@@ -32,13 +32,16 @@ enum FilterError {
     CommandWhichIsBothRequiresLintFlag,
 
     #[fail(
-        display = "You can only pass paths to files to the {} method, you passed {}",
+        display = "You can only pass paths to files to the {} method for this filter, you passed {}",
         method, path
     )]
     CanOnlyOperateOnFiles { method: &'static str, path: String },
 
-    #[fail(display = "Could not find a parent for the {} path", path)]
-    PathHasNoParent { path: String },
+    #[fail(
+        display = "You can only pass paths to directories to the {} method for this filter, you passed {}",
+        method, path
+    )]
+    CanOnlyOperateOnDirectories { method: &'static str, path: String },
 
     #[fail(
         display = "This {} is a {}. You cannot call {}() on it.",
@@ -57,24 +60,23 @@ pub struct Filter {
     typ: FilterType,
     includer: Includer,
     excluder: excluder::Excluder,
-    on_dir: bool,
-    seen: HashSet<PathBuf>,
+    pub on_dir: bool,
     implementation: Box<dyn FilterImplementation>,
 }
+
+// This should be safe because we never mutate the Filter struct in any of its
+// methods.
+unsafe impl Sync for Filter {}
 
 impl fmt::Debug for Filter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // I'm not sure how to get any useful info for the implementation
         // field so we'll just leave it out for now.
-        write!(f, "{{ root: {:?}, name: {:?}, typ: {:?}, includer: {:?}, excluder: {:?}, on_dir: {:?}, seen: {:?}",
-               self.root,
-               self.name,
-               self.typ,
-               self.includer,
-               self.excluder,
-               self.on_dir,
-               self.seen,
-          )
+        write!(
+            f,
+            "{{ root: {:?}, name: {:?}, typ: {:?}, includer: {:?}, excluder: {:?}, on_dir: {:?}",
+            self.root, self.name, self.typ, self.includer, self.excluder, self.on_dir,
+        )
     }
 }
 #[derive(Debug)]
@@ -90,30 +92,30 @@ pub trait FilterImplementation {
 }
 
 impl Filter {
-    pub fn tidy(&mut self, path: PathBuf) -> Result<bool, Error> {
+    pub fn tidy(&self, path: &PathBuf) -> Result<bool, Error> {
         self.require_is_not_filter_type(FilterType::Lint)?;
 
         let mut full = self.root.clone();
         full.push(path.clone());
 
-        Self::require_file("tidy", &full)?;
+        self.require_path_type("tidy", &full)?;
 
         if !self.should_process_file(path.clone())? {
             return Ok(false);
         }
 
         let mtime = Self::mtime_for(&full)?;
-        self.implementation.tidy(&self.name, &path)?;
+        self.implementation.tidy(&self.name, path)?;
         Ok(mtime != Self::mtime_for(&full)?)
     }
 
-    pub fn lint(&mut self, path: PathBuf) -> Result<LintResult, Error> {
+    pub fn lint(&self, path: PathBuf) -> Result<LintResult, Error> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
         full.push(path.clone());
 
-        Self::require_file("lint", &full)?;
+        self.require_path_type("lint", &full)?;
 
         if !self.should_process_file(path.clone())? {
             return Ok(LintResult {
@@ -137,8 +139,14 @@ impl Filter {
         Ok(())
     }
 
-    fn require_file(method: &'static str, path: &PathBuf) -> Result<(), Error> {
-        if fs::metadata(path)?.is_dir() {
+    fn require_path_type(&self, method: &'static str, path: &PathBuf) -> Result<(), Error> {
+        let is_dir = fs::metadata(path)?.is_dir();
+        if self.on_dir && !is_dir {
+            return Err(FilterError::CanOnlyOperateOnDirectories {
+                method,
+                path: path.to_string_lossy().to_string(),
+            })?;
+        } else if is_dir && !self.on_dir {
             return Err(FilterError::CanOnlyOperateOnFiles {
                 method,
                 path: path.to_string_lossy().to_string(),
@@ -147,7 +155,7 @@ impl Filter {
         Ok(())
     }
 
-    fn should_process_file(&mut self, mut path: PathBuf) -> Result<bool, Error> {
+    fn should_process_file(&self, path: PathBuf) -> Result<bool, Error> {
         if self.excluder.path_is_excluded(&path)? {
             debug!(
                 "Path {} is excluded for the {} filter",
@@ -164,24 +172,6 @@ impl Filter {
                 self.name
             );
             return Ok(false);
-        }
-
-        // This assumes that we always receive a file in `path`.
-        if self.on_dir {
-            let parent = path.parent();
-            if parent.is_some() {
-                path = parent.unwrap().to_path_buf();
-            } else {
-                return Err(FilterError::PathHasNoParent {
-                    path: path.to_string_lossy().to_string(),
-                })?;
-            }
-
-            if self.seen.contains(&path) {
-                return Ok(false);
-            } else {
-                self.seen.insert(path.clone().to_path_buf());
-            }
         }
 
         Ok(true)
@@ -236,7 +226,6 @@ impl Command {
             includer: Includer::new(&include)?,
             excluder: excluder::Excluder::new(root, &ignore, &exclude)?,
             on_dir,
-            seen: HashSet::new(),
             implementation: Box::new(Command {
                 cmd: replace_root(cmd, root),
                 lint_flag,

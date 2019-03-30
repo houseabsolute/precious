@@ -16,6 +16,7 @@ mod vcs;
 use clap::{App, Arg, ArgGroup, SubCommand};
 use failure::Error;
 use log::{debug, error};
+use rayon::prelude::*;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -26,8 +27,8 @@ fn main() {
     let status = if main.is_ok() {
         match main.unwrap().run() {
             Ok(e) => {
-                if e.has_error() {
-                    error!("{}", e.error);
+                if e.error.is_some() {
+                    error!("{}", e.error.unwrap());
                 }
                 e.status
             }
@@ -148,26 +149,23 @@ enum MainError {
 
     #[fail(display = "No linters defined in your config")]
     NoLinters,
+
+    #[fail(display = "Could not find a parent for the {} path", path)]
+    PathHasNoParent { path: String },
 }
 
 #[derive(Debug)]
 struct Exit {
     status: i32,
-    error: String,
+    error: Option<String>,
 }
 
 impl From<Error> for Exit {
     fn from(err: Error) -> Exit {
         Exit {
             status: 1,
-            error: err.to_string(),
+            error: Some(err.to_string()),
         }
-    }
-}
-
-impl Exit {
-    fn has_error(&self) -> bool {
-        self.error != ""
     }
 }
 
@@ -200,7 +198,9 @@ impl<'a> Main<'a> {
 
         Ok(Exit {
             status: 1,
-            error: String::from("You must run either the tidy or lint subcommand"),
+            error: Some(String::from(
+                "You must run either the tidy or lint subcommand",
+            )),
         })
     }
 
@@ -208,92 +208,138 @@ impl<'a> Main<'a> {
         let (mode, _) = self.mode();
         println!("Tidying {}", mode);
 
-        let mut tidiers = self.config().tidy_filters(&self.root_dir())?;
+        let tidiers = self.config().tidy_filters(&self.root_dir())?;
         if tidiers.is_empty() {
             return Err(MainError::NoTidiers)?;
         }
 
         let mut status = 0 as i32;
-        let paths = self.basepaths()?.paths()?;
-        for tidier in &mut tidiers {
-            for p in paths.iter().map(|p| p.clone()) {
-                match tidier.tidy(p.clone()) {
-                    Ok(true) => {
-                        if !self.quiet {
-                            println!("Tidied by {}:    {}", tidier.name, p.to_string_lossy());
+        let (files, dirs) = self.files_and_dirs(&tidiers)?;
+
+        for t in tidiers {
+            let p = match t.on_dir {
+                true => &dirs,
+                false => &files,
+            };
+            let failures: Vec<i32> = p
+                .par_iter()
+                .map(|p| -> i32 {
+                    match t.tidy(p) {
+                        Ok(true) => {
+                            if !self.quiet {
+                                println!("Tidied by {}:    {}", t.name, p.to_string_lossy());
+                            }
+                            0 as i32
+                        }
+                        Ok(false) => {
+                            if !self.quiet {
+                                println!("Unchanged by {}: {}", t.name, p.to_string_lossy());
+                            }
+                            0 as i32
+                        }
+                        Err(e) => {
+                            error!("{}", e);
+                            1 as i32
                         }
                     }
-                    Ok(false) => {
-                        if !self.quiet {
-                            println!("Unchanged by {}: {}", tidier.name, p.to_string_lossy());
-                        }
-                    }
-                    Err(e) => {
-                        error!("{}", e);
-                        status += 1;
-                    }
-                }
+                })
+                .collect();
+            for f in failures {
+                status += f;
             }
         }
-        let error = if status == 0 {
-            ""
-        } else {
-            "Error when tidying files"
-        };
-        Ok(Exit {
-            status,
-            error: error.to_string(),
-        })
+        Ok(Self::exit_from_status(status, "tidying"))
     }
 
     fn lint(&mut self) -> Result<Exit, Error> {
         let (mode, _) = self.mode();
         println!("Linting {}", mode);
 
-        let mut linters = self.config().lint_filters(&self.root_dir())?;
+        let linters = self.config().lint_filters(&self.root_dir())?;
         if linters.is_empty() {
             return Err(MainError::NoLinters)?;
         }
 
         let mut status = 0 as i32;
-        let paths = self.basepaths()?.paths()?;
-        for linter in &mut linters {
-            for p in paths.iter().map(|p| p.clone()) {
-                match linter.lint(p.clone()) {
-                    Ok(r) => {
-                        if r.ok {
-                            if !self.quiet {
-                                println!("Passed {}: {}", linter.name, p.to_string_lossy());
+        let (files, dirs) = self.files_and_dirs(&linters)?;
+
+        for l in linters {
+            let p = match l.on_dir {
+                true => &dirs,
+                false => &files,
+            };
+            let failures: Vec<i32> = p
+                .par_iter()
+                .map(|p| -> i32 {
+                    match l.lint(p.clone()) {
+                        Ok(r) => {
+                            if r.ok {
+                                if !self.quiet {
+                                    println!("Passed {}: {}", l.name, p.to_string_lossy());
+                                }
+                            } else {
+                                println!("Failed {}: {}", l.name, p.to_string_lossy());
+                                if r.stdout.is_some() {
+                                    println!("{}", r.stdout.unwrap());
+                                }
+                                if r.stderr.is_some() {
+                                    println!("{}", r.stderr.unwrap());
+                                }
                             }
-                        } else {
-                            println!("Failed {}: {}", linter.name, p.to_string_lossy());
-                            if r.stdout.is_some() {
-                                println!("{}", r.stdout.unwrap());
-                            }
-                            if r.stderr.is_some() {
-                                println!("{}", r.stderr.unwrap());
-                            }
+                            0
+                        }
+                        Err(e) => {
+                            error!("{}", e);
+                            1
                         }
                     }
-                    Err(e) => {
-                        error!("{}", e);
-                        status += 1;
-                    }
-                }
+                })
+                .collect();
+            for f in failures {
+                status += f;
             }
         }
-        let error = if status == 0 {
-            ""
-        } else {
-            "Error when linting files"
-        };
-        Ok(Exit {
-            status,
-            error: error.to_string(),
-        })
+        Ok(Self::exit_from_status(status, "linting"))
     }
 
-    fn basepaths(&mut self) -> Result<basepaths::BasePaths, Error> {
+    fn exit_from_status(status: i32, action: &str) -> Exit {
+        let error = if status == 0 {
+            None
+        } else {
+            Some(format!("Error when {} files", action))
+        };
+        Exit {
+            status,
+            error: error,
+        }
+    }
+    fn files_and_dirs(
+        &self,
+        filters: &[filter::Filter],
+    ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), Error> {
+        let files = self.basepaths()?.paths()?;
+        let mut dirs: Vec<PathBuf> = vec![];
+        if filters.iter().any(|f| f.on_dir) {
+            for p in &files {
+                dirs.push(Self::to_dir(p)?);
+            }
+            dirs.dedup();
+        }
+        Ok((files, dirs))
+    }
+
+    fn to_dir(path: &PathBuf) -> Result<PathBuf, Error> {
+        let parent = path.parent();
+        if parent.is_some() {
+            return Ok(parent.unwrap().to_path_buf());
+        }
+
+        Err(MainError::PathHasNoParent {
+            path: path.to_string_lossy().to_string(),
+        })?
+    }
+
+    fn basepaths(&self) -> Result<basepaths::BasePaths, Error> {
         let (mode, paths) = self.mode();
         Ok(basepaths::BasePaths::new(
             mode,
@@ -304,7 +350,7 @@ impl<'a> Main<'a> {
         )?)
     }
 
-    fn mode(&mut self) -> (basepaths::Mode, Vec<PathBuf>) {
+    fn mode(&self) -> (basepaths::Mode, Vec<PathBuf>) {
         let subc_matches = self.matched_subcommand();
 
         let mut paths: Vec<PathBuf> = vec![];
@@ -325,7 +371,7 @@ impl<'a> Main<'a> {
         (basepaths::Mode::FromCLI, paths)
     }
 
-    fn matched_subcommand(&mut self) -> &clap::ArgMatches<'a> {
+    fn matched_subcommand(&self) -> &clap::ArgMatches<'a> {
         match self.matches.subcommand() {
             ("tidy", Some(m)) => m,
             ("lint", Some(m)) => m,
