@@ -214,8 +214,9 @@ impl<'a> Main<'a> {
         }
 
         let mut status = 0 as i32;
-        for p in self.basepaths()?.paths()? {
-            for tidier in &mut tidiers {
+        let paths = self.basepaths()?.paths()?;
+        for tidier in &mut tidiers {
+            for p in paths.iter().map(|p| p.clone()) {
                 match tidier.tidy(p.clone()) {
                     Ok(true) => {
                         if !self.quiet {
@@ -255,8 +256,9 @@ impl<'a> Main<'a> {
         }
 
         let mut status = 0 as i32;
-        for p in self.basepaths()?.paths()? {
-            for linter in &mut linters {
+        let paths = self.basepaths()?.paths()?;
+        for linter in &mut linters {
+            for p in paths.iter().map(|p| p.clone()) {
                 match linter.lint(p.clone()) {
                     Ok(r) => {
                         if r.ok {
