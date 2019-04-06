@@ -16,7 +16,9 @@ mod vcs;
 use clap::{App, Arg, ArgGroup, SubCommand};
 use failure::Error;
 use log::{debug, error};
+use rand::Rng;
 use rayon::prelude::*;
+use std::char;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -206,7 +208,7 @@ impl<'a> Main<'a> {
 
     fn tidy(&mut self) -> Result<Exit, Error> {
         let (mode, _) = self.mode();
-        println!("Tidying {}", mode);
+        println!("💍 Tidying {}", mode);
 
         let tidiers = self.config().tidy_filters(&self.root_dir())?;
         if tidiers.is_empty() {
@@ -227,13 +229,13 @@ impl<'a> Main<'a> {
                     match t.tidy(p) {
                         Ok(Some(true)) => {
                             if !self.quiet {
-                                println!("Tidied by {}:    {}", t.name, p.to_string_lossy());
+                                println!("💧 Tidied by {}:    {}", t.name, p.to_string_lossy());
                             }
                             0 as i32
                         }
                         Ok(Some(false)) => {
                             if !self.quiet {
-                                println!("Unchanged by {}: {}", t.name, p.to_string_lossy());
+                                println!("✨ Unchanged by {}: {}", t.name, p.to_string_lossy());
                             }
                             0 as i32
                         }
@@ -254,7 +256,7 @@ impl<'a> Main<'a> {
 
     fn lint(&mut self) -> Result<Exit, Error> {
         let (mode, _) = self.mode();
-        println!("Linting {}", mode);
+        println!("💍 Linting {}", mode);
 
         let linters = self.config().lint_filters(&self.root_dir())?;
         if linters.is_empty() {
@@ -276,10 +278,10 @@ impl<'a> Main<'a> {
                         Ok(Some(r)) => {
                             if r.ok {
                                 if !self.quiet {
-                                    println!("Passed {}: {}", l.name, p.to_string_lossy());
+                                    println!("💯 Passed {}: {}", l.name, p.to_string_lossy());
                                 }
                             } else {
-                                println!("Failed {}: {}", l.name, p.to_string_lossy());
+                                println!("💩 Failed {}: {}", l.name, p.to_string_lossy());
                                 if r.stdout.is_some() {
                                     println!("{}", r.stdout.unwrap());
                                 }
