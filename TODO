@@ -1,0 +1,28 @@
+# auto-add lint_failure_exit_codes to ok_exit_codes
+
+no need to list lint failure codes in ok codes
+
+# remove `ignore_from` and just use repo's ignore files
+
+# tests
+
+# code cleanup like move parallel execution to shared sub
+
+Hard to figure out parallel closure issues with type checking.
+
+# both mode (tidy & lint together) - is this needed?
+
+# how to apply include/exclude rules on_dir when filter just gets the dir?
+
+need to pass the dir and the list of files in the dir?
+
+# docs
+
+how to exclude all but one file from a dir tree (2 filters, one excludes, the
+other includes just the relevant files).
+
+# EMOJIS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Poop emoji for failed lint
+Ta-da for lint pass
+Something for tidy/already tidy?

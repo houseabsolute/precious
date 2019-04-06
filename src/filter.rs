@@ -3,7 +3,8 @@ use crate::excluder;
 use failure::Error;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, info};
-use std::collections::HashSet;
+use md5;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::PathBuf;
@@ -52,6 +53,12 @@ enum FilterError {
         typ: &'static str,
         method: &'static str,
     },
+
+    #[fail(
+        display = "Cannot compare previous state of {} to its current state because we did not record its previous state!",
+        path
+    )]
+    CannotComparePaths { path: String },
 }
 
 pub struct Filter {
@@ -79,6 +86,7 @@ impl fmt::Debug for Filter {
         )
     }
 }
+
 #[derive(Debug)]
 pub struct LintResult {
     pub ok: bool,
@@ -91,8 +99,15 @@ pub trait FilterImplementation {
     fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult, Error>;
 }
 
+#[derive(Debug)]
+struct PathInfo {
+    mtime: SystemTime,
+    size: u64,
+    hash: md5::Digest,
+}
+
 impl Filter {
-    pub fn tidy(&self, path: &PathBuf) -> Result<bool, Error> {
+    pub fn tidy(&self, path: &PathBuf) -> Result<Option<bool>, Error> {
         self.require_is_not_filter_type(FilterType::Lint)?;
 
         let mut full = self.root.clone();
@@ -101,15 +116,15 @@ impl Filter {
         self.require_path_type("tidy", &full)?;
 
         if !self.should_process_file(path.clone())? {
-            return Ok(false);
+            return Ok(None);
         }
 
-        let mtime = Self::mtime_for(&full)?;
+        let info = Self::path_info_map_for(&full)?;
         self.implementation.tidy(&self.name, path)?;
-        Ok(mtime != Self::mtime_for(&full)?)
+        Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
-    pub fn lint(&self, path: PathBuf) -> Result<LintResult, Error> {
+    pub fn lint(&self, path: PathBuf) -> Result<Option<LintResult>, Error> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
@@ -118,14 +133,11 @@ impl Filter {
         self.require_path_type("lint", &full)?;
 
         if !self.should_process_file(path.clone())? {
-            return Ok(LintResult {
-                ok: true,
-                stdout: None,
-                stderr: None,
-            });
+            return Ok(None);
         }
 
-        self.implementation.lint(&self.name, &path)
+        let r = self.implementation.lint(&self.name, &path)?;
+        Ok(Some(r))
     }
 
     fn require_is_not_filter_type(&self, not_allowed: FilterType) -> Result<(), Error> {
@@ -177,13 +189,86 @@ impl Filter {
         Ok(true)
     }
 
-    fn mtime_for(path: &PathBuf) -> Result<SystemTime, Error> {
+    fn path_was_changed(path: &PathBuf, prev: &HashMap<PathBuf, PathInfo>) -> Result<bool, Error> {
         let meta = fs::metadata(path)?;
-        let mtime = meta.modified();
-        match mtime {
-            Ok(mtime) => Ok(mtime),
-            Err(e) => Err(e)?,
+        if meta.is_file() {
+            if !prev.contains_key(path) {
+                return Err(FilterError::CannotComparePaths {
+                    path: path.to_string_lossy().to_string(),
+                })?;
+            }
+            let prev_info = prev.get(path).unwrap();
+            // If the mtime is unchanged we don't need to compare anything
+            // else. Unfortunately there's no guarantee a filter won't modify
+            // the mtime even if it doesn't change the file's contents. For
+            // example, Perl::Tidy does this :(
+            if prev_info.mtime == meta.modified()? {
+                return Ok(false);
+            }
+
+            // If the size changed we know the contents changed.
+            if prev_info.size != meta.len() {
+                return Ok(true);
+            }
+
+            // Otherwise we need to compare the content hash.
+            return Ok(prev_info.hash != md5::compute(fs::read(path)?));
         }
+
+        for entry in path.read_dir()? {
+            match entry {
+                Ok(e) => {
+                    if !e.metadata()?.is_dir() {
+                        if prev.contains_key(&e.path()) {
+                            if Self::path_was_changed(&e.path(), &prev)? {
+                                return Ok(true);
+                            }
+                        } else {
+                            // We can only assume that when an entry is not
+                            // found in the previous hash that the filter must
+                            // have added a new file.
+                            return Ok(true);
+                        }
+                    }
+                }
+                Err(e) => Err(e)?,
+            }
+        }
+        Ok(false)
+    }
+
+    fn path_info_map_for(path: &PathBuf) -> Result<HashMap<PathBuf, PathInfo>, Error> {
+        let meta = fs::metadata(path)?;
+        if meta.is_dir() {
+            let mut info = HashMap::new();
+            for entry in path.read_dir()? {
+                match entry {
+                    Ok(e) => {
+                        // We do not recurse into subdirs. Our assumption is
+                        // that filters which operate on a dir do not recurse
+                        // either (thinking of things like golint, etc.).
+                        if !e.metadata()?.is_dir() {
+                            for (k, v) in Self::path_info_map_for(&e.path())?.drain() {
+                                info.insert(k.clone(), v);
+                            }
+                        }
+                    }
+                    Err(e) => return Err(e)?,
+                }
+            }
+            return Ok(info);
+        }
+
+        let mut info = HashMap::new();
+        info.insert(
+            path.clone(),
+            PathInfo {
+                mtime: meta.modified()?,
+                size: meta.len(),
+                hash: md5::compute(fs::read(path)?),
+            },
+        );
+        Ok(info)
     }
 }
 

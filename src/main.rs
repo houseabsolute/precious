@@ -225,18 +225,19 @@ impl<'a> Main<'a> {
                 .par_iter()
                 .map(|p| -> i32 {
                     match t.tidy(p) {
-                        Ok(true) => {
+                        Ok(Some(true)) => {
                             if !self.quiet {
                                 println!("Tidied by {}:    {}", t.name, p.to_string_lossy());
                             }
                             0 as i32
                         }
-                        Ok(false) => {
+                        Ok(Some(false)) => {
                             if !self.quiet {
                                 println!("Unchanged by {}: {}", t.name, p.to_string_lossy());
                             }
                             0 as i32
                         }
+                        Ok(None) => 0,
                         Err(e) => {
                             error!("{}", e);
                             1 as i32
@@ -272,7 +273,7 @@ impl<'a> Main<'a> {
                 .par_iter()
                 .map(|p| -> i32 {
                     match l.lint(p.clone()) {
-                        Ok(r) => {
+                        Ok(Some(r)) => {
                             if r.ok {
                                 if !self.quiet {
                                     println!("Passed {}: {}", l.name, p.to_string_lossy());
@@ -288,6 +289,7 @@ impl<'a> Main<'a> {
                             }
                             0
                         }
+                        Ok(None) => 0,
                         Err(e) => {
                             error!("{}", e);
                             1
