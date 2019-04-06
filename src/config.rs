@@ -28,7 +28,6 @@ enum FilterImplementation {
 pub struct FilterCore {
     name: String,
     typ: filter::FilterType,
-    ignore: Vec<String>,
     include: Vec<String>,
     exclude: Vec<String>,
     on_dir: bool,
@@ -44,7 +43,6 @@ pub struct Filter {
 
 #[derive(Debug)]
 pub struct Config {
-    pub ignore_from: Vec<String>,
     pub exclude: Vec<String>,
     filters: Vec<Filter>,
 }
@@ -98,7 +96,6 @@ impl Config {
         let table = root.as_table().unwrap();
 
         Ok(Config {
-            ignore_from: Self::toml_string_vec(table, "ignore_from")?,
             exclude: Self::toml_string_vec(table, "exclude")?,
             filters: Self::toml_filters(table)?,
         })
@@ -203,7 +200,6 @@ impl Config {
                 })?;
             }
         };
-        let ignore = Self::toml_string_vec(table, "ignore")?;
         let include = Self::toml_string_vec(table, "include")?;
         let exclude = Self::toml_string_vec(table, "exclude")?;
         let on_dir = Self::toml_bool(table, "on_dir")?;
@@ -224,7 +220,6 @@ impl Config {
         Ok(FilterCore {
             name,
             typ,
-            ignore,
             include,
             exclude,
             on_dir,
@@ -407,7 +402,6 @@ impl Config {
                     filter.core.name.clone(),
                     filter.core.typ.clone(),
                     filter.core.include.clone(),
-                    filter.core.ignore.clone(),
                     filter.core.exclude.clone(),
                     filter.core.on_dir,
                     filter.core.cmd.clone(),

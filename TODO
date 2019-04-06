@@ -2,8 +2,6 @@
 
 no need to list lint failure codes in ok codes
 
-# remove `ignore_from` and just use repo's ignore files
-
 # tests
 
 # code cleanup like move parallel execution to shared sub

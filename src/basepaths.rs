@@ -59,7 +59,6 @@ impl BasePaths {
         mode: Mode,
         cli_paths: Vec<PathBuf>,
         root: PathBuf,
-        ignore_files: &[String],
         exclude_globs: &[String],
     ) -> Result<BasePaths, Error> {
         match mode {
@@ -71,7 +70,7 @@ impl BasePaths {
             }
         };
 
-        let exc = excluder::Excluder::new(&root, ignore_files, exclude_globs)?;
+        let exc = excluder::Excluder::new(&root, exclude_globs)?;
         Ok(BasePaths {
             mode,
             cli_paths,

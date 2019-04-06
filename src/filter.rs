@@ -288,7 +288,6 @@ impl Command {
         name: String,
         typ: FilterType,
         include: Vec<String>,
-        ignore: Vec<String>,
         exclude: Vec<String>,
         on_dir: bool,
         cmd: Vec<String>,
@@ -309,7 +308,7 @@ impl Command {
             name,
             typ,
             includer: Includer::new(&include)?,
-            excluder: excluder::Excluder::new(root, &ignore, &exclude)?,
+            excluder: excluder::Excluder::new(root, &exclude)?,
             on_dir,
             implementation: Box::new(Command {
                 cmd: replace_root(cmd, root),

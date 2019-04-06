@@ -349,7 +349,6 @@ impl<'a> Main<'a> {
             mode,
             paths,
             self.root_dir(),
-            self.config().ignore_from.as_ref(),
             self.config().exclude.as_ref(),
         )?)
     }

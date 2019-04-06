@@ -3,6 +3,7 @@ use failure::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
 pub struct Repo {
     ignore_files: HashMap<PathBuf, IgnoreFile>,
 }
@@ -32,7 +33,6 @@ impl Repo {
         // Try the deepest first, recursing up to the root.
         // If a file is excluded by an ignore file, stop recursing (?)
         // (FIXME: is is possible to be re-included by a higher-up file?)
-        println!("{:?}", self.ignore_files.keys());
 
         // path.parent().join(".gitignore")
         // recurse until path.parent() == root
