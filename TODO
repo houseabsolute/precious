@@ -1,7 +1,3 @@
-# auto-add lint_failure_exit_codes to ok_exit_codes
-
-no need to list lint failure codes in ok codes
-
 # tests
 
 # code cleanup like move parallel execution to shared sub

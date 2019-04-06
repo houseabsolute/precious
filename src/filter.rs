@@ -314,17 +314,32 @@ impl Command {
                 cmd: replace_root(cmd, root),
                 lint_flag,
                 path_flag,
-                ok_exit_codes: Self::exit_codes_hashset(ok_exit_codes),
-                lint_failure_exit_codes: Self::exit_codes_hashset(lint_failure_exit_codes),
+                ok_exit_codes: Self::exit_codes_hashset(
+                    &ok_exit_codes,
+                    Some(&lint_failure_exit_codes),
+                ),
+                lint_failure_exit_codes: Self::exit_codes_hashset(&lint_failure_exit_codes, None),
                 expect_stderr,
             }),
         })
     }
 
-    fn exit_codes_hashset(ok_exit_codes: Vec<u8>) -> HashSet<i32> {
-        let mut hash: HashSet<i32> = HashSet::with_capacity(ok_exit_codes.len());
+    fn exit_codes_hashset(
+        ok_exit_codes: &[u8],
+        lint_failure_exit_codes: Option<&[u8]>,
+    ) -> HashSet<i32> {
+        let mut len = ok_exit_codes.len();
+        if lint_failure_exit_codes.is_some() {
+            len += lint_failure_exit_codes.unwrap().len();
+        }
+        let mut hash: HashSet<i32> = HashSet::with_capacity(len);
         for c in ok_exit_codes {
-            hash.insert(i32::from(c));
+            hash.insert(i32::from(*c));
+        }
+        if lint_failure_exit_codes.is_some() {
+            for c in lint_failure_exit_codes.unwrap() {
+                hash.insert(i32::from(*c));
+            }
         }
         hash
     }
