@@ -17,7 +17,6 @@ use clap::{App, Arg, ArgGroup, SubCommand};
 use failure::Error;
 use log::{debug, error};
 use rayon::prelude::*;
-use std::char;
 use std::env;
 use std::path::{Path, PathBuf};
 
