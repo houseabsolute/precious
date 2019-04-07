@@ -1,5 +1,6 @@
 use crate::command;
 use crate::excluder;
+use crate::gitignore;
 use crate::vcs;
 use failure::Error;
 use itertools::Itertools;
@@ -69,7 +70,7 @@ impl BasePaths {
             }
         };
 
-        let exc = excluder::Excluder::new(&root, exclude_globs)?;
+        let exc = excluder::Excluder::new(exclude_globs)?;
         Ok(BasePaths {
             mode,
             cli_paths,
@@ -91,20 +92,23 @@ impl BasePaths {
         pat.push('/');
         let re = Regex::new(pat.as_str())?;
 
+        let repo_ignorer = gitignore::repo::Repo::new(&self.root)?;
         let mut paths: Vec<PathBuf> = vec![];
         for p in files {
             let rel = PathBuf::from(
                 re.replace(p.to_string_lossy().into_owned().as_str(), "")
                     .into_owned(),
             );
+            if repo_ignorer.is_ignored(&rel, fs::metadata(&p)?.is_dir()) {
+                continue;
+            }
+            if self.excluder.path_is_excluded(&rel) {
+                continue;
+            }
             if self.is_vcs_dir(&rel) {
                 continue;
             }
-            match self.excluder.path_is_excluded(&rel) {
-                Ok(true) => paths.push(rel),
-                Ok(false) => (),
-                Err(e) => return Err(e)?,
-            }
+            paths.push(rel);
         }
 
         Ok(paths

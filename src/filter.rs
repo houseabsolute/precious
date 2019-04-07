@@ -168,7 +168,7 @@ impl Filter {
     }
 
     fn should_process_path(&self, path: &PathBuf) -> Result<bool, Error> {
-        if self.excluder.path_is_excluded(path)? {
+        if self.excluder.path_is_excluded(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
                 path.to_string_lossy(),
@@ -308,7 +308,7 @@ impl Command {
             name,
             typ,
             includer: Includer::new(&include)?,
-            excluder: excluder::Excluder::new(root, &exclude)?,
+            excluder: excluder::Excluder::new(&exclude)?,
             on_dir,
             implementation: Box::new(Command {
                 cmd: replace_root(cmd, root),
