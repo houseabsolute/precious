@@ -5,7 +5,6 @@ use failure::Error;
 use itertools::Itertools;
 use log::debug;
 use regex::Regex;
-use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
@@ -92,28 +91,26 @@ impl BasePaths {
         pat.push('/');
         let re = Regex::new(pat.as_str())?;
 
-        files
-            .iter()
-            .filter_map(|p| {
-                let rel = PathBuf::from(
-                    re.replace(p.to_string_lossy().into_owned().as_str(), "")
-                        .into_owned(),
-                );
-                if self.is_vcs_dir(&rel) {
-                    return None;
-                }
-                match self.excluder.path_is_excluded(&rel) {
-                    Ok(true) => None,
-                    Ok(false) => Some(Ok(rel)),
-                    Err(e) => Some(Err(e)),
-                }
-            })
-            .sorted_by(|a, b| match (a, b) {
-                (Ok(a), Ok(b)) => a.to_string_lossy().cmp(&b.to_string_lossy()),
-                // If we have an error the ordering irrelevant.
-                (_, _) => Ordering::Equal,
-            })
-            .collect()
+        let mut paths: Vec<PathBuf> = vec![];
+        for p in files {
+            let rel = PathBuf::from(
+                re.replace(p.to_string_lossy().into_owned().as_str(), "")
+                    .into_owned(),
+            );
+            if self.is_vcs_dir(&rel) {
+                continue;
+            }
+            match self.excluder.path_is_excluded(&rel) {
+                Ok(true) => paths.push(rel),
+                Ok(false) => (),
+                Err(e) => return Err(e)?,
+            }
+        }
+
+        Ok(paths
+            .drain(..)
+            .sorted_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()))
+            .collect())
     }
 
     fn all_files(&self) -> Result<Vec<PathBuf>, Error> {
