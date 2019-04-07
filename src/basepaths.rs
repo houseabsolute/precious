@@ -147,10 +147,13 @@ impl BasePaths {
     fn walkdir_files(&self, root: &PathBuf) -> Result<Vec<PathBuf>, Error> {
         let mut files: Vec<PathBuf> = vec![];
         for e in walkdir::WalkDir::new(root).into_iter() {
-            // Gross - is there a better way to do this?
-            let e2 = e?;
-            if !e2.file_type().is_dir() {
-                files.push(e2.into_path())
+            match e {
+                Ok(e) => {
+                    if e.file_type().is_file() {
+                        files.push(e.into_path())
+                    }
+                }
+                Err(e) => return Err(e)?,
             }
         }
         Ok(files)
