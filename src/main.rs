@@ -16,7 +16,6 @@ mod vcs;
 use clap::{App, Arg, ArgGroup, SubCommand};
 use failure::Error;
 use log::{debug, error};
-use rand::Rng;
 use rayon::prelude::*;
 use std::char;
 use std::env;
