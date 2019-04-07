@@ -115,7 +115,7 @@ impl Filter {
 
         self.require_path_type("tidy", &full)?;
 
-        if !self.should_process_file(path.clone())? {
+        if !self.should_process_path(path)? {
             return Ok(None);
         }
 
@@ -124,7 +124,7 @@ impl Filter {
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
-    pub fn lint(&self, path: PathBuf) -> Result<Option<LintResult>, Error> {
+    pub fn lint(&self, path: &PathBuf) -> Result<Option<LintResult>, Error> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
@@ -132,7 +132,7 @@ impl Filter {
 
         self.require_path_type("lint", &full)?;
 
-        if !self.should_process_file(path.clone())? {
+        if !self.should_process_path(&path)? {
             return Ok(None);
         }
 
@@ -167,8 +167,8 @@ impl Filter {
         Ok(())
     }
 
-    fn should_process_file(&self, path: PathBuf) -> Result<bool, Error> {
-        if self.excluder.path_is_excluded(&path)? {
+    fn should_process_path(&self, path: &PathBuf) -> Result<bool, Error> {
+        if self.excluder.path_is_excluded(path)? {
             debug!(
                 "Path {} is excluded for the {} filter",
                 path.to_string_lossy(),
@@ -177,7 +177,7 @@ impl Filter {
             return Ok(false);
         }
 
-        if !self.includer.path_is_included(&path) {
+        if !self.includer.path_is_included(path) {
             debug!(
                 "Path {} is not included in the {} filter",
                 path.to_string_lossy(),

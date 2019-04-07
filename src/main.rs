@@ -274,7 +274,7 @@ impl<'a> Main<'a> {
             let failures: Vec<i32> = p
                 .par_iter()
                 .map(|p| -> i32 {
-                    match l.lint(p.clone()) {
+                    match l.lint(p) {
                         Ok(Some(r)) => {
                             if r.ok {
                                 if !self.quiet {
