@@ -2,7 +2,6 @@ use crate::gitignore::ruleset::*;
 use failure::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-
 use std::path::Path;
 
 #[derive(Debug)]
@@ -34,14 +33,12 @@ mod test {
     use super::{IgnoreFile, RuleSet};
     use std::path::PathBuf;
 
-    macro_rules! ignore_file_from_test_repo {
-        ($ignore_path:expr) => {{
-            let cargo_root: PathBuf = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-            let root: PathBuf = cargo_root.join("tests/resources/fake_repo").to_path_buf();
-            let ignore: PathBuf = root.join($ignore_path).to_path_buf();
+    fn ignore_file_from_test_repo(ignore_path: &str) -> IgnoreFile {
+        let cargo_root: PathBuf = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let root: PathBuf = cargo_root.join("tests/resources/fake_repo").to_path_buf();
+        let ignore: PathBuf = root.join(ignore_path).to_path_buf();
 
-            IgnoreFile::new(root, ignore).unwrap()
-        }};
+        IgnoreFile::new(root, ignore).unwrap()
     }
 
     fn ruleset_from_rules<S: AsRef<str>>(raw_rules: S) -> RuleSet {
@@ -58,12 +55,12 @@ mod test {
     #[test]
     #[should_panic]
     fn fails_when_rules_invalid() {
-        ignore_file_from_test_repo!(".badgitignore");
+        ignore_file_from_test_repo(".badgitignore");
     }
 
     #[test]
     fn returns_correctly_an_ignorefile_from_valid_file() {
-        let file = ignore_file_from_test_repo!(".gitignore");
+        let file = ignore_file_from_test_repo(".gitignore");
 
         assert_eq!(
             file.ruleset.rules,
