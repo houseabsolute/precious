@@ -1,0 +1,43 @@
+language: rust
+cache: cargo
+env: # required for allow_failures
+rust:
+  - stable
+  - beta
+  - nightly
+
+matrix:
+  fast_finish: true
+  allow_failures:
+    - env: NAME='cargo-travis'
+  include:
+    - rust: stable
+      before_script:
+        - rustup component add rustfmt
+        - rustup component add clippy
+      script:
+        - cargo fmt -- --check
+        - cargo clippy -- -D clippy
+    - env: NAME='cargo-travis'
+      sudo: required # travis-ci/travis-ci#9061
+      before_script:
+        - cargo install cargo-update || echo "cargo-update already installed"
+        - cargo install cargo-travis || echo "cargo-travis already installed"
+        - cargo install-update -a
+      script:
+        - |
+          cargo build    --verbose &&
+          cargo coverage --verbose &&
+          bash <(curl -s https://codecov.io/bash) -s target/kcov
+      addons: # required for kcov
+        apt:
+          packages:
+            - libcurl4-openssl-dev
+            - libelf-dev
+            - libdw-dev
+            - binutils-dev
+            - cmake
+
+script: |
+  cargo build --verbose &&
+  cargo test  --verbose
