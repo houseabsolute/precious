@@ -1,5 +1,8 @@
 #![recursion_limit = "1024"]
 
+#[cfg(test)]
+mod testhelper;
+
 // For some reason I don't understand this needs to be loaded via "extern
 // crate" and not "use".
 #[macro_use]

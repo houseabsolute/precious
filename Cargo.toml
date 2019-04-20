@@ -23,7 +23,8 @@ toml = "0.4.10"
 walkdir = "2.2.7"
 
 [dev-dependencies]
-tempfile = "3.0.3"
+spectral = "0.6.0"
+tempdir = "0.3.7"
 
 [features]
 default = []

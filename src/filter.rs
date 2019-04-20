@@ -360,7 +360,13 @@ impl FilterImplementation for Command {
             cmd.join(" "),
         );
 
-        match command::run_command(cmd.remove(0), cmd, &self.ok_exit_codes, self.expect_stderr) {
+        match command::run_command(
+            cmd.remove(0),
+            cmd,
+            self.ok_exit_codes.iter().map(|p| *p).collect(),
+            self.expect_stderr,
+            None,
+        ) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
@@ -383,7 +389,13 @@ impl FilterImplementation for Command {
             cmd.join(" "),
         );
 
-        match command::run_command(cmd.remove(0), cmd, &self.ok_exit_codes, self.expect_stderr) {
+        match command::run_command(
+            cmd.remove(0),
+            cmd,
+            self.ok_exit_codes.iter().map(|p| *p).collect(),
+            self.expect_stderr,
+            None,
+        ) {
             Ok(result) => Ok(LintResult {
                 ok: !self.lint_failure_exit_codes.contains(&result.exit_code),
                 stdout: result.stdout,
