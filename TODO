@@ -1,14 +1,16 @@
-# tests
+# how to apply include/exclude rules on_dir when filter just gets the dir?
+
+need to pass the dir and the list of files in the dir?
+
+# git stage & unstage for -g flag
+
+# tests & CI
 
 # code cleanup like move parallel execution to shared sub
 
 Hard to figure out parallel closure issues with type checking.
 
 # both mode (tidy & lint together) - is this needed?
-
-# how to apply include/exclude rules on_dir when filter just gets the dir?
-
-need to pass the dir and the list of files in the dir?
 
 # docs
 
