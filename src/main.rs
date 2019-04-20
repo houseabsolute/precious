@@ -313,11 +313,9 @@ impl<'a> Main<'a> {
         } else {
             Some(format!("Error when {} files", action))
         };
-        Exit {
-            status,
-            error: error,
-        }
+        Exit { status, error }
     }
+
     fn files_and_dirs(
         &self,
         filters: &[filter::Filter],
