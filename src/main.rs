@@ -220,10 +220,7 @@ impl<'a> Main<'a> {
         let (files, dirs) = self.files_and_dirs(&tidiers)?;
 
         for t in tidiers {
-            let p = match t.on_dir {
-                true => &dirs,
-                false => &files,
-            };
+            let p = if t.on_dir { &dirs } else { &files };
             let failures: Vec<i32> = p
                 .par_iter()
                 .map(|p| -> i32 {
@@ -268,10 +265,7 @@ impl<'a> Main<'a> {
         let (files, dirs) = self.files_and_dirs(&linters)?;
 
         for l in linters {
-            let p = match l.on_dir {
-                true => &dirs,
-                false => &files,
-            };
+            let p = if l.on_dir { &dirs } else { &files };
             let failures: Vec<i32> = p
                 .par_iter()
                 .map(|p| -> i32 {
@@ -324,14 +318,14 @@ impl<'a> Main<'a> {
         let mut dirs: Vec<PathBuf> = vec![];
         if filters.iter().any(|f| f.on_dir) {
             for p in &files {
-                dirs.push(Self::to_dir(p)?);
+                dirs.push(Self::is_dir_or_parent(p)?);
             }
             dirs.dedup();
         }
         Ok((files, dirs))
     }
 
-    fn to_dir(path: &PathBuf) -> Result<PathBuf, Error> {
+    fn is_dir_or_parent(path: &PathBuf) -> Result<PathBuf, Error> {
         let parent = path.parent();
         if parent.is_some() {
             return Ok(parent.unwrap().to_path_buf());

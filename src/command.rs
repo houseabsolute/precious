@@ -70,8 +70,8 @@ pub fn run_command(
 fn output_from_command(
     mut c: process::Command,
     ok_exit_codes: Vec<i32>,
-    cmd: &String,
-    args: &Vec<String>,
+    cmd: &str,
+    args: &[String],
 ) -> Result<process::Output, Error> {
     let output = c.output()?;
     match output.status.code() {
@@ -103,8 +103,8 @@ fn output_from_command(
     Ok(output)
 }
 
-fn command_string(cmd: &String, args: &Vec<String>) -> String {
-    let mut cstr = cmd.clone();
+fn command_string(cmd: &str, args: &[String]) -> String {
+    let mut cstr = cmd.to_string();
     if !args.is_empty() {
         cstr.push(' ');
         cstr.push_str(args.join(" ").as_str());

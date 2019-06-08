@@ -363,7 +363,7 @@ impl FilterImplementation for Command {
         match command::run_command(
             cmd.remove(0),
             cmd,
-            self.ok_exit_codes.iter().map(|p| *p).collect(),
+            self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
             None,
         ) {
@@ -392,7 +392,7 @@ impl FilterImplementation for Command {
         match command::run_command(
             cmd.remove(0),
             cmd,
-            self.ok_exit_codes.iter().map(|p| *p).collect(),
+            self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
             None,
         ) {
