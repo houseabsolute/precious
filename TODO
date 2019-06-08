@@ -1,6 +1,8 @@
 # how to apply include/exclude rules on_dir when filter just gets the dir?
 
-need to pass the dir and the list of files in the dir?
+Make the basepaths return some sort of more complex struct that includes a dir
+and the files in that dir. Then we can apply rules to files but pass dirs to
+filters.
 
 # git stage & unstage for -g flag
 
@@ -9,8 +11,6 @@ need to pass the dir and the list of files in the dir?
 # code cleanup like move parallel execution to shared sub
 
 Hard to figure out parallel closure issues with type checking.
-
-# both mode (tidy & lint together) - is this needed?
 
 # docs
 
