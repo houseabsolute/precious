@@ -397,20 +397,20 @@ impl Config {
     fn make_filter(&self, root: &PathBuf, filter: &Filter) -> Result<filter::Filter, Error> {
         match &filter.implementation {
             FilterImplementation::C(c) => {
-                let n = filter::Command::build(
-                    root,
-                    filter.core.name.clone(),
-                    filter.core.typ.clone(),
-                    filter.core.include.clone(),
-                    filter.core.exclude.clone(),
-                    filter.core.on_dir,
-                    filter.core.cmd.clone(),
-                    c.lint_flag.clone(),
-                    c.path_flag.clone(),
-                    c.ok_exit_codes.clone(),
-                    c.lint_failure_exit_codes.clone(),
-                    c.expect_stderr,
-                )?;
+                let n = filter::Command::build(filter::CommandParams {
+                    root: root.clone(),
+                    name: filter.core.name.clone(),
+                    typ: filter.core.typ.clone(),
+                    include: filter.core.include.clone(),
+                    exclude: filter.core.exclude.clone(),
+                    on_dir: filter.core.on_dir,
+                    cmd: filter.core.cmd.clone(),
+                    lint_flag: c.lint_flag.clone(),
+                    path_flag: c.path_flag.clone(),
+                    ok_exit_codes: c.ok_exit_codes.clone(),
+                    lint_failure_exit_codes: c.lint_failure_exit_codes.clone(),
+                    expect_stderr: c.expect_stderr,
+                })?;
                 Ok(n)
             }
             FilterImplementation::S(_) => Err(ConfigError::ServersAreNotYetImplemented)?,

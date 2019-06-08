@@ -282,44 +282,49 @@ pub struct Command {
     expect_stderr: bool,
 }
 
+pub struct CommandParams {
+    pub root: PathBuf,
+    pub name: String,
+    pub typ: FilterType,
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    pub on_dir: bool,
+    pub cmd: Vec<String>,
+    pub lint_flag: String,
+    pub path_flag: String,
+    pub ok_exit_codes: Vec<u8>,
+    pub lint_failure_exit_codes: Vec<u8>,
+    pub expect_stderr: bool,
+}
+
 impl Command {
-    pub fn build(
-        root: &PathBuf,
-        name: String,
-        typ: FilterType,
-        include: Vec<String>,
-        exclude: Vec<String>,
-        on_dir: bool,
-        cmd: Vec<String>,
-        lint_flag: String,
-        path_flag: String,
-        ok_exit_codes: Vec<u8>,
-        lint_failure_exit_codes: Vec<u8>,
-        expect_stderr: bool,
-    ) -> Result<Filter, Error> {
-        if let FilterType::Both = typ {
-            if lint_flag == "" {
+    pub fn build(params: CommandParams) -> Result<Filter, Error> {
+        if let FilterType::Both = params.typ {
+            if params.lint_flag == "" {
                 return Err(FilterError::CommandWhichIsBothRequiresLintFlag)?;
             }
         }
 
         Ok(Filter {
-            root: root.clone(),
-            name,
-            typ,
-            includer: Includer::new(&include)?,
-            excluder: excluder::Excluder::new(&exclude)?,
-            on_dir,
+            root: params.root.clone(),
+            name: params.name,
+            typ: params.typ,
+            includer: Includer::new(&params.include)?,
+            excluder: excluder::Excluder::new(&params.exclude)?,
+            on_dir: params.on_dir,
             implementation: Box::new(Command {
-                cmd: replace_root(cmd, root),
-                lint_flag,
-                path_flag,
+                cmd: replace_root(params.cmd, &params.root),
+                lint_flag: params.lint_flag,
+                path_flag: params.path_flag,
                 ok_exit_codes: Self::exit_codes_hashset(
-                    &ok_exit_codes,
-                    Some(&lint_failure_exit_codes),
+                    &params.ok_exit_codes,
+                    Some(&params.lint_failure_exit_codes),
                 ),
-                lint_failure_exit_codes: Self::exit_codes_hashset(&lint_failure_exit_codes, None),
-                expect_stderr,
+                lint_failure_exit_codes: Self::exit_codes_hashset(
+                    &params.lint_failure_exit_codes,
+                    None,
+                ),
+                expect_stderr: params.expect_stderr,
             }),
         })
     }
