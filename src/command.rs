@@ -129,3 +129,80 @@ fn signal_from_status(status: process::ExitStatus) -> i32 {
     #[cfg(target_family = "windows")]
     0
 }
+
+#[cfg(test)]
+mod tests {
+    use failure::Error;
+    use spectral::prelude::*;
+
+    #[test]
+    fn command_string() {
+        assert_that(&super::command_string(&String::from("foo"), &vec![]))
+            .named("command without args")
+            .is_equal_to(String::from("foo"));
+
+        assert_that(&super::command_string(
+            &String::from("foo"),
+            &vec![String::from("bar")],
+        ))
+        .named("command with one arg")
+        .is_equal_to(String::from("foo bar"));
+
+        assert_that(&super::command_string(
+            &String::from("foo"),
+            &vec![String::from("--bar"), String::from("baz")],
+        ))
+        .named("command with multiple args")
+        .is_equal_to(String::from("foo --bar baz"));
+    }
+
+    #[test]
+    fn run_command() -> Result<(), Error> {
+        let res = super::run_command(
+            String::from("echo"),
+            vec![String::from("foo")],
+            vec![0],
+            false,
+            None,
+        )?;
+        assert_that(&res.exit_code)
+            .named("command exits 0")
+            .is_equal_to(&0);
+
+        let res = super::run_command(
+            String::from("sh"),
+            vec![String::from("-c"), String::from("exit 32")],
+            vec![0],
+            false,
+            None,
+        );
+        assert_that(&res).named("command exits non-zero").is_err();
+
+        match res {
+            Ok(_) => assert!(false, "did not get an error in the returned Result"),
+            Err(e) => {
+                let r = e
+                    .as_fail()
+                    .find_root_cause()
+                    .downcast_ref::<super::CommandError>();
+                match r {
+                    Some(c) => match c {
+                        super::CommandError::ExitCodeIsNotZero {
+                            code,
+                            cmd: _,
+                            stderr: _,
+                        } => {
+                            assert_that(code)
+                                .named("command unexpectedly exits 32")
+                                .is_equal_to(&32);
+                        }
+                        _ => assert!(false, "expected a CommandError::ExitCodeIsNotZero "),
+                    },
+                    None => assert!(false, "expected an error, not a None"),
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
