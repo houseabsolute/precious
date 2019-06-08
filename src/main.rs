@@ -13,7 +13,6 @@ mod command;
 mod config;
 mod excluder;
 mod filter;
-mod gitignore;
 mod vcs;
 
 use clap::{App, Arg, ArgGroup, SubCommand};

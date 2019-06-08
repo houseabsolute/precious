@@ -1,14 +1,13 @@
 use crate::command;
 use crate::excluder;
-use crate::gitignore;
 use crate::vcs;
 use failure::Error;
+use ignore;
 use itertools::Itertools;
 use log::debug;
 use regex::Regex;
 use std::fmt;
 use std::path::PathBuf;
-use walkdir;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
@@ -99,16 +98,12 @@ impl BasePaths {
         pat.push('/');
         let re = Regex::new(pat.as_str())?;
 
-        let repo_ignorer = gitignore::repo::Repo::new(&self.root)?;
         let mut paths: Vec<PathBuf> = vec![];
         for p in files.unwrap() {
             let rel = PathBuf::from(
                 re.replace(p.to_string_lossy().into_owned().as_str(), "")
                     .into_owned(),
             );
-            if repo_ignorer.is_ignored(&rel, rel.is_dir()) {
-                continue;
-            }
             if self.excluder.path_is_excluded(&rel) {
                 continue;
             }
@@ -154,21 +149,6 @@ impl BasePaths {
         Ok(Some(files))
     }
 
-    fn walkdir_files(&self, root: &PathBuf) -> Result<Option<Vec<PathBuf>>, Error> {
-        let mut files: Vec<PathBuf> = vec![];
-        for e in walkdir::WalkDir::new(root).into_iter() {
-            match e {
-                Ok(e) => {
-                    if e.file_type().is_file() {
-                        files.push(e.into_path())
-                    }
-                }
-                Err(e) => return Err(e)?,
-            }
-        }
-        Ok(Some(files))
-    }
-
     fn git_modified_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
         debug!("Getting modified files according to git");
         self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM"])
@@ -177,6 +157,25 @@ impl BasePaths {
     fn git_staged_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
         debug!("Getting staged files according to git");
         self.files_from_git(&["diff", "--cached", "--name-only", "--diff-filter=ACM"])
+    }
+
+    fn walkdir_files(&self, root: &PathBuf) -> Result<Option<Vec<PathBuf>>, Error> {
+        let mut files: Vec<PathBuf> = vec![];
+        for result in ignore::WalkBuilder::new(root).hidden(false).build() {
+            if result.is_err() {
+                return Err(result.err().unwrap())?;
+            }
+
+            let ent = result.ok().unwrap();
+            println!("{}", ent.path().display());
+            if ent.path().is_dir() {
+                continue;
+            }
+
+            files.push(ent.into_path());
+        }
+
+        Ok(Some(files))
     }
 
     fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>, Error> {
