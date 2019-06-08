@@ -19,7 +19,6 @@ matrix:
         - cargo fmt -- --check
         - cargo clippy -- -D clippy::all
     - env: NAME='cargo-travis'
-      sudo: required # travis-ci/travis-ci#9061
       before_script:
         - cargo install cargo-update || echo "cargo-update already installed"
         - cargo install cargo-travis || echo "cargo-travis already installed"
