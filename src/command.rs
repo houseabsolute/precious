@@ -17,7 +17,7 @@ pub enum CommandError {
         stderr: String,
     },
 
-    #[fail(display = "Ran `{}` and it was killed by a signal: {}", cmd, signal)]
+    #[fail(display = "Ran `{}` and it was killed by signal {}", cmd, signal)]
     ProcessKilledBySignal { cmd: String, signal: i32 },
 
     #[fail(display = "Got unexpected stderr output from `{}`: {}", cmd, stderr)]
@@ -91,7 +91,7 @@ fn output_from_command(
                 let cstr = command_string(cmd, args);
                 let signal = signal_from_status(output.status);
                 debug!(
-                    "Ran {} which exited because of {} signal",
+                    "Ran {} which exited because of signal {}",
                     cstr.clone(),
                     signal
                 );
