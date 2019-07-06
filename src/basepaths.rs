@@ -100,22 +100,7 @@ impl BasePaths {
             })?;
         }
 
-        self.files_to_paths(
-            files
-                .unwrap()
-                .iter()
-                .filter_map(|p| {
-                    if self.excluder.path_is_excluded(&p) {
-                        return None;
-                    }
-                    if self.is_vcs_dir(&p) {
-                        return None;
-                    }
-
-                    Some(p.clone())
-                })
-                .collect(),
-        )
+        self.files_to_paths(files.unwrap())
     }
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
@@ -193,34 +178,15 @@ impl BasePaths {
         }
     }
 
-    fn is_vcs_dir(&self, path: &PathBuf) -> bool {
-        for dir in vcs::VCS_DIRS {
-            if path.starts_with(dir) {
-                return true;
-            }
-        }
-        false
-    }
-
     fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Vec<Paths>, Error> {
         let mut entries: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
-        let mut pat = String::from("^");
-        pat.push_str(&self.root.to_string_lossy());
-        pat.push('/');
-        let re = Regex::new(pat.as_str())?;
 
-        for p in files {
-            let rel = PathBuf::from(re.replace(&p.to_string_lossy(), "./").into_owned());
-
-            let dir = rel.parent().unwrap().to_path_buf();
-            if dir.starts_with("./.git/") || dir == PathBuf::from("./.git") {
-                continue;
-            }
-
+        for f in self.filtered_relative_files(files)? {
+            let dir = f.parent().unwrap().to_path_buf();
             if entries.contains_key(&dir) {
-                entries.get_mut(&dir).unwrap().push(rel.clone());
+                entries.get_mut(&dir).unwrap().push(f.clone());
             } else {
-                let files: Vec<PathBuf> = vec![rel.clone()];
+                let files: Vec<PathBuf> = vec![f.clone()];
                 entries.insert(dir, files);
             }
         }
@@ -244,6 +210,53 @@ impl BasePaths {
             })
             .collect())
     }
+
+    fn filtered_relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>, Error> {
+        let mut pat = String::from("^");
+        pat.push_str(&self.root.to_string_lossy());
+        pat.push('/');
+        let root_path_re = Regex::new(pat.as_str())?;
+
+        let mut cleaned: Vec<PathBuf> = vec![];
+
+        for mut f in files {
+            // We want to make all files absolute so we can canonicalize them
+            // and _then_ strip off the root prefix. This lets us consistently
+            // produce path names starting with "./".
+            if !f.is_absolute() {
+                f = self.root.clone().join(f);
+            }
+
+            let mut rel_str = root_path_re
+                .replace(&f.canonicalize()?.to_string_lossy(), "./")
+                .into_owned();
+            if !rel_str.starts_with("./") {
+                rel_str.insert_str(0, "./");
+            }
+            let rel = PathBuf::from(rel_str);
+
+            if self.excluder.path_is_excluded(&rel) {
+                continue;
+            }
+            if self.starts_with_vcs_dir(&rel) {
+                continue;
+            }
+
+            cleaned.push(rel);
+        }
+
+        Ok(cleaned)
+    }
+
+    fn starts_with_vcs_dir(&self, path: &PathBuf) -> bool {
+        let rel = PathBuf::from("./");
+        for dir in vcs::VCS_DIRS {
+            if path.starts_with(rel.join(dir)) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[cfg(test)]
@@ -257,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn test_files_to_paths() -> Result<(), Error> {
+    fn files_to_paths() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         let mut files: Vec<PathBuf> = vec![];
         for p in testhelper::paths().iter() {
@@ -299,6 +312,35 @@ mod tests {
             .map(PathBuf::from)
             .collect(),
         });
+
+        Ok(())
+    }
+
+    #[test]
+    fn files_to_paths_prefix() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+
+        for p in vec![
+            "./src/bar.rs",
+            "src/bar.rs",
+            root.path()
+                .join("src/bar.rs")
+                .to_string_lossy()
+                .into_owned()
+                .as_str(),
+        ] {
+            let cli_paths = vec![PathBuf::from(p)];
+            let bp = new_basepaths(Mode::FromCLI, cli_paths.clone(), root.path().to_owned())?;
+            let paths = bp.files_to_paths(cli_paths)?;
+
+            assert_that(&paths.len())
+                .named("got one paths entry")
+                .is_equal_to(1);
+            assert_that(&paths[0]).is_equal_to(Paths {
+                dir: PathBuf::from("./src"),
+                files: ["./src/bar.rs"].iter().map(PathBuf::from).collect(),
+            });
+        }
 
         Ok(())
     }
@@ -353,7 +395,6 @@ mod tests {
         let expect = bp.files_to_paths(
             modified
                 .iter()
-                .filter(|p| !p.starts_with(".git"))
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
@@ -403,7 +444,6 @@ mod tests {
         let expect = bp.files_to_paths(
             modified
                 .iter()
-                .filter(|p| !p.starts_with(".git"))
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
@@ -434,17 +474,18 @@ mod tests {
     }
 
     #[test]
-    fn is_vcs_dir() -> Result<(), Error> {
+    fn starts_with_vcs_dir() -> Result<(), Error> {
         let bp = new_basepaths(Mode::All, vec![], PathBuf::from("/root"))?;
 
-        assert!(bp.is_vcs_dir(&PathBuf::from(".git")));
-        assert!(bp.is_vcs_dir(&PathBuf::from(".hg")));
-        assert!(bp.is_vcs_dir(&PathBuf::from(".svn")));
-        assert!(!bp.is_vcs_dir(&PathBuf::from("git")));
-        assert!(!bp.is_vcs_dir(&PathBuf::from("hg")));
-        assert!(!bp.is_vcs_dir(&PathBuf::from("svn")));
-        assert!(!bp.is_vcs_dir(&PathBuf::from(".config")));
-        assert!(!bp.is_vcs_dir(&PathBuf::from(".local")));
+        assert!(bp.starts_with_vcs_dir(&PathBuf::from("./.git")));
+        assert!(bp.starts_with_vcs_dir(&PathBuf::from("./.hg")));
+        assert!(bp.starts_with_vcs_dir(&PathBuf::from("./.svn")));
+        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./.gitignore")));
+        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./git")));
+        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./hg")));
+        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./svn")));
+        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./.config")));
+        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./.local")));
 
         Ok(())
     }

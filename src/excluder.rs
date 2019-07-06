@@ -33,6 +33,8 @@ mod tests {
         let e1 = Excluder::new(&[String::from("*.foo")])?;
         assert!(e1.path_is_excluded(&PathBuf::from("file.foo")));
         assert!(!e1.path_is_excluded(&PathBuf::from("file.bar")));
+        assert!(e1.path_is_excluded(&PathBuf::from("./file.foo")));
+        assert!(!e1.path_is_excluded(&PathBuf::from("./file.bar")));
 
         let e2 = Excluder::new(&[String::from("*.foo"), String::from("**/foo/*")])?;
         assert!(e2.path_is_excluded(&PathBuf::from("file.foo")));
@@ -40,6 +42,11 @@ mod tests {
         assert!(e2.path_is_excluded(&PathBuf::from("/baz/bar/file.foo")));
         assert!(!e2.path_is_excluded(&PathBuf::from("/baz/bar/file.bar")));
         assert!(e2.path_is_excluded(&PathBuf::from("/contains/foo/any.txt")));
+        assert!(e2.path_is_excluded(&PathBuf::from("./file.foo")));
+        assert!(!e2.path_is_excluded(&PathBuf::from("./file.bar")));
+        assert!(e2.path_is_excluded(&PathBuf::from("./baz/bar/file.foo")));
+        assert!(!e2.path_is_excluded(&PathBuf::from("./baz/bar/file.bar")));
+        assert!(e2.path_is_excluded(&PathBuf::from("./contains/foo/any.txt")));
 
         Ok(())
     }
