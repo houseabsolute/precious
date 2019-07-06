@@ -1,5 +1,4 @@
 use crate::command;
-use crate::excluder;
 use crate::vcs;
 use failure::Error;
 use ignore;
@@ -34,10 +33,10 @@ pub struct BasePaths {
     mode: Mode,
     cli_paths: Vec<PathBuf>,
     root: PathBuf,
-    excluder: excluder::Excluder,
+    exclude_globs: Vec<String>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Paths {
     pub dir: PathBuf,
     pub files: Vec<PathBuf>,
@@ -66,7 +65,7 @@ impl BasePaths {
         mode: Mode,
         cli_paths: Vec<PathBuf>,
         root: PathBuf,
-        exclude_globs: &[String],
+        exclude_globs: Vec<String>,
     ) -> Result<BasePaths, Error> {
         match mode {
             Mode::FromCLI => (),
@@ -76,13 +75,11 @@ impl BasePaths {
                 }
             }
         };
-
-        let exc = excluder::Excluder::new(exclude_globs)?;
         Ok(BasePaths {
             mode,
             cli_paths,
             root,
-            excluder: exc,
+            exclude_globs,
         })
     }
 
@@ -138,8 +135,20 @@ impl BasePaths {
     }
 
     fn walkdir_files(&self, root: &PathBuf) -> Result<Option<Vec<PathBuf>>, Error> {
+        let mut excludes = ignore::overrides::OverrideBuilder::new(root);
+        for e in self.exclude_globs.clone() {
+            excludes.add(format!("!{}", e).as_ref())?;
+        }
+        for d in vcs::VCS_DIRS {
+            excludes.add(format!("!{}/**/*", d).as_ref())?;
+        }
+
         let mut files: Vec<PathBuf> = vec![];
-        for result in ignore::WalkBuilder::new(root).hidden(false).build() {
+        for result in ignore::WalkBuilder::new(root)
+            .hidden(false)
+            .overrides(excludes.build()?)
+            .build()
+        {
             if result.is_err() {
                 return Err(result.err().unwrap())?;
             }
@@ -148,7 +157,7 @@ impl BasePaths {
             if ent.path().is_dir() {
                 continue;
             }
-
+            debug!("walkdir_files: {}", ent.path().to_string_lossy());
             files.push(ent.into_path());
         }
 
@@ -235,27 +244,10 @@ impl BasePaths {
             }
             let rel = PathBuf::from(rel_str);
 
-            if self.excluder.path_is_excluded(&rel) {
-                continue;
-            }
-            if self.starts_with_vcs_dir(&rel) {
-                continue;
-            }
-
             cleaned.push(rel);
         }
 
         Ok(cleaned)
-    }
-
-    fn starts_with_vcs_dir(&self, path: &PathBuf) -> bool {
-        let rel = PathBuf::from("./");
-        for dir in vcs::VCS_DIRS {
-            if path.starts_with(rel.join(dir)) {
-                return true;
-            }
-        }
-        false
     }
 }
 
@@ -266,7 +258,7 @@ mod tests {
     use spectral::prelude::*;
 
     fn new_basepaths(mode: Mode, paths: Vec<PathBuf>, root: PathBuf) -> Result<BasePaths, Error> {
-        BasePaths::new(mode, paths, root, &[])
+        BasePaths::new(mode, paths, root, vec![])
     }
 
     #[test]
@@ -470,23 +462,6 @@ mod tests {
                 .collect::<Vec<PathBuf>>(),
         )?;
         assert_that(&bp.paths()?).is_equal_to(expect);
-        Ok(())
-    }
-
-    #[test]
-    fn starts_with_vcs_dir() -> Result<(), Error> {
-        let bp = new_basepaths(Mode::All, vec![], PathBuf::from("/root"))?;
-
-        assert!(bp.starts_with_vcs_dir(&PathBuf::from("./.git")));
-        assert!(bp.starts_with_vcs_dir(&PathBuf::from("./.hg")));
-        assert!(bp.starts_with_vcs_dir(&PathBuf::from("./.svn")));
-        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./.gitignore")));
-        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./git")));
-        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./hg")));
-        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./svn")));
-        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./.config")));
-        assert!(!bp.starts_with_vcs_dir(&PathBuf::from("./.local")));
-
         Ok(())
     }
 }

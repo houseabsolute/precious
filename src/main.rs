@@ -19,6 +19,7 @@ use clap::{App, Arg, ArgGroup, SubCommand};
 use failure::Error;
 use log::{debug, error};
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -216,16 +217,16 @@ impl<'a> Main<'a> {
         let mut status = 0 as i32;
 
         for t in tidiers {
-            let p = if t.on_dir {
+            let map = if t.on_dir {
                 self.dirs()?
             } else {
                 self.files()?
             };
 
-            let failures: Vec<i32> = p
+            let failures: Vec<i32> = map
                 .par_iter()
-                .map(|p| -> i32 {
-                    match t.tidy(p) {
+                .map(|(p, paths)| -> i32 {
+                    match t.tidy(p, &paths.files) {
                         Ok(Some(true)) => {
                             if !self.quiet {
                                 println!("💧 Tidied by {}:    {}", t.name, p.to_string_lossy());
@@ -264,16 +265,16 @@ impl<'a> Main<'a> {
         let mut status = 0 as i32;
 
         for l in linters {
-            let p = if l.on_dir {
+            let map = if l.on_dir {
                 self.dirs()?
             } else {
                 self.files()?
             };
 
-            let failures: Vec<i32> = p
+            let failures: Vec<i32> = map
                 .par_iter()
-                .map(|p| -> i32 {
-                    match l.lint(p) {
+                .map(|(p, paths)| -> i32 {
+                    match l.lint(p, &paths.files) {
                         Ok(Some(r)) => {
                             if r.ok {
                                 if !self.quiet {
@@ -314,21 +315,24 @@ impl<'a> Main<'a> {
         Exit { status, error }
     }
 
-    fn dirs(&mut self) -> Result<Vec<PathBuf>, Error> {
-        Ok(self
-            .basepaths()?
-            .paths()?
-            .iter()
-            .map(|p| p.dir.clone())
-            .collect())
+    fn dirs(&mut self) -> Result<HashMap<PathBuf, basepaths::Paths>, Error> {
+        let mut map = HashMap::new();
+        for p in self.basepaths()?.paths()? {
+            map.insert(p.dir.clone(), p);
+        }
+        Ok(map)
     }
 
-    fn files(&mut self) -> Result<Vec<PathBuf>, Error> {
-        let mut files: Vec<PathBuf> = vec![];
+    fn files(&mut self) -> Result<HashMap<PathBuf, basepaths::Paths>, Error> {
+        let mut map = HashMap::new();
         for p in self.basepaths()?.paths()? {
-            files.append(&mut p.files.clone());
+            // This is gross
+            let p_clone = p.clone();
+            for f in p.files {
+                map.insert(f.clone(), p_clone.clone());
+            }
         }
-        Ok(files)
+        Ok(map)
     }
 
     fn basepaths(&mut self) -> Result<&basepaths::BasePaths, Error> {
@@ -338,7 +342,7 @@ impl<'a> Main<'a> {
                 mode,
                 paths,
                 self.root_dir(),
-                self.config().exclude.as_ref(),
+                self.config().exclude.clone(),
             )?);
         }
         Ok(self.basepaths.as_ref().unwrap())

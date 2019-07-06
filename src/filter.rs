@@ -107,7 +107,7 @@ struct PathInfo {
 }
 
 impl Filter {
-    pub fn tidy(&self, path: &PathBuf) -> Result<Option<bool>, Error> {
+    pub fn tidy(&self, path: &PathBuf, files: &Vec<PathBuf>) -> Result<Option<bool>, Error> {
         self.require_is_not_filter_type(FilterType::Lint)?;
 
         let mut full = self.root.clone();
@@ -115,7 +115,7 @@ impl Filter {
 
         self.require_path_type("tidy", &full)?;
 
-        if !self.should_process_path(path)? {
+        if !self.should_process_path(path, files)? {
             return Ok(None);
         }
 
@@ -124,7 +124,7 @@ impl Filter {
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
-    pub fn lint(&self, path: &PathBuf) -> Result<Option<LintResult>, Error> {
+    pub fn lint(&self, path: &PathBuf, files: &Vec<PathBuf>) -> Result<Option<LintResult>, Error> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
@@ -132,7 +132,7 @@ impl Filter {
 
         self.require_path_type("lint", &full)?;
 
-        if !self.should_process_path(&path)? {
+        if !self.should_process_path(path, files)? {
             return Ok(None);
         }
 
@@ -167,26 +167,48 @@ impl Filter {
         Ok(())
     }
 
-    fn should_process_path(&self, path: &PathBuf) -> Result<bool, Error> {
+    fn should_process_path(&self, path: &PathBuf, files: &Vec<PathBuf>) -> Result<bool, Error> {
         if self.excluder.path_is_excluded(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
                 path.to_string_lossy(),
-                self.name
+                self.name,
             );
             return Ok(false);
         }
 
-        if !self.includer.path_is_included(path) {
+        if self.on_dir && files.iter().all(|f| self.excluder.path_is_excluded(f)) {
             debug!(
-                "Path {} is not included in the {} filter",
+                "Directory {} is excluded for the {} filter because all of its files are excluded",
+                path.to_string_lossy(),
+                self.name,
+            );
+            return Ok(false);
+        }
+
+        if self.includer.path_is_included(path) {
+            return Ok(true);
+        }
+
+        if self.on_dir {
+            if files.iter().any(|f| self.includer.path_is_included(f)) {
+                return Ok(true);
+            }
+
+            debug!(
+                "Directory {} is not included in the {} filter because neither it nor its files are included",
                 path.to_string_lossy(),
                 self.name
             );
             return Ok(false);
         }
 
-        Ok(true)
+        debug!(
+            "Path {} is not included in the {} filter",
+            path.to_string_lossy(),
+            self.name
+        );
+        Ok(false)
     }
 
     fn path_was_changed(path: &PathBuf, prev: &HashMap<PathBuf, PathInfo>) -> Result<bool, Error> {
