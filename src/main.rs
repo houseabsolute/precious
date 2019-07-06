@@ -419,7 +419,7 @@ impl<'a> Main<'a> {
     }
 
     fn is_checkout_root(path: &Path) -> bool {
-        for dir in vcs::VCS_DIRS {
+        for dir in vcs::dirs() {
             let mut poss = PathBuf::from(path);
             poss.push(dir);
             if poss.exists() {

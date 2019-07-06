@@ -65,6 +65,20 @@ pub fn stage_all_in(root: &TempDir) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn commit_all_in(root: &TempDir) -> Result<(), Error> {
+    command::run_command(
+        "git".to_string(),
+        ["commit", "-a", "-m", "committed"]
+            .iter()
+            .map(|a| a.to_string())
+            .collect(),
+        [0].to_vec(),
+        false,
+        Some(&root.path().to_owned()),
+    )?;
+    Ok(())
+}
+
 const ROOT_GITIGNORE: &'static str = "
 /**/bar.*
 can_ignore.*
@@ -106,7 +120,7 @@ pub fn modify_files(root: &TempDir) -> Result<Vec<PathBuf>, Error> {
     Ok(paths)
 }
 
-fn write_file(root: &TempDir, rel: &str, content: &str) -> Result<(), Error> {
+pub fn write_file(root: &TempDir, rel: &str, content: &str) -> Result<(), Error> {
     let mut full = root.path().to_owned().clone();
     full.push(rel);
     fs::create_dir_all(full.parent().unwrap()).context(format!(

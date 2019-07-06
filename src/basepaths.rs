@@ -1,4 +1,5 @@
 use crate::command;
+use crate::excluder;
 use crate::vcs;
 use failure::Error;
 use ignore;
@@ -139,7 +140,7 @@ impl BasePaths {
         for e in self.exclude_globs.clone() {
             excludes.add(format!("!{}", e).as_ref())?;
         }
-        for d in vcs::VCS_DIRS {
+        for d in vcs::dirs() {
             excludes.add(format!("!{}/**/*", d).as_ref())?;
         }
 
@@ -173,13 +174,21 @@ impl BasePaths {
             Some(&self.root),
         )?;
 
+        let mut globs = self.exclude_globs.clone();
+        let mut v = vcs::dirs().clone();
+        globs.append(&mut v);
+        let excluder = excluder::Excluder::new(globs.as_ref())?;
         match result.stdout {
             Some(s) => Ok(Some(
                 s.lines()
-                    .map(|r| {
+                    .filter_map(|rel| {
+                        if excluder.path_is_excluded(&PathBuf::from(rel)) {
+                            return None;
+                        }
+
                         let mut f = self.root.clone();
-                        f.push(r);
-                        f
+                        f.push(rel);
+                        Some(f)
                     })
                     .collect(),
             )),
@@ -258,7 +267,16 @@ mod tests {
     use spectral::prelude::*;
 
     fn new_basepaths(mode: Mode, paths: Vec<PathBuf>, root: PathBuf) -> Result<BasePaths, Error> {
-        BasePaths::new(mode, paths, root, vec![])
+        new_basepaths_with_excludes(mode, paths, root, vec![])
+    }
+
+    fn new_basepaths_with_excludes(
+        mode: Mode,
+        paths: Vec<PathBuf>,
+        root: PathBuf,
+        exclude: Vec<String>,
+    ) -> Result<BasePaths, Error> {
+        BasePaths::new(mode, paths, root, exclude)
     }
 
     #[test]
@@ -396,6 +414,33 @@ mod tests {
     }
 
     #[test]
+    fn git_modified_mode_with_excluded_files() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
+        testhelper::stage_all_in(&root)?;
+        testhelper::commit_all_in(&root)?;
+
+        let modified = testhelper::modify_files(&root)?;
+        testhelper::write_file(&root, "vendor/foo/bar.txt", "new content")?;
+        let bp = new_basepaths_with_excludes(
+            Mode::GitModified,
+            vec![],
+            root.path().to_owned(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        let expect = bp.files_to_paths(
+            modified
+                .iter()
+                .sorted_by(|a, b| a.cmp(b))
+                .map(PathBuf::from)
+                .collect::<Vec<PathBuf>>(),
+        )?;
+        assert_that(&bp.paths()?).is_equal_to(expect);
+
+        Ok(())
+    }
+
+    #[test]
     fn git_staged_mode_empty() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         let bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
@@ -433,6 +478,30 @@ mod tests {
         }));
 
         testhelper::stage_all_in(&root)?;
+        let expect = bp.files_to_paths(
+            modified
+                .iter()
+                .sorted_by(|a, b| a.cmp(b))
+                .map(PathBuf::from)
+                .collect::<Vec<PathBuf>>(),
+        )?;
+        assert_that(&bp.paths()?).is_equal_to(expect);
+
+        Ok(())
+    }
+
+    #[test]
+    fn git_staged_mode_with_excluded_files() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+        let modified = testhelper::modify_files(&root)?;
+        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
+        testhelper::stage_all_in(&root)?;
+        let bp = new_basepaths_with_excludes(
+            Mode::GitStaged,
+            vec![],
+            root.path().to_owned(),
+            vec!["vendor/**/*".to_string()],
+        )?;
         let expect = bp.files_to_paths(
             modified
                 .iter()

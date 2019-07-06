@@ -1,1 +1,6 @@
-pub const VCS_DIRS: &[&str] = &[".git", ".hg", ".svn"];
+pub fn dirs() -> Vec<String> {
+    [".git", ".hg", ".svn"]
+        .iter()
+        .map(|&s| String::from(s))
+        .collect()
+}
