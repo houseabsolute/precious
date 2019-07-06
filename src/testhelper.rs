@@ -8,18 +8,18 @@ use std::path::PathBuf;
 use tempdir::TempDir;
 
 const PATHS: &'static [&'static str] = &[
-    "can_ignore.x",
-    "README.md",
-    "src/can_ignore.rs",
-    "src/bar.rs",
-    "src/main.rs",
-    "src/module.rs",
-    "tests/data/foo.txt",
-    "tests/data/bar.txt",
-    "tests/data/generated.txt",
+    "./README.md",
+    "./can_ignore.x",
+    "./src/can_ignore.rs",
+    "./src/bar.rs",
+    "./src/main.rs",
+    "./src/module.rs",
+    "./tests/data/foo.txt",
+    "./tests/data/bar.txt",
+    "./tests/data/generated.txt",
 ];
 
-const TO_MODIFY: &'static [&'static str] = &["src/module.rs", "tests/data/foo.txt"];
+const TO_MODIFY: &'static [&'static str] = &["./src/module.rs", "./tests/data/foo.txt"];
 
 pub fn paths() -> &'static [&'static str] {
     PATHS
@@ -74,11 +74,27 @@ const TESTS_DATA_GITIGNORE: &'static str = "
 generated.*
 ";
 
-pub fn add_gitignore_files(root: &TempDir) -> Result<(), Error> {
-    write_file(root, ".gitignore", ROOT_GITIGNORE)?;
-    write_file(root, "tests/data/.gitignore", TESTS_DATA_GITIGNORE)?;
+const ROOT_GITIGNORE_FILE: &'static str = "./.gitignore";
+const TESTS_DATA_GITIGNORE_FILE: &'static str = "./tests/data/.gitignore";
 
-    Ok(())
+pub fn non_ignored_files() -> Vec<&'static str> {
+    PATHS
+        .iter()
+        .filter_map(|&p| {
+            if p.contains("can_ignore") || p.contains("bar.") || p.contains("generated.txt") {
+                None
+            } else {
+                Some(p)
+            }
+        })
+        .collect::<Vec<&'static str>>()
+}
+
+pub fn add_gitignore_files(root: &TempDir) -> Result<Vec<&'static str>, Error> {
+    write_file(root, ROOT_GITIGNORE_FILE, ROOT_GITIGNORE)?;
+    write_file(root, TESTS_DATA_GITIGNORE_FILE, TESTS_DATA_GITIGNORE)?;
+
+    Ok(vec![ROOT_GITIGNORE_FILE, TESTS_DATA_GITIGNORE_FILE])
 }
 
 pub fn modify_files(root: &TempDir) -> Result<Vec<PathBuf>, Error> {

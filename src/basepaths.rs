@@ -6,6 +6,7 @@ use ignore;
 use itertools::Itertools;
 use log::debug;
 use regex::Regex;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -34,6 +35,12 @@ pub struct BasePaths {
     cli_paths: Vec<PathBuf>,
     root: PathBuf,
     excluder: excluder::Excluder,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Paths {
+    pub dir: PathBuf,
+    pub files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Fail, PartialEq)]
@@ -79,7 +86,7 @@ impl BasePaths {
         })
     }
 
-    pub fn paths(&self) -> Result<Vec<PathBuf>, Error> {
+    pub fn paths(&self) -> Result<Vec<Paths>, Error> {
         let files = match self.mode {
             Mode::All => self.all_files()?,
             Mode::FromCLI => self.files_from_cli()?,
@@ -93,36 +100,22 @@ impl BasePaths {
             })?;
         }
 
-        let mut pat = String::from("^");
-        pat.push_str(&self.root.to_string_lossy());
-        pat.push('/');
-        let re = Regex::new(pat.as_str())?;
+        self.files_to_paths(
+            files
+                .unwrap()
+                .iter()
+                .filter_map(|p| {
+                    if self.excluder.path_is_excluded(&p) {
+                        return None;
+                    }
+                    if self.is_vcs_dir(&p) {
+                        return None;
+                    }
 
-        let mut paths: Vec<PathBuf> = vec![];
-        for p in files.unwrap() {
-            let rel = PathBuf::from(
-                re.replace(p.to_string_lossy().into_owned().as_str(), "")
-                    .into_owned(),
-            );
-            if self.excluder.path_is_excluded(&rel) {
-                continue;
-            }
-            if self.is_vcs_dir(&rel) {
-                continue;
-            }
-            paths.push(rel);
-        }
-
-        if paths.is_empty() {
-            return Err(BasePathsError::AllPathsWereExcluded {
-                mode: self.mode.clone(),
-            })?;
-        }
-
-        Ok(paths
-            .drain(..)
-            .sorted_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()))
-            .collect())
+                    Some(p.clone())
+                })
+                .collect(),
+        )
     }
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
@@ -167,7 +160,6 @@ impl BasePaths {
             }
 
             let ent = result.ok().unwrap();
-            println!("{}", ent.path().display());
             if ent.path().is_dir() {
                 continue;
             }
@@ -209,6 +201,49 @@ impl BasePaths {
         }
         false
     }
+
+    fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Vec<Paths>, Error> {
+        let mut entries: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+        let mut pat = String::from("^");
+        pat.push_str(&self.root.to_string_lossy());
+        pat.push('/');
+        let re = Regex::new(pat.as_str())?;
+
+        for p in files {
+            let rel = PathBuf::from(re.replace(&p.to_string_lossy(), "./").into_owned());
+
+            let dir = rel.parent().unwrap().to_path_buf();
+            if dir.starts_with("./.git/") || dir == PathBuf::from("./.git") {
+                continue;
+            }
+
+            if entries.contains_key(&dir) {
+                entries.get_mut(&dir).unwrap().push(rel.clone());
+            } else {
+                let files: Vec<PathBuf> = vec![rel.clone()];
+                entries.insert(dir, files);
+            }
+        }
+
+        if entries.is_empty() {
+            return Err(BasePathsError::AllPathsWereExcluded {
+                mode: self.mode.clone(),
+            })?;
+        }
+
+        Ok(entries
+            .keys()
+            .sorted()
+            .map(|k| {
+                let mut files = entries.get(k).unwrap().to_vec();
+                files.sort();
+                Paths {
+                    dir: k.to_path_buf(),
+                    files,
+                }
+            })
+            .collect())
+    }
 }
 
 #[cfg(test)]
@@ -222,16 +257,58 @@ mod tests {
     }
 
     #[test]
+    fn test_files_to_paths() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+        let mut files: Vec<PathBuf> = vec![];
+        for p in testhelper::paths().iter() {
+            files.push(PathBuf::from(p));
+        }
+
+        let bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
+        let paths = bp.files_to_paths(files)?;
+        assert_that(&paths.len())
+            .named("got three paths entries")
+            .is_equal_to(3);
+        assert_that(&paths[0]).is_equal_to(Paths {
+            dir: PathBuf::from("."),
+            files: ["./README.md", "./can_ignore.x"]
+                .iter()
+                .map(PathBuf::from)
+                .collect(),
+        });
+        assert_that(&paths[1]).is_equal_to(Paths {
+            dir: PathBuf::from("./src"),
+            files: [
+                "./src/bar.rs",
+                "./src/can_ignore.rs",
+                "./src/main.rs",
+                "./src/module.rs",
+            ]
+            .iter()
+            .map(PathBuf::from)
+            .collect(),
+        });
+        assert_that(&paths[2]).is_equal_to(Paths {
+            dir: PathBuf::from("./tests/data"),
+            files: [
+                "./tests/data/bar.txt",
+                "./tests/data/foo.txt",
+                "./tests/data/generated.txt",
+            ]
+            .iter()
+            .map(PathBuf::from)
+            .collect(),
+        });
+
+        Ok(())
+    }
+
+    #[test]
     fn all_mode() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         let bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
         assert_that(&bp.paths()?).is_equal_to(
-            testhelper::paths()
-                .iter()
-                .filter(|p| !p.starts_with(".git"))
-                .sorted_by(|a, b| a.cmp(b))
-                .map(PathBuf::from)
-                .collect::<Vec<PathBuf>>(),
+            bp.files_to_paths(testhelper::paths().iter().map(PathBuf::from).collect())?,
         );
         Ok(())
     }
@@ -239,22 +316,13 @@ mod tests {
     #[test]
     fn all_mode_with_gitignore() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
-        testhelper::add_gitignore_files(&root)?;
+        let mut gitignores = testhelper::add_gitignore_files(&root)?;
+        let mut expect = testhelper::non_ignored_files();
+        expect.append(&mut gitignores);
+
         let bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
-        let mut expect = testhelper::paths()
-            .iter()
-            .filter(|p| {
-                !(p.starts_with(".git")
-                    || p.contains("/bar.")
-                    || p.contains("can_ignore.")
-                    || p.contains("generated."))
-            })
-            .sorted_by(|a, b| a.cmp(b))
-            .map(PathBuf::from)
-            .collect::<Vec<PathBuf>>();
-        expect.insert(0, PathBuf::from(".gitignore"));
-        expect.insert(4, PathBuf::from("tests/data/.gitignore"));
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.paths()?)
+            .is_equal_to(bp.files_to_paths(expect.iter().map(PathBuf::from).collect())?);
         Ok(())
     }
 
@@ -282,15 +350,15 @@ mod tests {
         let root = testhelper::create_git_repo()?;
         let modified = testhelper::modify_files(&root)?;
         let bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
-        assert_that(&bp.paths()?).is_equal_to(
+        let expect = bp.files_to_paths(
             modified
                 .iter()
                 .filter(|p| !p.starts_with(".git"))
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
-        );
-
+        )?;
+        assert_that(&bp.paths()?).is_equal_to(expect);
         Ok(())
     }
 
@@ -332,14 +400,15 @@ mod tests {
         }));
 
         testhelper::stage_all_in(&root)?;
-        assert_that(&bp.paths()?).is_equal_to(
+        let expect = bp.files_to_paths(
             modified
                 .iter()
                 .filter(|p| !p.starts_with(".git"))
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
-        );
+        )?;
+        assert_that(&bp.paths()?).is_equal_to(expect);
 
         Ok(())
     }
@@ -352,12 +421,14 @@ mod tests {
             vec![PathBuf::from("tests")],
             root.path().to_owned(),
         )?;
-        let expect = testhelper::paths()
-            .iter()
-            .filter(|p| p.starts_with("tests/"))
-            .sorted_by(|a, b| a.cmp(b))
-            .map(PathBuf::from)
-            .collect::<Vec<PathBuf>>();
+        let expect = bp.files_to_paths(
+            testhelper::paths()
+                .iter()
+                .filter(|p| p.starts_with("./tests/"))
+                .sorted_by(|a, b| a.cmp(b))
+                .map(PathBuf::from)
+                .collect::<Vec<PathBuf>>(),
+        )?;
         assert_that(&bp.paths()?).is_equal_to(expect);
         Ok(())
     }

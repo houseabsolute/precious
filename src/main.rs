@@ -151,9 +151,6 @@ enum MainError {
 
     #[fail(display = "No linters defined in your config")]
     NoLinters,
-
-    #[fail(display = "Could not find a parent for the {} path", path)]
-    PathHasNoParent { path: String },
 }
 
 #[derive(Debug)]
@@ -177,6 +174,7 @@ struct Main<'a> {
     config: Option<config::Config>,
     root: Option<PathBuf>,
     quiet: bool,
+    basepaths: Option<basepaths::BasePaths>,
 }
 
 impl<'a> Main<'a> {
@@ -186,6 +184,7 @@ impl<'a> Main<'a> {
             config: None,
             root: None,
             quiet: matches.is_present("quiet"),
+            basepaths: None,
         };
         s.set_config()?;
         Ok(s)
@@ -207,8 +206,7 @@ impl<'a> Main<'a> {
     }
 
     fn tidy(&mut self) -> Result<Exit, Error> {
-        let (mode, _) = self.mode();
-        println!("💍 Tidying {}", mode);
+        println!("💍 Tidying {}", self.mode());
 
         let tidiers = self.config().tidy_filters(&self.root_dir())?;
         if tidiers.is_empty() {
@@ -216,10 +214,14 @@ impl<'a> Main<'a> {
         }
 
         let mut status = 0 as i32;
-        let (files, dirs) = self.files_and_dirs(&tidiers)?;
 
         for t in tidiers {
-            let p = if t.on_dir { &dirs } else { &files };
+            let p = if t.on_dir {
+                self.dirs()?
+            } else {
+                self.files()?
+            };
+
             let failures: Vec<i32> = p
                 .par_iter()
                 .map(|p| -> i32 {
@@ -252,8 +254,7 @@ impl<'a> Main<'a> {
     }
 
     fn lint(&mut self) -> Result<Exit, Error> {
-        let (mode, _) = self.mode();
-        println!("💍 Linting {}", mode);
+        println!("💍 Linting {}", self.mode());
 
         let linters = self.config().lint_filters(&self.root_dir())?;
         if linters.is_empty() {
@@ -261,10 +262,14 @@ impl<'a> Main<'a> {
         }
 
         let mut status = 0 as i32;
-        let (files, dirs) = self.files_and_dirs(&linters)?;
 
         for l in linters {
-            let p = if l.on_dir { &dirs } else { &files };
+            let p = if l.on_dir {
+                self.dirs()?
+            } else {
+                self.files()?
+            };
+
             let failures: Vec<i32> = p
                 .par_iter()
                 .map(|p| -> i32 {
@@ -309,43 +314,42 @@ impl<'a> Main<'a> {
         Exit { status, error }
     }
 
-    fn files_and_dirs(
-        &self,
-        filters: &[filter::Filter],
-    ) -> Result<(Vec<PathBuf>, Vec<PathBuf>), Error> {
-        let files = self.basepaths()?.paths()?;
-        let mut dirs: Vec<PathBuf> = vec![];
-        if filters.iter().any(|f| f.on_dir) {
-            for p in &files {
-                dirs.push(Self::is_dir_or_parent(p)?);
-            }
-            dirs.dedup();
+    fn dirs(&mut self) -> Result<Vec<PathBuf>, Error> {
+        Ok(self
+            .basepaths()?
+            .paths()?
+            .iter()
+            .map(|p| p.dir.clone())
+            .collect())
+    }
+
+    fn files(&mut self) -> Result<Vec<PathBuf>, Error> {
+        let mut files: Vec<PathBuf> = vec![];
+        for p in self.basepaths()?.paths()? {
+            files.append(&mut p.files.clone());
         }
-        Ok((files, dirs))
+        Ok(files)
     }
 
-    fn is_dir_or_parent(path: &PathBuf) -> Result<PathBuf, Error> {
-        let parent = path.parent();
-        if parent.is_some() {
-            return Ok(parent.unwrap().to_path_buf());
+    fn basepaths(&mut self) -> Result<&basepaths::BasePaths, Error> {
+        if self.basepaths.is_none() {
+            let (mode, paths) = self.mode_and_paths_from_args();
+            self.basepaths = Some(basepaths::BasePaths::new(
+                mode,
+                paths,
+                self.root_dir(),
+                self.config().exclude.as_ref(),
+            )?);
         }
-
-        Err(MainError::PathHasNoParent {
-            path: path.to_string_lossy().to_string(),
-        })?
+        Ok(self.basepaths.as_ref().unwrap())
     }
 
-    fn basepaths(&self) -> Result<basepaths::BasePaths, Error> {
-        let (mode, paths) = self.mode();
-        Ok(basepaths::BasePaths::new(
-            mode,
-            paths,
-            self.root_dir(),
-            self.config().exclude.as_ref(),
-        )?)
+    fn mode(&self) -> basepaths::Mode {
+        let (mode, _) = self.mode_and_paths_from_args();
+        mode
     }
 
-    fn mode(&self) -> (basepaths::Mode, Vec<PathBuf>) {
+    fn mode_and_paths_from_args(&self) -> (basepaths::Mode, Vec<PathBuf>) {
         let subc_matches = self.matched_subcommand();
 
         let mut paths: Vec<PathBuf> = vec![];
