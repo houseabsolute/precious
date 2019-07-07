@@ -51,9 +51,6 @@ pub enum BasePathsError {
     )]
     GotPathsFromCLIWithWrongMode { mode: Mode },
 
-    #[fail(display = "Did not find any paths when looking for {}", mode)]
-    NoMatchingPaths { mode: Mode },
-
     #[fail(
         display = "Found some paths when looking for {} but they were all excluded",
         mode
@@ -84,7 +81,7 @@ impl BasePaths {
         })
     }
 
-    pub fn paths(&self) -> Result<Vec<Paths>, Error> {
+    pub fn paths(&self) -> Result<Option<Vec<Paths>>, Error> {
         let files = match self.mode {
             Mode::All => self.all_files()?,
             Mode::FromCLI => self.files_from_cli()?,
@@ -93,9 +90,7 @@ impl BasePaths {
         };
 
         if files.is_none() {
-            return Err(BasePathsError::NoMatchingPaths {
-                mode: self.mode.clone(),
-            })?;
+            return Ok(None);
         }
 
         self.files_to_paths(files.unwrap())
@@ -196,7 +191,7 @@ impl BasePaths {
         }
     }
 
-    fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Vec<Paths>, Error> {
+    fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>, Error> {
         let mut entries: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
         for f in self.filtered_relative_files(files)? {
@@ -215,18 +210,20 @@ impl BasePaths {
             })?;
         }
 
-        Ok(entries
-            .keys()
-            .sorted()
-            .map(|k| {
-                let mut files = entries.get(k).unwrap().to_vec();
-                files.sort();
-                Paths {
-                    dir: k.to_path_buf(),
-                    files,
-                }
-            })
-            .collect())
+        Ok(Some(
+            entries
+                .keys()
+                .sorted()
+                .map(|k| {
+                    let mut files = entries.get(k).unwrap().to_vec();
+                    files.sort();
+                    Paths {
+                        dir: k.to_path_buf(),
+                        files,
+                    }
+                })
+                .collect(),
+        ))
     }
 
     fn filtered_relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>, Error> {
@@ -288,7 +285,7 @@ mod tests {
         }
 
         let bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
-        let paths = bp.files_to_paths(files)?;
+        let paths = bp.files_to_paths(files)?.unwrap();
         assert_that(&paths.len())
             .named("got three paths entries")
             .is_equal_to(3);
@@ -341,7 +338,7 @@ mod tests {
         ] {
             let cli_paths = vec![PathBuf::from(p)];
             let bp = new_basepaths(Mode::FromCLI, cli_paths.clone(), root.path().to_owned())?;
-            let paths = bp.files_to_paths(cli_paths)?;
+            let paths = bp.files_to_paths(cli_paths)?.unwrap();
 
             assert_that(&paths.len())
                 .named("got one paths entry")
@@ -383,17 +380,8 @@ mod tests {
         let root = testhelper::create_git_repo()?;
         let bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
         let res = bp.paths();
-        assert_that(&res).is_err();
-        assert_that(&std::mem::discriminant(
-            res.unwrap_err()
-                .as_fail()
-                .find_root_cause()
-                .downcast_ref()
-                .unwrap(),
-        ))
-        .is_equal_to(std::mem::discriminant(&BasePathsError::NoMatchingPaths {
-            mode: Mode::GitModified,
-        }));
+        assert_that(&res).is_ok();
+        assert_that(&res.unwrap()).is_none();
         Ok(())
     }
 
@@ -445,17 +433,8 @@ mod tests {
         let root = testhelper::create_git_repo()?;
         let bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
         let res = bp.paths();
-        assert_that(&res).is_err();
-        assert_that(&std::mem::discriminant(
-            res.unwrap_err()
-                .as_fail()
-                .find_root_cause()
-                .downcast_ref()
-                .unwrap(),
-        ))
-        .is_equal_to(std::mem::discriminant(&BasePathsError::NoMatchingPaths {
-            mode: Mode::GitStaged,
-        }));
+        assert_that(&res).is_ok();
+        assert_that(&res.unwrap()).is_none();
         Ok(())
     }
 
@@ -465,17 +444,8 @@ mod tests {
         let modified = testhelper::modify_files(&root)?;
         let bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
         let res = bp.paths();
-        assert_that(&res).is_err();
-        assert_that(&std::mem::discriminant(
-            res.unwrap_err()
-                .as_fail()
-                .find_root_cause()
-                .downcast_ref()
-                .unwrap(),
-        ))
-        .is_equal_to(std::mem::discriminant(&BasePathsError::NoMatchingPaths {
-            mode: Mode::GitStaged,
-        }));
+        assert_that(&res).is_ok();
+        assert_that(&res.unwrap()).is_none();
 
         testhelper::stage_all_in(&root)?;
         let expect = bp.files_to_paths(

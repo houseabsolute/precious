@@ -28,19 +28,7 @@ fn main() {
     init_logger(&matches);
     let main = Main::new(&matches);
     let status = if main.is_ok() {
-        match main.unwrap().run() {
-            Ok(e) => {
-                if e.error.is_some() {
-                    error!("{}", e.error.unwrap());
-                }
-                e.status
-            }
-            Err(e) => {
-                error!("Failed to run precious: {}", e);
-                debug!("{}", e.backtrace());
-                127 as i32
-            }
-        }
+        main.unwrap().run()
     } else {
         error!("{}", main.unwrap_err());
         127 as i32
@@ -162,6 +150,7 @@ enum MainError {
 #[derive(Debug)]
 struct Exit {
     status: i32,
+    message: Option<String>,
     error: Option<String>,
 }
 
@@ -169,6 +158,7 @@ impl From<Error> for Exit {
     fn from(err: Error) -> Exit {
         Exit {
             status: 1,
+            message: None,
             error: Some(err.to_string()),
         }
     }
@@ -181,6 +171,7 @@ struct Chars {
     unchanged: &'static str,
     lint_free: &'static str,
     lint_dirty: &'static str,
+    empty: &'static str,
 }
 
 const FUN_CHARS: Chars = Chars {
@@ -189,14 +180,16 @@ const FUN_CHARS: Chars = Chars {
     unchanged: "✨",
     lint_free: "💯",
     lint_dirty: "💩",
+    empty: "⚫",
 };
 
 const BORING_CHARS: Chars = Chars {
-    ring: "}",
+    ring: ":",
     tidied: "*",
     unchanged: "|",
     lint_free: "|",
     lint_dirty: "*",
+    empty: "_",
 };
 
 #[derive(Debug)]
@@ -230,7 +223,26 @@ impl<'a> Main<'a> {
         Ok(s)
     }
 
-    fn run(&mut self) -> Result<Exit, Error> {
+    fn run(&mut self) -> i32 {
+        match self.run_subcommand() {
+            Ok(e) => {
+                if e.error.is_some() {
+                    error!("{}", e.error.unwrap());
+                }
+                if e.message.is_some() {
+                    println!("{} {}", self.chars.empty, e.message.unwrap());
+                }
+                e.status
+            }
+            Err(e) => {
+                error!("Failed to run precious: {}", e);
+                debug!("{}", e.backtrace());
+                127 as i32
+            }
+        }
+    }
+
+    fn run_subcommand(&mut self) -> Result<Exit, Error> {
         if self.matches.subcommand_matches("tidy").is_some() {
             return self.tidy();
         } else if self.matches.subcommand_matches("lint").is_some() {
@@ -239,6 +251,7 @@ impl<'a> Main<'a> {
 
         Ok(Exit {
             status: 1,
+            message: None,
             error: Some(String::from(
                 "You must run either the tidy or lint subcommand",
             )),
@@ -262,7 +275,12 @@ impl<'a> Main<'a> {
                 self.files()?
             };
 
+            if map.is_none() {
+                return Ok(self.no_files_exit());
+            }
+
             let failures: Vec<i32> = map
+                .unwrap()
                 .par_iter()
                 .map(|(p, paths)| -> i32 {
                     match t.tidy(p, &paths.files) {
@@ -320,7 +338,12 @@ impl<'a> Main<'a> {
                 self.files()?
             };
 
+            if map.is_none() {
+                return Ok(self.no_files_exit());
+            }
+
             let failures: Vec<i32> = map
+                .unwrap()
                 .par_iter()
                 .map(|(p, paths)| -> i32 {
                     match l.lint(p, &paths.files) {
@@ -365,33 +388,55 @@ impl<'a> Main<'a> {
         Ok(Self::exit_from_status(status, "linting"))
     }
 
+    fn no_files_exit(&self) -> Exit {
+        Exit {
+            status: 0,
+            message: Some(String::from("No files found")),
+            error: None,
+        }
+    }
+
     fn exit_from_status(status: i32, action: &str) -> Exit {
         let error = if status == 0 {
             None
         } else {
             Some(format!("Error when {} files", action))
         };
-        Exit { status, error }
+        Exit {
+            status,
+            message: None,
+            error,
+        }
     }
 
-    fn dirs(&mut self) -> Result<HashMap<PathBuf, basepaths::Paths>, Error> {
+    fn dirs(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
         let mut map = HashMap::new();
-        for p in self.basepaths()?.paths()? {
+        let paths = self.basepaths()?.paths()?;
+        if paths.is_none() {
+            return Ok(None);
+        }
+
+        for p in paths.unwrap() {
             map.insert(p.dir.clone(), p);
         }
-        Ok(map)
+        Ok(Some(map))
     }
 
-    fn files(&mut self) -> Result<HashMap<PathBuf, basepaths::Paths>, Error> {
+    fn files(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
         let mut map = HashMap::new();
-        for p in self.basepaths()?.paths()? {
+        let paths = self.basepaths()?.paths()?;
+        if paths.is_none() {
+            return Ok(None);
+        }
+
+        for p in paths.unwrap() {
             // This is gross
             let p_clone = p.clone();
             for f in p.files {
                 map.insert(f.clone(), p_clone.clone());
             }
         }
-        Ok(map)
+        Ok(Some(map))
     }
 
     fn basepaths(&mut self) -> Result<&basepaths::BasePaths, Error> {
