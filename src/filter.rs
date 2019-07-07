@@ -433,16 +433,16 @@ impl FilterImplementation for Command {
     }
 }
 
-#[derive(Debug)]
-pub struct Server {
-    name: String,
-    typ: FilterType,
-    include: GlobSet,
-    excluder: excluder::Excluder,
-    cmd: Vec<String>,
-    on_dir: bool,
-    port: u16,
-}
+// #[derive(Debug)]
+// pub struct Server {
+//     name: String,
+//     typ: FilterType,
+//     include: GlobSet,
+//     excluder: excluder::Excluder,
+//     cmd: Vec<String>,
+//     on_dir: bool,
+//     port: u16,
+// }
 
 fn replace_root(cmd: Vec<String>, root: &PathBuf) -> Vec<String> {
     cmd.iter()
