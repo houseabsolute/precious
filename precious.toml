@@ -1,6 +1,6 @@
 ignore_from  = ".gitignore"
 exclude = [
-  "vendor/**/*",
+  "target",
 ]
 
   [commands.rustfmt-tidy]
