@@ -74,6 +74,11 @@ fn make_app<'a>() -> App<'a, 'a> {
                 .help("Path to config file"),
         )
         .arg(
+            Arg::with_name("ascii")
+                .long("ascii")
+                .help("Replace super-fun Unicode symbols with terribly boring ASCII"),
+        )
+        .arg(
             Arg::with_name("verbose")
                 .short("v")
                 .long("verbose")
@@ -170,24 +175,58 @@ impl From<Error> for Exit {
 }
 
 #[derive(Debug)]
+struct Chars {
+    ring: &'static str,
+    tidied: &'static str,
+    unchanged: &'static str,
+    lint_free: &'static str,
+    lint_dirty: &'static str,
+}
+
+const FUN_CHARS: Chars = Chars {
+    ring: "💍",
+    tidied: "💧",
+    unchanged: "✨",
+    lint_free: "💯",
+    lint_dirty: "💩",
+};
+
+const BORING_CHARS: Chars = Chars {
+    ring: "}",
+    tidied: "*",
+    unchanged: "|",
+    lint_free: "|",
+    lint_dirty: "*",
+};
+
+#[derive(Debug)]
 struct Main<'a> {
     matches: &'a clap::ArgMatches<'a>,
     config: Option<config::Config>,
     root: Option<PathBuf>,
+    chars: Chars,
     quiet: bool,
     basepaths: Option<basepaths::BasePaths>,
 }
 
 impl<'a> Main<'a> {
     fn new(matches: &'a clap::ArgMatches) -> Result<Main<'a>, Error> {
+        let chars = if matches.is_present("ascii") {
+            BORING_CHARS
+        } else {
+            FUN_CHARS
+        };
+
         let mut s = Main {
             matches,
             config: None,
             root: None,
+            chars,
             quiet: matches.is_present("quiet"),
             basepaths: None,
         };
         s.set_config()?;
+
         Ok(s)
     }
 
@@ -207,7 +246,7 @@ impl<'a> Main<'a> {
     }
 
     fn tidy(&mut self) -> Result<Exit, Error> {
-        println!("💍 Tidying {}", self.mode());
+        println!("{} Tidying {}", self.chars.ring, self.mode());
 
         let tidiers = self.config().tidy_filters(&self.root_dir())?;
         if tidiers.is_empty() {
@@ -229,13 +268,23 @@ impl<'a> Main<'a> {
                     match t.tidy(p, &paths.files) {
                         Ok(Some(true)) => {
                             if !self.quiet {
-                                println!("💧 Tidied by {}:    {}", t.name, p.to_string_lossy());
+                                println!(
+                                    "{} Tidied by {}:    {}",
+                                    self.chars.tidied,
+                                    t.name,
+                                    p.to_string_lossy()
+                                );
                             }
                             0 as i32
                         }
                         Ok(Some(false)) => {
                             if !self.quiet {
-                                println!("✨ Unchanged by {}: {}", t.name, p.to_string_lossy());
+                                println!(
+                                    "{} Unchanged by {}: {}",
+                                    self.chars.unchanged,
+                                    t.name,
+                                    p.to_string_lossy()
+                                );
                             }
                             0 as i32
                         }
@@ -255,7 +304,7 @@ impl<'a> Main<'a> {
     }
 
     fn lint(&mut self) -> Result<Exit, Error> {
-        println!("💍 Linting {}", self.mode());
+        println!("{} Linting {}", self.chars.ring, self.mode());
 
         let linters = self.config().lint_filters(&self.root_dir())?;
         if linters.is_empty() {
@@ -278,10 +327,20 @@ impl<'a> Main<'a> {
                         Ok(Some(r)) => {
                             if r.ok {
                                 if !self.quiet {
-                                    println!("💯 Passed {}: {}", l.name, p.to_string_lossy());
+                                    println!(
+                                        "{} Passed {}: {}",
+                                        self.chars.lint_free,
+                                        l.name,
+                                        p.to_string_lossy()
+                                    );
                                 }
                             } else {
-                                println!("💩 Failed {}: {}", l.name, p.to_string_lossy());
+                                println!(
+                                    "{} Failed {}: {}",
+                                    self.chars.lint_dirty,
+                                    l.name,
+                                    p.to_string_lossy()
+                                );
                                 if r.stdout.is_some() {
                                     println!("{}", r.stdout.unwrap());
                                 }
