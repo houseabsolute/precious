@@ -5,7 +5,6 @@ use failure::Error;
 use ignore;
 use itertools::Itertools;
 use log::debug;
-use regex::Regex;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -56,6 +55,9 @@ pub enum BasePathsError {
         mode
     )]
     AllPathsWereExcluded { mode: Mode },
+
+    #[fail(display = "Found a path on the CLI which does not exist: {}", path)]
+    NonExistentPathOnCLI { path: String },
 }
 
 impl BasePaths {
@@ -112,6 +114,12 @@ impl BasePaths {
             // could come up in real world usage (I think).
             let mut full = self.root.clone();
             full.push(cli);
+
+            if !full.exists() {
+                return Err(BasePathsError::NonExistentPathOnCLI {
+                    path: full.to_string_lossy().to_string(),
+                })?;
+            }
 
             if full.is_dir() {
                 files.append(self.walkdir_files(&full)?.unwrap().as_mut());
@@ -204,7 +212,7 @@ impl BasePaths {
     fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>, Error> {
         let mut entries: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
-        for f in self.filtered_relative_files(files)? {
+        for f in self.relative_files(files)? {
             let dir = f.parent().unwrap().to_path_buf();
             if entries.contains_key(&dir) {
                 entries.get_mut(&dir).unwrap().push(f.clone());
@@ -236,14 +244,10 @@ impl BasePaths {
         ))
     }
 
-    fn filtered_relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>, Error> {
-        let mut pat = String::from("^");
-        pat.push_str(&self.root.to_string_lossy());
-        pat.push('/');
-        let root_path_re = Regex::new(pat.as_str())?;
-
+    fn relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>, Error> {
         let mut cleaned: Vec<PathBuf> = vec![];
 
+        let curdir = PathBuf::from(".");
         for mut f in files {
             // We want to make all files absolute so we can canonicalize them
             // and _then_ strip off the root prefix. This lets us consistently
@@ -252,14 +256,7 @@ impl BasePaths {
                 f = self.root.clone().join(f);
             }
 
-            let mut rel_str = root_path_re
-                .replace(&f.canonicalize()?.to_string_lossy(), "./")
-                .into_owned();
-            if !rel_str.starts_with("./") {
-                rel_str.insert_str(0, "./");
-            }
-            let rel = PathBuf::from(rel_str);
-
+            let rel = curdir.join(f.canonicalize()?.strip_prefix(&self.root)?);
             cleaned.push(rel);
         }
 
@@ -273,17 +270,21 @@ mod tests {
     use crate::testhelper;
     use spectral::prelude::*;
 
-    fn new_basepaths(mode: Mode, paths: Vec<PathBuf>, root: PathBuf) -> Result<BasePaths, Error> {
-        new_basepaths_with_excludes(mode, paths, root, vec![])
+    fn new_basepaths(
+        mode: Mode,
+        cli_paths: Vec<PathBuf>,
+        root: PathBuf,
+    ) -> Result<BasePaths, Error> {
+        new_basepaths_with_excludes(mode, cli_paths, root, vec![])
     }
 
     fn new_basepaths_with_excludes(
         mode: Mode,
-        paths: Vec<PathBuf>,
+        cli_paths: Vec<PathBuf>,
         root: PathBuf,
         exclude: Vec<String>,
     ) -> Result<BasePaths, Error> {
-        BasePaths::new(mode, paths, root, exclude)
+        BasePaths::new(mode, cli_paths, root, exclude)
     }
 
     #[test]
@@ -550,6 +551,34 @@ mod tests {
         )?;
         let expect = bp.files_to_paths(vec![PathBuf::from(testhelper::paths()[0])])?;
         assert_that(&bp.paths()?).is_equal_to(expect);
+        Ok(())
+    }
+
+    #[test]
+    fn cli_mode_given_files_with_nonexistent_path() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+        let bp = new_basepaths(
+            Mode::FromCLI,
+            vec![
+                PathBuf::from(testhelper::paths()[0]),
+                PathBuf::from("./does/not/exist"),
+            ],
+            root.path().to_owned(),
+        )?;
+        let res = bp.paths();
+        assert_that(&res).is_err();
+        assert_that(&std::mem::discriminant(
+            res.unwrap_err()
+                .as_fail()
+                .find_root_cause()
+                .downcast_ref()
+                .unwrap(),
+        ))
+        .is_equal_to(std::mem::discriminant(
+            &BasePathsError::NonExistentPathOnCLI {
+                path: String::from("./does/not/exist"),
+            },
+        ));
         Ok(())
     }
 }
