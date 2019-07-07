@@ -107,7 +107,7 @@ struct PathInfo {
 }
 
 impl Filter {
-    pub fn tidy(&self, path: &PathBuf, files: &Vec<PathBuf>) -> Result<Option<bool>, Error> {
+    pub fn tidy(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<bool>, Error> {
         self.require_is_not_filter_type(FilterType::Lint)?;
 
         let mut full = self.root.clone();
@@ -124,7 +124,7 @@ impl Filter {
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
-    pub fn lint(&self, path: &PathBuf, files: &Vec<PathBuf>) -> Result<Option<LintResult>, Error> {
+    pub fn lint(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<LintResult>, Error> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
@@ -167,7 +167,7 @@ impl Filter {
         Ok(())
     }
 
-    fn should_process_path(&self, path: &PathBuf, files: &Vec<PathBuf>) -> Result<bool, Error> {
+    fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> Result<bool, Error> {
         if self.excluder.path_is_excluded(path) {
             debug!(
                 "Path {} is excluded for the {} filter",

@@ -215,12 +215,10 @@ impl BasePaths {
 
         for f in files {
             let dir = f.parent().unwrap().to_path_buf();
-            if entries.contains_key(&dir) {
-                entries.get_mut(&dir).unwrap().push(f.clone());
-            } else {
-                let files: Vec<PathBuf> = vec![f.clone()];
-                entries.insert(dir, files);
-            }
+            entries
+                .entry(dir)
+                .and_modify(|e| e.push(f.clone()))
+                .or_insert_with(|| vec![f.clone()]);
         }
 
         if entries.is_empty() {

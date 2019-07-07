@@ -237,7 +237,7 @@ impl<'a> Main<'a> {
             Err(e) => {
                 error!("Failed to run precious: {}", e);
                 let bt = format!("{}", e.backtrace());
-                if bt.len() > 0 {
+                if !bt.is_empty() {
                     debug!("{}", bt);
                 }
                 127 as i32
