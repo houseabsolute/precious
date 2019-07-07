@@ -1,9 +1,3 @@
-# how to apply include/exclude rules on_dir when filter just gets the dir?
-
-Make the basepaths return some sort of more complex struct that includes a dir
-and the files in that dir. Then we can apply rules to files but pass dirs to
-filters.
-
 # git stage & unstage for -g flag
 
 # tests & CI
