@@ -103,6 +103,8 @@ impl BasePaths {
 
     fn files_from_cli(&self) -> Result<Option<Vec<PathBuf>>, Error> {
         debug!("Using the list of files passed from the command line");
+        let excluder = self.excluder()?;
+
         let mut files: Vec<PathBuf> = vec![];
         for cli in self.cli_paths.iter() {
             // We want to resolve this path relative to our root, not our
@@ -114,7 +116,11 @@ impl BasePaths {
             if full.is_dir() {
                 files.append(self.walkdir_files(&full)?.unwrap().as_mut());
             } else {
-                files.push(full.strip_prefix(&self.root)?.to_path_buf());
+                let rel = full.strip_prefix(&self.root)?.to_path_buf();
+                if excluder.path_is_excluded(&rel) {
+                    continue;
+                }
+                files.push(rel);
             }
         }
         Ok(Some(files))
@@ -169,10 +175,7 @@ impl BasePaths {
             Some(&self.root),
         )?;
 
-        let mut globs = self.exclude_globs.clone();
-        let mut v = vcs::dirs().clone();
-        globs.append(&mut v);
-        let excluder = excluder::Excluder::new(globs.as_ref())?;
+        let excluder = self.excluder()?;
         match result.stdout {
             Some(s) => Ok(Some(
                 s.lines()
@@ -189,6 +192,13 @@ impl BasePaths {
             )),
             None => Ok(None),
         }
+    }
+
+    fn excluder(&self) -> Result<excluder::Excluder, Error> {
+        let mut globs = self.exclude_globs.clone();
+        let mut v = vcs::dirs().clone();
+        globs.append(&mut v);
+        excluder::Excluder::new(globs.as_ref())
     }
 
     fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>, Error> {
@@ -500,6 +510,45 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
+        assert_that(&bp.paths()?).is_equal_to(expect);
+        Ok(())
+    }
+
+    #[test]
+    fn cli_mode_given_dir_with_excluded_files() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
+        let bp = new_basepaths_with_excludes(
+            Mode::FromCLI,
+            vec![PathBuf::from(".")],
+            root.path().to_owned(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        let expect = bp.files_to_paths(
+            testhelper::paths()
+                .iter()
+                .sorted_by(|a, b| a.cmp(b))
+                .map(PathBuf::from)
+                .collect::<Vec<PathBuf>>(),
+        )?;
+        assert_that(&bp.paths()?).is_equal_to(expect);
+        Ok(())
+    }
+
+    #[test]
+    fn cli_mode_given_files_with_excluded_files() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
+        let bp = new_basepaths_with_excludes(
+            Mode::FromCLI,
+            vec![
+                PathBuf::from(testhelper::paths()[0]),
+                PathBuf::from("vendor/foo/bar.txt"),
+            ],
+            root.path().to_owned(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        let expect = bp.files_to_paths(vec![PathBuf::from(testhelper::paths()[0])])?;
         assert_that(&bp.paths()?).is_equal_to(expect);
         Ok(())
     }
