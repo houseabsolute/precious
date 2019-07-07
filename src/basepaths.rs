@@ -158,7 +158,7 @@ impl BasePaths {
             if ent.path().is_dir() {
                 continue;
             }
-            debug!("walkdir_files: {}", ent.path().to_string_lossy());
+
             files.push(ent.into_path());
         }
 
