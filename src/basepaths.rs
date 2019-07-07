@@ -5,6 +5,7 @@ use failure::Error;
 use ignore;
 use itertools::Itertools;
 use log::debug;
+use path_clean::PathClean;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -100,7 +101,10 @@ impl BasePaths {
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
         debug!("Getting all files under {}", self.root.to_string_lossy());
-        self.walkdir_files(&self.root)
+        match self.walkdir_files(&self.root)? {
+            Some(all) => Ok(Some(self.relative_files(all)?)),
+            None => Ok(None),
+        }
     }
 
     fn files_from_cli(&self) -> Result<Option<Vec<PathBuf>>, Error> {
@@ -108,26 +112,21 @@ impl BasePaths {
         let excluder = self.excluder()?;
 
         let mut files: Vec<PathBuf> = vec![];
-        for cli in self.cli_paths.iter() {
-            // We want to resolve this path relative to our root, not our
-            // current directory. This is necessary for our test code and
-            // could come up in real world usage (I think).
-            let mut full = self.root.clone();
-            full.push(cli);
-
+        for rel in self.relative_files(self.cli_paths.clone())? {
+            let full = self.root.clone().join(rel.clone());
             if !full.exists() {
                 return Err(BasePathsError::NonExistentPathOnCLI {
-                    path: full.to_string_lossy().to_string(),
+                    path: rel.to_string_lossy().to_string(),
                 })?;
             }
 
-            if full.is_dir() {
+            if excluder.path_is_excluded(&rel) {
+                continue;
+            }
+
+            if rel.is_dir() {
                 files.append(self.walkdir_files(&full)?.unwrap().as_mut());
             } else {
-                let rel = full.strip_prefix(&self.root)?.to_path_buf();
-                if excluder.path_is_excluded(&rel) {
-                    continue;
-                }
                 files.push(rel);
             }
         }
@@ -171,7 +170,7 @@ impl BasePaths {
             files.push(ent.into_path());
         }
 
-        Ok(Some(files))
+        Ok(Some(self.relative_files(files)?))
     }
 
     fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>, Error> {
@@ -186,17 +185,19 @@ impl BasePaths {
         let excluder = self.excluder()?;
         match result.stdout {
             Some(s) => Ok(Some(
-                s.lines()
-                    .filter_map(|rel| {
-                        if excluder.path_is_excluded(&PathBuf::from(rel)) {
-                            return None;
-                        }
+                self.relative_files(
+                    s.lines()
+                        .filter_map(|rel| {
+                            if excluder.path_is_excluded(&PathBuf::from(rel)) {
+                                return None;
+                            }
 
-                        let mut f = self.root.clone();
-                        f.push(rel);
-                        Some(f)
-                    })
-                    .collect(),
+                            let mut f = self.root.clone();
+                            f.push(rel);
+                            Some(f)
+                        })
+                        .collect(),
+                )?,
             )),
             None => Ok(None),
         }
@@ -212,7 +213,7 @@ impl BasePaths {
     fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>, Error> {
         let mut entries: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
-        for f in self.relative_files(files)? {
+        for f in files {
             let dir = f.parent().unwrap().to_path_buf();
             if entries.contains_key(&dir) {
                 entries.get_mut(&dir).unwrap().push(f.clone());
@@ -236,7 +237,7 @@ impl BasePaths {
                     let mut files = entries.get(k).unwrap().to_vec();
                     files.sort();
                     Paths {
-                        dir: k.to_path_buf(),
+                        dir: k.to_path_buf().clean(),
                         files,
                     }
                 })
@@ -244,23 +245,24 @@ impl BasePaths {
         ))
     }
 
+    // We want to make all files absolute so we can clean them and _then_
+    // strip off the root prefix. This lets us consistently produce path names
+    // starting at the root dir (without "./").
     fn relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>, Error> {
-        let mut cleaned: Vec<PathBuf> = vec![];
+        let mut relative: Vec<PathBuf> = vec![];
 
-        let curdir = PathBuf::from(".");
         for mut f in files {
-            // We want to make all files absolute so we can canonicalize them
-            // and _then_ strip off the root prefix. This lets us consistently
-            // produce path names starting with "./".
             if !f.is_absolute() {
                 f = self.root.clone().join(f);
             }
 
-            let rel = curdir.join(f.canonicalize()?.strip_prefix(&self.root)?);
-            cleaned.push(rel);
+            // If the directory given is just "." then the first clean()
+            // removes that and we then strip the prefix, leaving an empty
+            // string. The second clean turns that back into ".".
+            relative.push(f.clean().strip_prefix(&self.root)?.to_path_buf().clean());
         }
 
-        Ok(cleaned)
+        Ok(relative)
     }
 }
 
@@ -302,63 +304,34 @@ mod tests {
             .is_equal_to(3);
         assert_that(&paths[0]).is_equal_to(Paths {
             dir: PathBuf::from("."),
-            files: ["./README.md", "./can_ignore.x"]
+            files: ["README.md", "can_ignore.x"]
                 .iter()
                 .map(PathBuf::from)
                 .collect(),
         });
         assert_that(&paths[1]).is_equal_to(Paths {
-            dir: PathBuf::from("./src"),
+            dir: PathBuf::from("src"),
             files: [
-                "./src/bar.rs",
-                "./src/can_ignore.rs",
-                "./src/main.rs",
-                "./src/module.rs",
+                "src/bar.rs",
+                "src/can_ignore.rs",
+                "src/main.rs",
+                "src/module.rs",
             ]
             .iter()
             .map(PathBuf::from)
             .collect(),
         });
         assert_that(&paths[2]).is_equal_to(Paths {
-            dir: PathBuf::from("./tests/data"),
+            dir: PathBuf::from("tests/data"),
             files: [
-                "./tests/data/bar.txt",
-                "./tests/data/foo.txt",
-                "./tests/data/generated.txt",
+                "tests/data/bar.txt",
+                "tests/data/foo.txt",
+                "tests/data/generated.txt",
             ]
             .iter()
             .map(PathBuf::from)
             .collect(),
         });
-
-        Ok(())
-    }
-
-    #[test]
-    fn files_to_paths_prefix() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-
-        for p in vec![
-            "./src/bar.rs",
-            "src/bar.rs",
-            root.path()
-                .join("src/bar.rs")
-                .to_string_lossy()
-                .into_owned()
-                .as_str(),
-        ] {
-            let cli_paths = vec![PathBuf::from(p)];
-            let bp = new_basepaths(Mode::FromCLI, cli_paths.clone(), root.path().to_owned())?;
-            let paths = bp.files_to_paths(cli_paths)?.unwrap();
-
-            assert_that(&paths.len())
-                .named("got one paths entry")
-                .is_equal_to(1);
-            assert_that(&paths[0]).is_equal_to(Paths {
-                dir: PathBuf::from("./src"),
-                files: ["./src/bar.rs"].iter().map(PathBuf::from).collect(),
-            });
-        }
 
         Ok(())
     }
@@ -506,7 +479,7 @@ mod tests {
         let expect = bp.files_to_paths(
             testhelper::paths()
                 .iter()
-                .filter(|p| p.starts_with("./tests/"))
+                .filter(|p| p.starts_with("tests/"))
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
@@ -561,7 +534,7 @@ mod tests {
             Mode::FromCLI,
             vec![
                 PathBuf::from(testhelper::paths()[0]),
-                PathBuf::from("./does/not/exist"),
+                PathBuf::from("does/not/exist"),
             ],
             root.path().to_owned(),
         )?;
@@ -576,7 +549,7 @@ mod tests {
         ))
         .is_equal_to(std::mem::discriminant(
             &BasePathsError::NonExistentPathOnCLI {
-                path: String::from("./does/not/exist"),
+                path: String::from("does/not/exist"),
             },
         ));
         Ok(())

@@ -8,18 +8,18 @@ use std::path::PathBuf;
 use tempdir::TempDir;
 
 const PATHS: &'static [&'static str] = &[
-    "./README.md",
-    "./can_ignore.x",
-    "./src/can_ignore.rs",
-    "./src/bar.rs",
-    "./src/main.rs",
-    "./src/module.rs",
-    "./tests/data/foo.txt",
-    "./tests/data/bar.txt",
-    "./tests/data/generated.txt",
+    "README.md",
+    "can_ignore.x",
+    "src/can_ignore.rs",
+    "src/bar.rs",
+    "src/main.rs",
+    "src/module.rs",
+    "tests/data/foo.txt",
+    "tests/data/bar.txt",
+    "tests/data/generated.txt",
 ];
 
-const TO_MODIFY: &'static [&'static str] = &["./src/module.rs", "./tests/data/foo.txt"];
+const TO_MODIFY: &'static [&'static str] = &["src/module.rs", "tests/data/foo.txt"];
 
 pub fn paths() -> &'static [&'static str] {
     PATHS
@@ -88,8 +88,8 @@ const TESTS_DATA_GITIGNORE: &'static str = "
 generated.*
 ";
 
-const ROOT_GITIGNORE_FILE: &'static str = "./.gitignore";
-const TESTS_DATA_GITIGNORE_FILE: &'static str = "./tests/data/.gitignore";
+const ROOT_GITIGNORE_FILE: &'static str = ".gitignore";
+const TESTS_DATA_GITIGNORE_FILE: &'static str = "tests/data/.gitignore";
 
 pub fn non_ignored_files() -> Vec<&'static str> {
     PATHS
