@@ -442,7 +442,7 @@ impl<'a> Main<'a> {
         Ok(Some(map))
     }
 
-    fn basepaths(&mut self) -> Result<&basepaths::BasePaths, Error> {
+    fn basepaths(&mut self) -> Result<&mut basepaths::BasePaths, Error> {
         if self.basepaths.is_none() {
             let (mode, paths) = self.mode_and_paths_from_args();
             self.basepaths = Some(basepaths::BasePaths::new(
@@ -452,7 +452,7 @@ impl<'a> Main<'a> {
                 self.config().exclude.clone(),
             )?);
         }
-        Ok(self.basepaths.as_ref().unwrap())
+        Ok(self.basepaths.as_mut().unwrap())
     }
 
     fn mode(&self) -> basepaths::Mode {

@@ -46,6 +46,9 @@ pub fn run_command(
         c.current_dir(in_dir.unwrap());
     }
 
+    let cstr = command_string(&cmd, &args);
+    debug!("Running command: {}", cstr);
+
     let output = output_from_command(c, ok_exit_codes, &cmd, &args)?;
 
     if !output.stderr.is_empty() && !expect_stderr {

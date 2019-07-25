@@ -1,7 +1,5 @@
 # caching?
 
-# git stage & unstage for -g flag
-
 # tests & CI
 
 # code cleanup like move parallel execution to shared sub

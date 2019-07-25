@@ -4,11 +4,12 @@ use crate::vcs;
 use failure::Error;
 use ignore;
 use itertools::Itertools;
-use log::debug;
+use log::{debug, error};
 use path_clean::PathClean;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::str;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
@@ -35,6 +36,7 @@ pub struct BasePaths {
     cli_paths: Vec<PathBuf>,
     root: PathBuf,
     exclude_globs: Vec<String>,
+    stashed: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -81,10 +83,11 @@ impl BasePaths {
             cli_paths,
             root,
             exclude_globs,
+            stashed: false,
         })
     }
 
-    pub fn paths(&self) -> Result<Option<Vec<Paths>>, Error> {
+    pub fn paths(&mut self) -> Result<Option<Vec<Paths>>, Error> {
         let files = match self.mode {
             Mode::All => self.all_files()?,
             Mode::FromCLI => self.files_from_cli()?,
@@ -94,6 +97,20 @@ impl BasePaths {
 
         if files.is_none() {
             return Ok(None);
+        }
+
+        if self.mode == Mode::GitStaged {
+            command::run_command(
+                String::from("git"),
+                ["stash", "--keep-index"]
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect(),
+                [0].to_vec(),
+                false,
+                Some(&self.root),
+            )?;
+            self.stashed = true;
         }
 
         self.files_to_paths(files.unwrap())
@@ -264,11 +281,35 @@ impl BasePaths {
     }
 }
 
+impl Drop for BasePaths {
+    fn drop(&mut self) {
+        if !self.stashed {
+            return;
+        }
+
+        let res = command::run_command(
+            String::from("git"),
+            ["stash", "pop"].iter().map(|a| a.to_string()).collect(),
+            [0].to_vec(),
+            false,
+            Some(&self.root),
+        );
+
+        if res.is_ok() {
+            return;
+        }
+
+        error!("Error popping stash: {}", res.unwrap_err());
+        return;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testhelper;
     use spectral::prelude::*;
+    use std::fs;
 
     fn new_basepaths(
         mode: Mode,
@@ -337,7 +378,7 @@ mod tests {
     #[test]
     fn all_mode() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
-        let bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
+        let mut bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
         assert_that(&bp.paths()?).is_equal_to(
             bp.files_to_paths(testhelper::paths().iter().map(PathBuf::from).collect())?,
         );
@@ -351,7 +392,7 @@ mod tests {
         let mut expect = testhelper::non_ignored_files();
         expect.append(&mut gitignores);
 
-        let bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
+        let mut bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
         assert_that(&bp.paths()?)
             .is_equal_to(bp.files_to_paths(expect.iter().map(PathBuf::from).collect())?);
         Ok(())
@@ -360,7 +401,7 @@ mod tests {
     #[test]
     fn git_modified_mode_empty() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
-        let bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
+        let mut bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
         let res = bp.paths();
         assert_that(&res).is_ok();
         assert_that(&res.unwrap()).is_none();
@@ -371,7 +412,7 @@ mod tests {
     fn git_modified_mode_with_changes() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         let modified = testhelper::modify_files(&root)?;
-        let bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
+        let mut bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
         let expect = bp.files_to_paths(
             modified
                 .iter()
@@ -392,7 +433,7 @@ mod tests {
 
         let modified = testhelper::modify_files(&root)?;
         testhelper::write_file(&root, "vendor/foo/bar.txt", "new content")?;
-        let bp = new_basepaths_with_excludes(
+        let mut bp = new_basepaths_with_excludes(
             Mode::GitModified,
             vec![],
             root.path().to_owned(),
@@ -413,7 +454,7 @@ mod tests {
     #[test]
     fn git_staged_mode_empty() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
-        let bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+        let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
         let res = bp.paths();
         assert_that(&res).is_ok();
         assert_that(&res.unwrap()).is_none();
@@ -424,7 +465,7 @@ mod tests {
     fn git_staged_mode_with_changes() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         let modified = testhelper::modify_files(&root)?;
-        let bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+        let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
         let res = bp.paths();
         assert_that(&res).is_ok();
         assert_that(&res.unwrap()).is_none();
@@ -448,7 +489,7 @@ mod tests {
         let modified = testhelper::modify_files(&root)?;
         testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
         testhelper::stage_all_in(&root)?;
-        let bp = new_basepaths_with_excludes(
+        let mut bp = new_basepaths_with_excludes(
             Mode::GitStaged,
             vec![],
             root.path().to_owned(),
@@ -467,9 +508,40 @@ mod tests {
     }
 
     #[test]
+    fn git_staged_mode_stashes_unindexed() -> Result<(), Error> {
+        let root = testhelper::create_git_repo()?;
+        let modified = testhelper::modify_files(&root)?;
+        testhelper::stage_all_in(&root)?;
+        let unstaged = "tests/data/bar.txt";
+        testhelper::write_file(&root, unstaged, "new content")?;
+
+        {
+            let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+            let expect = bp.files_to_paths(
+                modified
+                    .iter()
+                    .sorted_by(|a, b| a.cmp(b))
+                    .map(PathBuf::from)
+                    .collect::<Vec<PathBuf>>(),
+            )?;
+            assert_that(&bp.paths()?).is_equal_to(expect);
+            assert_that(&String::from_utf8(fs::read(
+                root.path().to_owned().join(unstaged),
+            )?)?)
+            .is_equal_to(String::from("some content"));
+        }
+        assert_that(&String::from_utf8(fs::read(
+            root.path().to_owned().join(unstaged),
+        )?)?)
+        .is_equal_to(String::from("new content"));
+
+        Ok(())
+    }
+
+    #[test]
     fn cli_mode() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
-        let bp = new_basepaths(
+        let mut bp = new_basepaths(
             Mode::FromCLI,
             vec![PathBuf::from("tests")],
             root.path().to_owned(),
@@ -490,7 +562,7 @@ mod tests {
     fn cli_mode_given_dir_with_excluded_files() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
-        let bp = new_basepaths_with_excludes(
+        let mut bp = new_basepaths_with_excludes(
             Mode::FromCLI,
             vec![PathBuf::from(".")],
             root.path().to_owned(),
@@ -511,7 +583,7 @@ mod tests {
     fn cli_mode_given_files_with_excluded_files() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
-        let bp = new_basepaths_with_excludes(
+        let mut bp = new_basepaths_with_excludes(
             Mode::FromCLI,
             vec![
                 PathBuf::from(testhelper::paths()[0]),
@@ -528,7 +600,7 @@ mod tests {
     #[test]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
-        let bp = new_basepaths(
+        let mut bp = new_basepaths(
             Mode::FromCLI,
             vec![
                 PathBuf::from(testhelper::paths()[0]),
