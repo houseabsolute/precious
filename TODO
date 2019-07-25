@@ -1,3 +1,7 @@
+# Filters that don't take a path
+
+To run clippy on a rust project you just run something like `cargo clippy -q -- -D clippy::all` in the project root with no path given.
+
 # caching?
 
 # tests & CI
@@ -10,3 +14,6 @@ Hard to figure out parallel closure issues with type checking.
 
 how to exclude all but one file from a dir tree (2 filters, one excludes, the
 other includes just the relevant files).
+
+how to handle a linter that just runs once for the entire tree (like
+golangci-lint).
