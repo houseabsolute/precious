@@ -8,7 +8,7 @@ use std::process;
 #[derive(Debug, Fail)]
 pub enum CommandError {
     #[fail(
-        display = "Got unexpected exit code {} from `{}. Stderr was {}`",
+        display = "Got unexpected exit code {} from `{}`. Stderr was {}`",
         code, cmd, stderr
     )]
     ExitCodeIsNotZero {
