@@ -1,7 +1,3 @@
-# Filters that don't take a path
-
-To run clippy on a rust project you just run something like `cargo clippy -q -- -D clippy::all` in the project root with no path given.
-
 # caching?
 
 # tests & CI

@@ -20,6 +20,7 @@ exclude = [
   type    = "lint"
   include = "."
   on_dir  = true
+  chdir   = true
   cmd     = ["cargo", "clippy", "-q", "--", "-D", "clippy::all"]
   ok_exit_codes = [0]
   lint_failure_exit_codes = [1]

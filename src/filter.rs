@@ -95,8 +95,8 @@ pub struct LintResult {
 }
 
 pub trait FilterImplementation {
-    fn tidy(&self, name: &str, path: &PathBuf) -> Result<(), Error>;
-    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult, Error>;
+    fn tidy(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<(), Error>;
+    fn lint(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<LintResult, Error>;
 }
 
 #[derive(Debug)]
@@ -120,7 +120,7 @@ impl Filter {
         }
 
         let info = Self::path_info_map_for(&full)?;
-        self.implementation.tidy(&self.name, path)?;
+        self.implementation.tidy(&self.name, path, self.on_dir)?;
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
@@ -136,7 +136,7 @@ impl Filter {
             return Ok(None);
         }
 
-        let r = self.implementation.lint(&self.name, &path)?;
+        let r = self.implementation.lint(&self.name, &path, self.on_dir)?;
         Ok(Some(r))
     }
 
@@ -297,6 +297,7 @@ impl Filter {
 #[derive(Debug)]
 pub struct Command {
     cmd: Vec<String>,
+    chdir: bool,
     lint_flag: String,
     path_flag: String,
     ok_exit_codes: HashSet<i32>,
@@ -311,6 +312,7 @@ pub struct CommandParams {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub on_dir: bool,
+    pub chdir: bool,
     pub cmd: Vec<String>,
     pub lint_flag: String,
     pub path_flag: String,
@@ -336,6 +338,7 @@ impl Command {
             on_dir: params.on_dir,
             implementation: Box::new(Command {
                 cmd: replace_root(params.cmd, &params.root),
+                chdir: params.chdir,
                 lint_flag: params.lint_flag,
                 path_flag: params.path_flag,
                 ok_exit_codes: Self::exit_codes_hashset(
@@ -370,15 +373,29 @@ impl Command {
         }
         hash
     }
+
+    fn in_dir(&self, path: &PathBuf) -> Option<PathBuf> {
+        if !self.chdir {
+            return None;
+        }
+
+        if path.is_dir() {
+            return Some(path.clone());
+        }
+
+        Some(path.parent().unwrap().to_path_buf())
+    }
 }
 
 impl FilterImplementation for Command {
-    fn tidy(&self, name: &str, path: &PathBuf) -> Result<(), Error> {
+    fn tidy(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<(), Error> {
         let mut cmd = self.cmd.clone();
         if self.path_flag != "" {
             cmd.push(self.path_flag.clone());
         }
-        cmd.push(path.to_string_lossy().to_string());
+        if !(on_dir && self.chdir) {
+            cmd.push(path.to_string_lossy().to_string());
+        }
 
         info!(
             "Tidying {} with {} command: {}",
@@ -392,14 +409,14 @@ impl FilterImplementation for Command {
             cmd,
             self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
-            None,
+            self.in_dir(path).as_ref(),
         ) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
     }
 
-    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult, Error> {
+    fn lint(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<LintResult, Error> {
         let mut cmd = self.cmd.clone();
         if self.lint_flag != "" {
             cmd.push(self.lint_flag.clone());
@@ -407,7 +424,9 @@ impl FilterImplementation for Command {
         if self.path_flag != "" {
             cmd.push(self.path_flag.clone());
         }
-        cmd.push(path.to_string_lossy().to_string());
+        if !(on_dir && self.chdir) {
+            cmd.push(path.to_string_lossy().to_string());
+        }
 
         info!(
             "Linting {} with {} command: {}",
@@ -421,7 +440,7 @@ impl FilterImplementation for Command {
             cmd,
             self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
-            None,
+            self.in_dir(path).as_ref(),
         ) {
             Ok(result) => Ok(LintResult {
                 ok: !self.lint_failure_exit_codes.contains(&result.exit_code),
