@@ -260,9 +260,8 @@ impl BasePaths {
         ))
     }
 
-    // We want to make all files absolute so we can clean them and _then_
-    // strip off the root prefix. This lets us consistently produce path names
-    // starting at the root dir (without "./").
+    // We want to make all files relative. This lets us consistently produce
+    // path names starting at the root dir (without "./").
     fn relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>, Error> {
         let mut relative: Vec<PathBuf> = vec![];
 
