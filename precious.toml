@@ -2,14 +2,8 @@ exclude = [
   "target",
 ]
 
-  [commands.rustfmt-tidy]
-  type    = "tidy"
-  include = "**/*.rs"
-  cmd     = ["rustfmt"]
-  ok_exit_codes = 0
-
-  [commands.rustfmt-lint]
-  type    = "lint"
+  [commands.rustfmt]
+  type    = "both"
   include = "**/*.rs"
   cmd     = ["rustfmt"]
   lint_flag = "--check"
