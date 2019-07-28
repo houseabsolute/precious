@@ -141,7 +141,7 @@ impl BasePaths {
                 continue;
             }
 
-            if rel.is_dir() {
+            if full.is_dir() {
                 files.append(self.walkdir_files(&full)?.unwrap().as_mut());
             } else {
                 files.push(rel);
