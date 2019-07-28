@@ -6,6 +6,8 @@
 
 Hard to figure out parallel closure issues with type checking.
 
+# $ROOT in args
+
 # docs
 
 how to exclude all but one file from a dir tree (2 filters, one excludes, the
@@ -13,3 +15,8 @@ other includes just the relevant files).
 
 how to handle a linter that just runs once for the entire tree (like
 golangci-lint).
+
+# examples
+
+Make a set of per-language examples showing how to configure common tools for
+those languages.
