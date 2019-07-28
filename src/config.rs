@@ -33,7 +33,6 @@ pub struct FilterCore {
     exclude: Vec<String>,
     on_dir: bool,
     cmd: Vec<String>,
-    args: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -207,7 +206,6 @@ impl Config {
         let exclude = Self::toml_string_vec(table, "exclude")?;
         let on_dir = Self::toml_bool(table, "on_dir")?;
         let cmd = Self::toml_string_vec(table, "cmd")?;
-        let args = Self::toml_string_vec(table, "args")?;
 
         if include.is_empty() {
             return Err(ConfigError::MissingTOMLKey {
@@ -227,7 +225,6 @@ impl Config {
             exclude,
             on_dir,
             cmd,
-            args,
         })
     }
 
