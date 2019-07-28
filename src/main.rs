@@ -82,7 +82,7 @@ fn make_app<'a>() -> App<'a, 'a> {
             Arg::with_name("trace")
                 .short("t")
                 .long("trace")
-                .help("Enable tracinng output (maximum logging)"),
+                .help("Enable tracing output (maximum logging)"),
         )
         .arg(
             Arg::with_name("quiet")
