@@ -23,7 +23,34 @@ place and easily run `precious` from your commit hooks and in CI.
 
 ## Installation
 
-...
+There are several ways to install this tool.
+
+### Binary Releases
+
+The easiest way to install it is to grab a binary release from the [releases
+page](releases). Simply put this somewhere in your path and you're good to go.
+
+### Cargo
+
+You can also install this via `cargo` by running `cargo install
+preciosu-rs`. See [the cargo
+documentation](https://doc.rust-lang.org/cargo/commands/cargo-install.html)
+for the rules on where the binary is installed.
+
+### godownloader
+
+The binaries are published to GitHub using
+[goreleaser](https://goreleaser.com/). There is a sister tool called
+[godownloader](https://github.com/goreleaser/godownloader) that can be used to
+automate the installation of anything published by goreleaser. I highly
+recommend using this if you want to automate the installation of precious as
+part of your workflow.
+
+To create a download script using `godownloader` just run `godownloader
+--repo=houseabsolute/precious > ./godownloader-precious.sh`. Now you can run
+the `godownloader-precious.sh` script to download the `precious` binary. By
+default, this script downloads the latest version of Precious, but you can
+also pass an explicit version number.
 
 ## Configuration
 
