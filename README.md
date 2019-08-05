@@ -89,6 +89,20 @@ The keys that are allowed for each command are as follows:
 | `lint_failure_exit_codes` | array of integers | no | linters |  | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue. |
 | `expect_stderr` | boolean | all | false | | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. If this is not the case, set this to true. |
 
+### Referencing the Project Root
+
+For tools that may be run from a subdirectory, you may need to specify config
+files in terms of the project root. You can do this by using the string
+`$PRECIOUS_ROOT` in any element of the `cmd` configuration key. So for example
+you might write something like this:
+
+```toml
+cmd = ["some-tidier", "--config", "$PRECIOUS_ROOT/some-tidier.conf"]
+```
+
+The `$PRECIOUS_ROOT` string will be replaced by the absolute path to the
+project root.
+
 ## Running Precious
 
 To get help run `precious --help`.
