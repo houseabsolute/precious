@@ -1,32 +1,23 @@
+# Based on the "trust" template v0.1.2
+# https://github.com/japaric/trust/tree/v0.1.2
 language: rust
 cache: cargo
-env: # required for allow_failures
-rust:
-  - stable
-  - beta
-  - nightly
+before_cache:
+  # Travis can't cache files that are not readable by "others"
+  - chmod -R a+r $HOME/.cargo
+
+env:
+  global:
+    - CRATE_NAME=precious
+    - RUST_BACKTRACE=1
 
 matrix:
   fast_finish: true
   allow_failures:
-    - env: NAME='cargo-travis'
+    - env: NAME='coverage'
   include:
-    - rust: stable
-      before_script:
-        - rustup component add rustfmt
-        - rustup component add clippy
-      script:
-        - cargo build && ./target/debug/precious lint -a
-    - env: NAME='cargo-travis'
-      before_script:
-        - cargo install cargo-update || echo "cargo-update already installed"
-        - cargo install cargo-travis || echo "cargo-travis already installed"
-        - cargo install-update -a
-      script:
-        - |
-          cargo build    --verbose &&
-          cargo coverage --verbose &&
-          bash <(curl -s https://codecov.io/bash) -s target/kcov
+    - env: NAME='self-check'
+      rust: stable
       addons: # required for kcov
         apt:
           packages:
@@ -35,7 +26,78 @@ matrix:
             - libdw-dev
             - binutils-dev
             - cmake
+      before_script:
+        - rustup component add rustfmt
+        - rustup component add clippy
+      script:
+        - cargo build && ./target/debug/precious lint -a
+    - env: NAME='coverage'
+      before_script:
+        - cargo install cargo-update || echo "cargo-update already installed"
+        - cargo install cargo-travis || echo "cargo-travis already installed"
+        - cargo install-update -a
+      script:
+        - |
+          cargo build    --verbose &&
+          cargo test     --verbose &&
+          cargo bench    --verbose &&
+          cargo coverage --verbose
+      after_success:
+        - cargo coveralls
 
-script: |
-  cargo build --verbose &&
-  cargo test  --verbose -- --nocapture
+    - env: RUN_TESTS=1
+      rust: stable
+    - env: RUN_TESTS=1
+      rust: beta
+    - env: RUN_TESTS=1
+      rust: nightly
+
+    # Linux
+    - env: TARGET=x86_64-unknown-linux-gnu
+      rust: stable
+
+    # OSX
+    - env: TARGET=x86_64-apple-darwin
+      os: osx
+      rust: stable
+
+    # *BSD
+    - env: TARGET=x86_64-unknown-freebsd
+      rust: stable
+    - env: TARGET=x86_64-unknown-netbsd
+      rust: stable
+
+    # Windows
+    - env: TARGET=x86_64-pc-windows-gnu
+      rust: stable
+
+before_install:
+  - set -e
+  - rustup self update
+
+install:
+  - sh ci/install.sh
+  - source ~/.cargo/env || true
+
+script:
+  - bash ci/script.sh
+
+after_script: set +e
+
+before_deploy:
+  - sh ci/before_deploy.sh
+  - curl https://github.com/lindell/github-release-cli/releases/download/1.1.0/github-releaser-travis -L --output github-releaser && chmod +x github-releaser
+  - export BODY=$(envsubst < ./Changes.md)
+  - export FILES=$CRATE_NAME-$TRAVIS_TAG-$TARGET.*
+
+deploy:
+  api_key:
+    secure: "OLutiXyxovCSQVrqPjgenTndELRVEp177e8ZAsKdjcEhTBRvygQ0BxTwa/vh+a0HvQ1sih4ERkr/45carXcSBYg+fJmgx1Knuf8ThXadW/m2O4ecgj2hr6gZyc3j2VtcDzT87ZCK4xIQilazWo2KfTtu9kx9InOm2Fnz78HcsffHaK9NrhqYZQV1YeBTdZ2em6Ip5GggGdRnH5JD3CGlKcOSMtty0lP6HtmWdw7VbtbDS+RD+19exP77pvxHip72y2gVlzzlsD6YJgJDIAUl3/W8az24q2CQNoseGNWdVracCdJ9IrPm1q3fI2uHjtbyDx+p5ONyXNu+Vd4wmK461lzpTxois3XTddw9fFg4Gbw6IUlS3tpTSlyN1shZ+ftFdCFrw2QBnZB1BY0fhIEttUzQybQMngtcmW/PdlZDG09wyTb/15xZKfMP1aEw3O8W2k6hjBm268aZBKi/0zEB0EqD9hbFDTyYdxyTFulGqZKUj4kxzfjLdO/KfZxnndeJlknML76OV0e9ipskVgFMRS6fmDg2zFCrzvHZruiKNZRGQ/eqUHIP+SVOcRrrXuO+Yugx4sIfRPXuBBKU9+XXoRhJaaoIjgzveiKmRG+IWFs4Zjf5jzHSFKxoLm+oCNMIF5HKAentF7I67b4oN0+LIFfCO7JXv1kdgM9U+NSsN1U="
+  provider: script
+  script: ./github-releaser -draft -verbose
+  on:
+    condition:
+      - $RUN_TESTS != 1
+      - $TRAVIS_RUST_VERSION = stable
+    tags: true
+  skip_cleanup: true
