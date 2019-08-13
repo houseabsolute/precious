@@ -13,7 +13,6 @@ travis-ci = { repository = "houseabsolute/precious-rs" }
 
 [dependencies]
 clap = "2"
-clippy = { version = "*", optional = true }
 failure = "0.1.5"
 failure_derive = "0.1.5"
 glob = "0.2.11"
