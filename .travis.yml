@@ -10,6 +10,7 @@ env:
   global:
     - CRATE_NAME=precious
     - RUST_BACKTRACE=1
+    - secure: "JvMFmx8/Y5nXgi4b049V2BzR7SaSCEfsx6w4bgKBlXgw3ZxAcD7kbxY3HWyIHx3y6yzOYTvOkX9cCNug2YIiYrZoh8iESTHm05nVpq56yHBSvPAr0GVG1tyV91NihKNrWQ4hZCNp/Bnuczm5H4R/Ht5m3W5cy38fX8CPeablQi0Jephw3zEBEq7eYvgpZX6koxtngD3ucX/gZaaEsI8+JVwyb/EysoIdsJ3MvNp1Cm0abu3mf+oJXYnx2WxvvG0MFzNtt0oFF/L07mpWkaahD4JJP1hdJhPYsHDb3pv+1lpUDvlhEhqba5m6MHGmv8LRFiQaRw//aY2x5lpuYOZyftqk0KxsorKpL3GSan+4i/pevflSgINe8uc6hWoaT7IVwqu+0dDEL2fbrI7ZrgxCCLr6GdK4ICOMn14ZAlgSsqd8gj8IqUw+BoPIRp8jcBYK6ll1VTu9WeMsemGhNWrtywxD7e1SZSpeOpTatd5xwrlHBkZDBrA5UGfBjzIaYnjhzCGpxBjGcLbjmi57UgjkNUNbtyB4hne/HGEHLvxOYCPRI46jDWTvUgb8XTTJepU67YEVliuD4ISsm/ayaj683aZXZE+TXoCThQUuMNqAjmLNafngC9BwCt+Jm49xv+cidSgdrn0lOxUZEmGTJd4gEVM84CJGOuZpMDdiTHYLX1g="
 
 matrix:
   fast_finish: true
@@ -53,22 +54,32 @@ matrix:
       rust: nightly
 
     # Linux
-    - env: TARGET=x86_64-unknown-linux-gnu
+    - env:
+        - TARGET=x86_64-unknown-linux-gnu
+        - DEPLOY=1
       rust: stable
 
     # OSX
-    - env: TARGET=x86_64-apple-darwin
+    - env:
+        - TARGET=x86_64-apple-darwin
+        - DEPLOY=1
       os: osx
       rust: stable
 
     # *BSD
-    - env: TARGET=x86_64-unknown-freebsd
+    - env:
+        - TARGET=x86_64-unknown-freebsd
+        - DEPLOY=1
       rust: stable
-    - env: TARGET=x86_64-unknown-netbsd
+    - env:
+        - TARGET=x86_64-unknown-netbsd
+        - DEPLOY=1
       rust: stable
 
     # Windows
-    - env: TARGET=x86_64-pc-windows-gnu
+    - env:
+        - TARGET=x86_64-pc-windows-gnu
+        - DEPLOY=1
       rust: stable
 
 before_install:
@@ -86,18 +97,15 @@ after_script: set +e
 
 before_deploy:
   - sh ci/before_deploy.sh
-  - curl https://github.com/lindell/github-release-cli/releases/download/1.1.0/github-releaser-travis -L --output github-releaser && chmod +x github-releaser
-  - export BODY=$(envsubst < ./Changes.md)
-  - export FILES=$CRATE_NAME-$TRAVIS_TAG-$TARGET.*
 
 deploy:
+  provider: releases
   api_key:
-    secure: "OLutiXyxovCSQVrqPjgenTndELRVEp177e8ZAsKdjcEhTBRvygQ0BxTwa/vh+a0HvQ1sih4ERkr/45carXcSBYg+fJmgx1Knuf8ThXadW/m2O4ecgj2hr6gZyc3j2VtcDzT87ZCK4xIQilazWo2KfTtu9kx9InOm2Fnz78HcsffHaK9NrhqYZQV1YeBTdZ2em6Ip5GggGdRnH5JD3CGlKcOSMtty0lP6HtmWdw7VbtbDS+RD+19exP77pvxHip72y2gVlzzlsD6YJgJDIAUl3/W8az24q2CQNoseGNWdVracCdJ9IrPm1q3fI2uHjtbyDx+p5ONyXNu+Vd4wmK461lzpTxois3XTddw9fFg4Gbw6IUlS3tpTSlyN1shZ+ftFdCFrw2QBnZB1BY0fhIEttUzQybQMngtcmW/PdlZDG09wyTb/15xZKfMP1aEw3O8W2k6hjBm268aZBKi/0zEB0EqD9hbFDTyYdxyTFulGqZKUj4kxzfjLdO/KfZxnndeJlknML76OV0e9ipskVgFMRS6fmDg2zFCrzvHZruiKNZRGQ/eqUHIP+SVOcRrrXuO+Yugx4sIfRPXuBBKU9+XXoRhJaaoIjgzveiKmRG+IWFs4Zjf5jzHSFKxoLm+oCNMIF5HKAentF7I67b4oN0+LIFfCO7JXv1kdgM9U+NSsN1U="
-  provider: script
-  script: ./github-releaser -draft -verbose
+    secure: "UqTTdWOrIcWbLwnY9ktUGPRNFQ+pjrkdBhd5sHApqF9YbEyYko9jY1GCijJ3JRiP84Z77Xw9YmZJssX4+Gk+8zQWaKhs80Zmb76/WicitqooHzDM/j3bGfA89LKHE/XXtF2YtRkF9xRW8jqXPtdr3Z9EOEYSvC442H919gkGuxWj97xTkuEmqRzxk6680z2aWiXUwpDnsM6YA/TcbL5JmLCOaQ+IpWKymU4s38rbIRHkNQw17ldddbeQBpCeB4nLxd31XucGzuYEB49tyLFKxR0gz5A7dat2uD2C8TXH1fHFT3gC7o/+DV70b0AE06PH51fvz17mw/0HN2mKmze289JBsQq6JzfIgklAA65Bzr/sS3sB9UghBGkN1K3gTE1xP02TOuhx1ErAMZkuf5VXzu3MBUaSKlLjarvIWK8u7Lt384C4jx0i3sAWo0sXC1NlrLz5lFWkMjhme1OraQBZoX9hwN5Ke9WAgYdngcS5o3lcN+WrGKH2l8Q71RTUY6e0MkKETgSAmJwNgZWlcDuH5N6joX6sFIUpdBmhrZQMaV+KGUVJLJUXYHp6PIPodTrsKYAOrBByKVcV5NaiXQcNup16WwwKnCIkj3G/v2J5GQGFfUx2v4WYj+ZKgb3QSBvledeztrzJIlDj+W3Ox6CTrccH9zffgdcSUMoGYwN7TT8="
+  file_glob: true
+  file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
   on:
     condition:
-      - $RUN_TESTS != 1
-      - $TRAVIS_RUST_VERSION = stable
+      - $DEPLOY = 1
     tags: true
   skip_cleanup: true
