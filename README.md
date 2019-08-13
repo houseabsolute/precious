@@ -32,8 +32,8 @@ page](releases). Simply put this somewhere in your path and you're good to go.
 
 ### Cargo
 
-You can also install this via `cargo` by running `cargo install
-preciosu-rs`. See [the cargo
+You can also install this via `cargo` by running `cargo install precious`. See
+[the cargo
 documentation](https://doc.rust-lang.org/cargo/commands/cargo-install.html)
 for the rules on where the binary is installed.
 
