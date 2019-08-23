@@ -299,7 +299,6 @@ impl Drop for BasePaths {
         }
 
         error!("Error popping stash: {}", res.unwrap_err());
-        return;
     }
 }
 
