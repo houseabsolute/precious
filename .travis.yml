@@ -19,6 +19,12 @@ matrix:
   include:
     - env: NAME='self-check'
       rust: stable
+      before_script:
+        - rustup component add rustfmt
+        - rustup component add clippy
+      script:
+        - cargo build && ./target/debug/precious lint -a
+    - env: NAME='coverage'
       addons: # required for kcov
         apt:
           packages:
@@ -28,12 +34,6 @@ matrix:
             - libdw-dev
             - binutils-dev
             - cmake
-      before_script:
-        - rustup component add rustfmt
-        - rustup component add clippy
-      script:
-        - cargo build && ./target/debug/precious lint -a
-    - env: NAME='coverage'
       before_script:
         - cargo install cargo-update || echo "cargo-update already installed"
         - cargo install cargo-travis || echo "cargo-travis already installed"
