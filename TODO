@@ -1,6 +1,8 @@
 # caching?
 
-# tests & CI
+# tests
+
+especially tests for the filter and its include/exclude handling
 
 # code cleanup like move parallel execution to shared sub
 
