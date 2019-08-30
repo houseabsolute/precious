@@ -77,7 +77,7 @@ The keys that are allowed for each command are as follows:
 
 ### Referencing the Project Root
 
-For tools that may be run from a subdirectory, you may need to specify config
+For tools that can be run from a subdirectory, you may need to specify config
 files in terms of the project root. You can do this by using the string
 `$PRECIOUS_ROOT` in any element of the `cmd` configuration key. So for example
 you might write something like this:
@@ -97,13 +97,14 @@ The root command takes the following options:
 
 | Flag | Description |
 | ---- | ----------- |
-| -h, --help | Prints help information |
-| -q, --quiet | Suppresses most output |
-| -V, --version | Prints version information |
-| -v, --verbose | Enable verbose output |
-| -d, --debug | Enable debugging output | 
-| -t, --trace | Enable tracing output (maximum logging) |
-| --ascii | Replace super-fun Unicode symbols with terribly boring ASCII |
+| `-h`, `--help` | Prints help information |
+| `-q`, `--quiet` | Suppresses most output |
+| `-V`, `--version` | Prints version information |
+| `-v`, `--verbose` | Enable verbose output |
+| `-d`, `--debug` | Enable debugging output |
+| `-t`, `--trace` | Enable tracing output (maximum logging) |
+| `--ascii` | Replace super-fun Unicode symbols with terribly boring ASCII |
+| `-c`, `--config` `<config>` | Path to config file |
 
 ### Subcommands
 
@@ -118,9 +119,9 @@ supports several ways of setting these via command line arguments:
 
 | Mode | Flag | Description |
 | ---- | ---- | ----------- |
-| All paths | -a, --all | Run on all paths in the project. |
-| Modified files according to git | -g, --git | Run on all files that git reports as having been modified. |
-| Staged files according to git | -s, --staged | Run on all files that git reports as having been staged. This will stash unstaged changes while it runs and pop the stash at the end. This ensures that filters only run against the staged version of your codebase. |
+| All paths | `-a`, `--all` | Run on all paths in the project. |
+| Modified files according to git | `-g`, `--git` | Run on all files that git reports as having been modified. |
+| Staged files according to git | `-s`, `--staged` | Run on all files that git reports as having been staged. This will stash unstaged changes while it runs and pop the stash at the end. This ensures that filters only run against the staged version of your codebase. |
 | Paths given on CLI | | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other options. If any of these paths are directories then that entire directory tree will be included. |
 
 #### Default Exclusions
