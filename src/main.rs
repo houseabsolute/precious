@@ -272,7 +272,9 @@ impl<'a> Main<'a> {
         let mut status = 0 as i32;
 
         for t in tidiers {
-            let map = if t.on_dir {
+            let map = if t.run_once {
+                self.root_as_paths()?
+            } else if t.on_dir {
                 self.dirs()?
             } else {
                 self.files()?
@@ -335,7 +337,9 @@ impl<'a> Main<'a> {
         let mut status = 0 as i32;
 
         for l in linters {
-            let map = if l.on_dir {
+            let map = if l.run_once {
+                self.root_as_paths()?
+            } else if l.on_dir {
                 self.dirs()?
             } else {
                 self.files()?
@@ -423,6 +427,26 @@ impl<'a> Main<'a> {
             map.insert(p.dir.clone(), p);
         }
         Ok(Some(map))
+    }
+
+    fn root_as_paths(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
+        let mut m = HashMap::new();
+        let paths = self.basepaths()?.paths()?;
+        if paths.is_none() {
+            return Ok(None);
+        }
+
+        let mut all: Vec<PathBuf> = vec![];
+        for p in paths.unwrap().iter_mut() {
+            all.append(&mut p.files);
+        }
+
+        let root_paths = basepaths::Paths {
+            dir: PathBuf::from("."),
+            files: all,
+        };
+        m.insert(PathBuf::from("."), root_paths);
+        Ok(Some(m))
     }
 
     fn files(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {

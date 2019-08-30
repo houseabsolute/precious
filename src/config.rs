@@ -32,6 +32,7 @@ pub struct FilterCore {
     include: Vec<String>,
     exclude: Vec<String>,
     on_dir: bool,
+    run_once: bool,
     cmd: Vec<String>,
 }
 
@@ -205,6 +206,7 @@ impl Config {
         let include = Self::toml_string_vec(table, "include")?;
         let exclude = Self::toml_string_vec(table, "exclude")?;
         let on_dir = Self::toml_bool(table, "on_dir")?;
+        let run_once = Self::toml_bool(table, "run_once")?;
         let cmd = Self::toml_string_vec(table, "cmd")?;
 
         if include.is_empty() {
@@ -224,6 +226,7 @@ impl Config {
             include,
             exclude,
             on_dir,
+            run_once,
             cmd,
         })
     }
@@ -404,6 +407,7 @@ impl Config {
                     include: filter.core.include.clone(),
                     exclude: filter.core.exclude.clone(),
                     on_dir: filter.core.on_dir,
+                    run_once: filter.core.run_once,
                     chdir: c.chdir,
                     cmd: filter.core.cmd.clone(),
                     lint_flag: c.lint_flag.clone(),

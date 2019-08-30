@@ -68,6 +68,7 @@ pub struct Filter {
     includer: Includer,
     excluder: excluder::Excluder,
     pub on_dir: bool,
+    pub run_once: bool,
     implementation: Box<dyn FilterImplementation>,
 }
 
@@ -177,24 +178,31 @@ impl Filter {
             return Ok(false);
         }
 
-        if self.on_dir && files.iter().all(|f| self.excluder.path_is_excluded(f)) {
-            debug!(
-                "Directory {} is excluded for the {} filter because all of its files are excluded",
-                path.to_string_lossy(),
-                self.name,
-            );
-            return Ok(false);
-        }
-
         if self.includer.path_is_included(path) {
+            debug!(
+                "Path {} is included in the {} filter",
+                path.to_string_lossy(),
+                self.name
+            );
             return Ok(true);
         }
 
         if self.on_dir {
-            if files.iter().any(|f| self.includer.path_is_included(f)) {
-                return Ok(true);
-            }
+            for f in files {
+                if self.excluder.path_is_excluded(f) {
+                    continue;
+                }
 
+                if self.includer.path_is_included(f) {
+                    debug!(
+                        "Directory {} is included in the {} filter because it contains {} which is included",
+                        path.to_string_lossy(),
+                        self.name,
+                        f.to_string_lossy(),
+                    );
+                    return Ok(true);
+                }
+            }
             debug!(
                 "Directory {} is not included in the {} filter because neither it nor its files are included",
                 path.to_string_lossy(),
@@ -312,6 +320,7 @@ pub struct CommandParams {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub on_dir: bool,
+    pub run_once: bool,
     pub chdir: bool,
     pub cmd: Vec<String>,
     pub lint_flag: String,
@@ -336,6 +345,7 @@ impl Command {
             includer: Includer::new(&params.include)?,
             excluder: excluder::Excluder::new(&params.exclude)?,
             on_dir: params.on_dir,
+            run_once: params.run_once,
             implementation: Box::new(Command {
                 cmd: replace_root(params.cmd, &params.root),
                 chdir: params.chdir,

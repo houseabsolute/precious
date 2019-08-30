@@ -69,6 +69,7 @@ The keys that are allowed for each command are as follows:
 | `path_flag` | string | no | all | | By default, `precious` will pass the each path being operated on to the command it executes as a final, positional, argument. However, if the command takes paths via a flag you need to specify that flag with this key.
 | `lint_flag` | string | no | combined linter & tidier | | If a command is both a linter and tidier than it typically takes an extra flag to operate in linting mode. This is how you set that flag. |
 | `on_dir` | boolean | no | all | false | If this is true, then the command is run once per matched directory rather than per file. |
+| `run_once` | boolean | no | all | false | If this is true, then the command is only run once from the root directory no matter how many files match. |
 | `chdir` |  boolean | no | all | false | If this is true, then command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if both `on_dir` and `chdir` are true then `precious` will not pass the path to the executable as an argument. |
 | `ok_exit_codes` | array of integers | **yes** | all | | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit. |
 | `lint_failure_exit_codes` | array of integers | no | linters |  | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue. |
@@ -148,6 +149,9 @@ which paths.
 * VCS ignore rules are applied to remove paths from this list.
 * Each filter is given either the files or directories from the list of paths,
   depending on the `on_dir` setting for that filter.
+  * Except for `run_once` filters, which will get all of the files in all
+    directories and will use those to determine whether to run or not. These
+    filters are always run exactly once.
 * The filter will check its include and exclude rules. The path must match at
   least one include rule *and* not match any exclude rules to be accepted.
   * If the filter is per-file, it matches each path against its rules as is.
@@ -175,11 +179,12 @@ lint_failure_exit_codes = [1]
 
 ```toml
 [commands.clippy]
-type    = "lint"
-include = "."
-on_dir  = true
-chdir   = true
-cmd     = ["cargo", "clippy", "-q", "--", "-D", "clippy::all"]
+type     = "lint"
+include  = "**/*.rs"
+on_dir   = true
+chdir    = true
+run_once = true
+cmd      = ["cargo", "clippy", "-q", "--", "-D", "clippy::all"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 ```
@@ -210,17 +215,26 @@ In order to make that happen you should use the following config:
 ```toml
 include = "."
 on_dir  = true
+run_once = true
 ```
 
 This combination of flags will cause `precious` to run the command exactly
-once in the project root. If you want to run the command without passing the
-path being operated on to the command, add the `chdir` flag:
+once in the project root. 
+
+### Linter runs in the same directory as the files it lints and does not accept path as arguments
+
+If you want to run the command without passing the path being operated on to
+the command, add the `chdir` flag:
 
 ```toml
-include = "."
+include = "**/*.rs"
 on_dir  = true
 chdir   = true
 ```
+
+You will probably want to set the `on_dir` flag to true in such cases, but
+these two flags are independent in case there are tools where setting just
+`chdir` makes sense.
 
 ### You want a command to exclude an entire directory (tree) except for one file
 
