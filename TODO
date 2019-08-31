@@ -10,6 +10,14 @@ Hard to figure out parallel closure issues with type checking.
 
 # $ROOT in args
 
+# lint_flag(s) and tidy_flags
+
+Make these plural and add one for tidy commands
+
+# stash push/pop doesn't pop some times
+
+No idea why
+
 # examples
 
 Make a set of per-language examples showing how to configure common tools for
