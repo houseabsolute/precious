@@ -1,6 +1,6 @@
 [package]
 name = "precious"
-version = "0.0.3"
+version = "0.0.4"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "One code quality tool to rule them all"
 repository = "https://github.com/houseabsolute/precious-rs"
