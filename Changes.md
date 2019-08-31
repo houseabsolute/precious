@@ -1,11 +1,11 @@
-## 0.0.4
+## 0.0.4 - 2019-08-31
 
 * Fixed a bug where `git stash` would be run multiple times in staged mode if
   you had more than one filter defined. As a bonus this also makes precious
   more efficient by not retrieving the list of files to check more than once.
 
 
-## 0.0.3
+## 0.0.3 - 2019-08-31
 
 * Add a `run_once` flag for commands. This causes command to be run exactly
   once from the root directory of the project (when it applies). This lets you
@@ -18,11 +18,11 @@
   should always win in these situations.
 
 
-## 0.0.2
+## 0.0.2 - 2019-08-13
 
 * Documentation fixes
 
 
-## 0.0.1
+## 0.0.1 - 2019-08-13
 
 * First release upon an unsuspecting world.
