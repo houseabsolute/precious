@@ -12,7 +12,7 @@ lint_failure_exit_codes = [1]
 
 [commands.clippy]
 type     = "lint"
-include  = "."
+include  = "**/*.rs"
 on_dir   = true
 run_once = true
 chdir    = true
