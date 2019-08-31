@@ -416,19 +416,6 @@ impl<'a> Main<'a> {
         }
     }
 
-    fn dirs(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
-        let mut map = HashMap::new();
-        let paths = self.basepaths()?.paths()?;
-        if paths.is_none() {
-            return Ok(None);
-        }
-
-        for p in paths.unwrap() {
-            map.insert(p.dir.clone(), p);
-        }
-        Ok(Some(map))
-    }
-
     fn root_as_paths(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
         let mut m = HashMap::new();
         let paths = self.basepaths()?.paths()?;
@@ -447,6 +434,19 @@ impl<'a> Main<'a> {
         };
         m.insert(PathBuf::from("."), root_paths);
         Ok(Some(m))
+    }
+
+    fn dirs(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
+        let mut map = HashMap::new();
+        let paths = self.basepaths()?.paths()?;
+        if paths.is_none() {
+            return Ok(None);
+        }
+
+        for p in paths.unwrap() {
+            map.insert(p.dir.clone(), p);
+        }
+        Ok(Some(map))
     }
 
     fn files(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
