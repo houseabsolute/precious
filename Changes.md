@@ -1,3 +1,10 @@
+## 0.0.4
+
+* Fixed a bug where `git stash` would be run multiple times in staged mode if
+  you had more than one filter defined. As a bonus this also makes precious
+  more efficient by not retrieving the list of files to check more than once.
+
+
 ## 0.0.3
 
 * Add a `run_once` flag for commands. This causes command to be run exactly
