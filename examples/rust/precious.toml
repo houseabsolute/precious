@@ -1,0 +1,21 @@
+exclude = [
+  "target",
+]
+
+[commands.rustfmt]
+type    = "both"
+include = "**/*.rs"
+cmd     = ["rustfmt"]
+lint_flag = "--check"
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
+
+[commands.clippy]
+type     = "lint"
+include  = "."
+on_dir   = true
+run_once = true
+chdir    = true
+cmd      = ["cargo", "clippy", "-q", "--", "-D", "clippy::all"]
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
