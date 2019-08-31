@@ -37,6 +37,8 @@ pub struct BasePaths {
     root: PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
+    #[allow(clippy::option_option)]
+    paths: Option<Option<Vec<Paths>>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -84,10 +86,16 @@ impl BasePaths {
             root,
             exclude_globs,
             stashed: false,
+            paths: None,
         })
     }
 
     pub fn paths(&mut self) -> Result<Option<Vec<Paths>>, Error> {
+        debug!("P = {:#?}", self.paths);
+        if self.paths.is_some() {
+            return Ok(self.paths.as_ref().unwrap().clone());
+        }
+
         let files = match self.mode {
             Mode::All => self.all_files()?,
             Mode::FromCLI => self.files_from_cli()?,
@@ -96,6 +104,7 @@ impl BasePaths {
         };
 
         if files.is_none() {
+            self.paths = Some(None);
             return Ok(None);
         }
 
@@ -113,7 +122,9 @@ impl BasePaths {
             self.stashed = true;
         }
 
-        self.files_to_paths(files.unwrap())
+        self.paths = Some(self.files_to_paths(files.unwrap())?);
+
+        Ok(self.paths.as_ref().unwrap().clone())
     }
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
@@ -463,20 +474,26 @@ mod tests {
     fn git_staged_mode_with_changes() -> Result<(), Error> {
         let root = testhelper::create_git_repo()?;
         let modified = testhelper::modify_files(&root)?;
-        let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
-        let res = bp.paths();
-        assert_that(&res).is_ok();
-        assert_that(&res.unwrap()).is_none();
 
-        testhelper::stage_all_in(&root)?;
-        let expect = bp.files_to_paths(
-            modified
-                .iter()
-                .sorted_by(|a, b| a.cmp(b))
-                .map(PathBuf::from)
-                .collect::<Vec<PathBuf>>(),
-        )?;
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        {
+            let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+            let res = bp.paths();
+            assert_that(&res).is_ok();
+            assert_that(&res.unwrap()).is_none();
+        }
+
+        {
+            let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+            testhelper::stage_all_in(&root)?;
+            let expect = bp.files_to_paths(
+                modified
+                    .iter()
+                    .sorted_by(|a, b| a.cmp(b))
+                    .map(PathBuf::from)
+                    .collect::<Vec<PathBuf>>(),
+            )?;
+            assert_that(&bp.paths()?).is_equal_to(expect);
+        }
 
         Ok(())
     }
