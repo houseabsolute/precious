@@ -270,4 +270,4 @@ status if any of the lint filters indicate a linting problem.
 
 ## Build Status
 
-[![Build Status](https://travis-ci.com/houseabsolute/precious-rs.svg?branch=master)](https://travis-ci.com/houseabsolute/precious-rs)
+[![Build Status](https://travis-ci.com/houseabsolute/precious.svg?branch=master)](https://travis-ci.com/houseabsolute/precious)
