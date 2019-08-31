@@ -51,7 +51,7 @@ fn init_logger(matches: &clap::ArgMatches) {
 
 fn make_app<'a>() -> App<'a, 'a> {
     App::new("precious")
-        .version("0.0.4")
+        .version(env!("CARGO_PKG_VERSION"))
         .author("Dave Rolsky <autarch@urth.org>")
         .about("One code quality tool to rule them all")
         .arg(
