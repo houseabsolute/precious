@@ -6,7 +6,7 @@ exclude = [
 type    = "both"
 include = "**/*.rs"
 cmd     = ["rustfmt"]
-lint_flag = "--check"
+lint_flags = "--check"
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 

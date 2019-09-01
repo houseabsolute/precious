@@ -29,8 +29,10 @@ impl FilterType {
 
 #[derive(Debug, Fail)]
 enum FilterError {
-    #[fail(display = "You cannot create a Command which lints and tidies without a lint_flag")]
-    CommandWhichIsBothRequiresLintFlag,
+    #[fail(
+        display = "You cannot create a Command which lints and tidies without lint_flags and/or tidy_flags"
+    )]
+    CommandWhichIsBothRequiresLintOrTidyFlags,
 
     #[fail(
         display = "You can only pass paths to files to the {} method for this filter, you passed {}",
@@ -306,7 +308,8 @@ impl Filter {
 pub struct Command {
     cmd: Vec<String>,
     chdir: bool,
-    lint_flag: String,
+    lint_flags: Vec<String>,
+    tidy_flags: Vec<String>,
     path_flag: String,
     ok_exit_codes: HashSet<i32>,
     lint_failure_exit_codes: HashSet<i32>,
@@ -323,7 +326,8 @@ pub struct CommandParams {
     pub run_once: bool,
     pub chdir: bool,
     pub cmd: Vec<String>,
-    pub lint_flag: String,
+    pub lint_flags: Vec<String>,
+    pub tidy_flags: Vec<String>,
     pub path_flag: String,
     pub ok_exit_codes: Vec<u8>,
     pub lint_failure_exit_codes: Vec<u8>,
@@ -333,8 +337,8 @@ pub struct CommandParams {
 impl Command {
     pub fn build(params: CommandParams) -> Result<Filter, Error> {
         if let FilterType::Both = params.typ {
-            if params.lint_flag == "" {
-                return Err(FilterError::CommandWhichIsBothRequiresLintFlag)?;
+            if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
+                return Err(FilterError::CommandWhichIsBothRequiresLintOrTidyFlags)?;
             }
         }
 
@@ -349,7 +353,8 @@ impl Command {
             implementation: Box::new(Command {
                 cmd: replace_root(params.cmd, &params.root),
                 chdir: params.chdir,
-                lint_flag: params.lint_flag,
+                lint_flags: params.lint_flags,
+                tidy_flags: params.tidy_flags,
                 path_flag: params.path_flag,
                 ok_exit_codes: Self::exit_codes_hashset(
                     &params.ok_exit_codes,
@@ -400,6 +405,9 @@ impl Command {
 impl FilterImplementation for Command {
     fn tidy(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<(), Error> {
         let mut cmd = self.cmd.clone();
+        if !self.tidy_flags.is_empty() {
+            cmd.append(&mut self.tidy_flags.clone());
+        }
         if self.path_flag != "" {
             cmd.push(self.path_flag.clone());
         }
@@ -428,8 +436,8 @@ impl FilterImplementation for Command {
 
     fn lint(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<LintResult, Error> {
         let mut cmd = self.cmd.clone();
-        if self.lint_flag != "" {
-            cmd.push(self.lint_flag.clone());
+        if !self.lint_flags.is_empty() {
+            cmd.append(&mut self.lint_flags.clone());
         }
         if self.path_flag != "" {
             cmd.push(self.path_flag.clone());

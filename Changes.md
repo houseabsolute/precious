@@ -1,3 +1,12 @@
+## 0.0.5 - 2019-09-01
+
+* Renamed the config key `lint_flag` to `lint_flags` so it can now be an array
+  of strings as well as a single string.
+
+* Added a `tidy_flags` option as well. Now commands which are both must define
+  either `lint_flags` or `tidy_flags` (or both).
+
+
 ## 0.0.4 - 2019-08-31
 
 * Fixed a bug where `git stash` would be run multiple times in staged mode if

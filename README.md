@@ -62,12 +62,13 @@ The keys that are allowed for each command are as follows:
 
 | Key | Type | Required? | Applies To | Default | Description |
 | --- | ---- | --------- | ---------- | ------- | ----------- |
-| `type` | strings | **yes** | all | | This must be either `lint`, `tidy`, or `both`. This defines what type of filter this is. Note that a filter which is `both` **must** define a `lint_flag` as well. |
+| `type` | strings | **yes** | all | | This must be either `lint`, `tidy`, or `both`. This defines what type of filter this is. Note that a filter which is `both` **must** define `lint_flags` or `tidy_flags` as well. |
 | `include` | array of strings | **yes** | all | | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter applies to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
 | `exclude` | array of strings | no | all | | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter should not be applied to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
-| `cmd` | array of string | **yes** | all | | This is the executable to be run followed by any arguments that should always be passed. |
+| `cmd` | array of strings | **yes** | all | | This is the executable to be run followed by any arguments that should always be passed. |
 | `path_flag` | string | no | all | | By default, `precious` will pass the each path being operated on to the command it executes as a final, positional, argument. However, if the command takes paths via a flag you need to specify that flag with this key.
-| `lint_flag` | string | no | combined linter & tidier | | If a command is both a linter and tidier than it typically takes an extra flag to operate in linting mode. This is how you set that flag. |
+| `lint_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in linting mode. This is how you set that flag. |
+| `tidy_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in tidying mode. This is how you set that flag. |
 | `on_dir` | boolean | no | all | false | If this is true, then the command is run once per matched directory rather than per file. |
 | `run_once` | boolean | no | all | false | If this is true, then the command is only run once from the root directory no matter how many files match. |
 | `chdir` |  boolean | no | all | false | If this is true, then the command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if both `on_dir` and `chdir` are true then `precious` will not pass the path to the executable as an argument. |
@@ -171,7 +172,7 @@ Here are some example command configurations:
 type    = "both"
 include = "**/*.rs"
 cmd     = ["rustfmt"]
-lint_flag = "--check"
+lint_flags = "--check"
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 ```
@@ -250,7 +251,7 @@ type    = "both"
 include = "**/*.rs"
 exclude = "path/to/dir"
 cmd     = ["rustfmt"]
-lint_flag = "--check"
+lint_flags = "--check"
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 
@@ -258,7 +259,7 @@ lint_failure_exit_codes = [1]
 type    = "both"
 include = "path/to/dir/that.rs"
 cmd     = ["rustfmt"]
-lint_flag = "--check"
+lint_flags = "--check"
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 ```

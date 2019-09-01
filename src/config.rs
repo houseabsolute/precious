@@ -12,7 +12,8 @@ pub struct Server {
 #[derive(Debug)]
 pub struct Command {
     chdir: bool,
-    lint_flag: String,
+    lint_flags: Vec<String>,
+    tidy_flags: Vec<String>,
     path_flag: String,
     ok_exit_codes: Vec<u8>,
     lint_failure_exit_codes: Vec<u8>,
@@ -146,7 +147,8 @@ impl Config {
 
     fn toml_to_command(name: String, table: &toml::value::Table) -> Result<Filter, Error> {
         let chdir = Self::toml_bool(table, "chdir")?;
-        let lint_flag = Self::toml_string(table, "lint_flag")?;
+        let lint_flags = Self::toml_string_vec(table, "lint_flags")?;
+        let tidy_flags = Self::toml_string_vec(table, "tidy_flags")?;
         let path_flag = Self::toml_string(table, "path_flag")?;
         let ok_exit_codes = Self::toml_u8_vec(table, "ok_exit_codes")?;
         let lint_failure_exit_codes = Self::toml_u8_vec(table, "lint_failure_exit_codes")?;
@@ -171,7 +173,8 @@ impl Config {
             core: Self::toml_to_filter_core(name, table)?,
             implementation: FilterImplementation::C(Command {
                 chdir,
-                lint_flag,
+                lint_flags,
+                tidy_flags,
                 path_flag,
                 ok_exit_codes,
                 lint_failure_exit_codes,
@@ -410,7 +413,8 @@ impl Config {
                     run_once: filter.core.run_once,
                     chdir: c.chdir,
                     cmd: filter.core.cmd.clone(),
-                    lint_flag: c.lint_flag.clone(),
+                    lint_flags: c.lint_flags.clone(),
+                    tidy_flags: c.tidy_flags.clone(),
                     path_flag: c.path_flag.clone(),
                     ok_exit_codes: c.ok_exit_codes.clone(),
                     lint_failure_exit_codes: c.lint_failure_exit_codes.clone(),
