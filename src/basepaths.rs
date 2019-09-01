@@ -91,7 +91,6 @@ impl BasePaths {
     }
 
     pub fn paths(&mut self) -> Result<Option<Vec<Paths>>, Error> {
-        debug!("P = {:#?}", self.paths);
         if self.paths.is_some() {
             return Ok(self.paths.as_ref().unwrap().clone());
         }
