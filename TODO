@@ -8,8 +8,6 @@ especially tests for the filter and its include/exclude handling
 
 Hard to figure out parallel closure issues with type checking.
 
-# $ROOT in args
-
 # examples
 
 Make a set of per-language examples showing how to configure common tools for
