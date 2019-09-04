@@ -15,7 +15,6 @@ travis-ci = { repository = "houseabsolute/precious-rs" }
 clap = "2"
 failure = "0.1.5"
 failure_derive = "0.1.5"
-glob = "0.2.11"
 globset = "0.4.1"
 ignore = "0.4.7"
 itertools = "0.8.0"
