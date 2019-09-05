@@ -1,4 +1,4 @@
-## 0.0.5 - 2019-09-01
+## 0.0.5 - 2019-09-05
 
 * Renamed the config key `lint_flag` to `lint_flags` so it can now be an array
   of strings as well as a single string.
