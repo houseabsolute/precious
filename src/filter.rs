@@ -84,7 +84,7 @@ impl fmt::Debug for Filter {
         // field so we'll just leave it out for now.
         write!(
             f,
-            "{{ root: {:?}, name: {:?}, typ: {:?}, includer: {:?}, excluder: {:?}, on_dir: {:?}",
+            "{{ root: {:?}, name: {:?}, typ: {:?}, includer: {:?}, excluder: {:?}, on_dir: {:?} }}",
             self.root, self.name, self.typ, self.includer, self.excluder, self.on_dir,
         )
     }
