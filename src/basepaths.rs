@@ -338,14 +338,10 @@ mod tests {
 
     #[test]
     fn files_to_paths() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let mut files: Vec<PathBuf> = vec![];
-        for p in testhelper::paths().iter() {
-            files.push(PathBuf::from(p));
-        }
+        let helper = testhelper::TestHelper::new()?;
 
-        let bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
-        let paths = bp.files_to_paths(files)?.unwrap();
+        let bp = new_basepaths(Mode::All, vec![], helper.root())?;
+        let paths = bp.files_to_paths(helper.all_files())?.unwrap();
         assert_that(&paths.len())
             .named("got three paths entries")
             .is_equal_to(3);
@@ -385,31 +381,28 @@ mod tests {
 
     #[test]
     fn all_mode() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let mut bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
-        assert_that(&bp.paths()?).is_equal_to(
-            bp.files_to_paths(testhelper::paths().iter().map(PathBuf::from).collect())?,
-        );
+        let helper = testhelper::TestHelper::new()?;
+        let mut bp = new_basepaths(Mode::All, vec![], helper.root())?;
+        assert_that(&bp.paths()?).is_equal_to(bp.files_to_paths(helper.all_files())?);
         Ok(())
     }
 
     #[test]
     fn all_mode_with_gitignore() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let mut gitignores = testhelper::add_gitignore_files(&root)?;
-        let mut expect = testhelper::non_ignored_files();
+        let helper = testhelper::TestHelper::new()?;
+        let mut gitignores = helper.add_gitignore_files()?;
+        let mut expect = testhelper::TestHelper::non_ignored_files();
         expect.append(&mut gitignores);
 
-        let mut bp = new_basepaths(Mode::All, vec![], root.path().to_owned())?;
-        assert_that(&bp.paths()?)
-            .is_equal_to(bp.files_to_paths(expect.iter().map(PathBuf::from).collect())?);
+        let mut bp = new_basepaths(Mode::All, vec![], helper.root())?;
+        assert_that(&bp.paths()?).is_equal_to(bp.files_to_paths(expect)?);
         Ok(())
     }
 
     #[test]
     fn git_modified_mode_empty() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let mut bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
+        let helper = testhelper::TestHelper::new()?;
+        let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
         let res = bp.paths();
         assert_that(&res).is_ok();
         assert_that(&res.unwrap()).is_none();
@@ -418,9 +411,9 @@ mod tests {
 
     #[test]
     fn git_modified_mode_with_changes() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let modified = testhelper::modify_files(&root)?;
-        let mut bp = new_basepaths(Mode::GitModified, vec![], root.path().to_owned())?;
+        let helper = testhelper::TestHelper::new()?;
+        let modified = helper.modify_files()?;
+        let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
         let expect = bp.files_to_paths(
             modified
                 .iter()
@@ -434,17 +427,17 @@ mod tests {
 
     #[test]
     fn git_modified_mode_with_excluded_files() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
-        testhelper::stage_all_in(&root)?;
-        testhelper::commit_all_in(&root)?;
+        let helper = testhelper::TestHelper::new()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
+        helper.commit_all()?;
 
-        let modified = testhelper::modify_files(&root)?;
-        testhelper::write_file(&root, "vendor/foo/bar.txt", "new content")?;
+        let modified = helper.modify_files()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::GitModified,
             vec![],
-            root.path().to_owned(),
+            helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_paths(
@@ -461,8 +454,8 @@ mod tests {
 
     #[test]
     fn git_staged_mode_empty() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+        let helper = testhelper::TestHelper::new()?;
+        let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
         let res = bp.paths();
         assert_that(&res).is_ok();
         assert_that(&res.unwrap()).is_none();
@@ -471,19 +464,19 @@ mod tests {
 
     #[test]
     fn git_staged_mode_with_changes() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let modified = testhelper::modify_files(&root)?;
+        let helper = testhelper::TestHelper::new()?;
+        let modified = helper.modify_files()?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+            let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
             let res = bp.paths();
             assert_that(&res).is_ok();
             assert_that(&res.unwrap()).is_none();
         }
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
-            testhelper::stage_all_in(&root)?;
+            let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
+            helper.stage_all()?;
             let expect = bp.files_to_paths(
                 modified
                     .iter()
@@ -499,14 +492,14 @@ mod tests {
 
     #[test]
     fn git_staged_mode_with_excluded_files() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let modified = testhelper::modify_files(&root)?;
-        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
-        testhelper::stage_all_in(&root)?;
+        let helper = testhelper::TestHelper::new()?;
+        let modified = helper.modify_files()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
         let mut bp = new_basepaths_with_excludes(
             Mode::GitStaged,
             vec![],
-            root.path().to_owned(),
+            helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_paths(
@@ -523,14 +516,14 @@ mod tests {
 
     #[test]
     fn git_staged_mode_stashes_unindexed() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let modified = testhelper::modify_files(&root)?;
-        testhelper::stage_all_in(&root)?;
+        let helper = testhelper::TestHelper::new()?;
+        let modified = helper.modify_files()?;
+        helper.stage_all()?;
         let unstaged = "tests/data/bar.txt";
-        testhelper::write_file(&root, unstaged, "new content")?;
+        helper.write_file(&PathBuf::from(unstaged), "new content")?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, vec![], root.path().to_owned())?;
+            let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
             let expect = bp.files_to_paths(
                 modified
                     .iter()
@@ -539,29 +532,22 @@ mod tests {
                     .collect::<Vec<PathBuf>>(),
             )?;
             assert_that(&bp.paths()?).is_equal_to(expect);
-            assert_that(&String::from_utf8(fs::read(
-                root.path().to_owned().join(unstaged),
-            )?)?)
-            .is_equal_to(String::from("some content"));
+            assert_that(&String::from_utf8(fs::read(helper.root().join(unstaged))?)?)
+                .is_equal_to(String::from("some content"));
         }
-        assert_that(&String::from_utf8(fs::read(
-            root.path().to_owned().join(unstaged),
-        )?)?)
-        .is_equal_to(String::from("new content"));
+        assert_that(&String::from_utf8(fs::read(helper.root().join(unstaged))?)?)
+            .is_equal_to(String::from("new content"));
 
         Ok(())
     }
 
     #[test]
     fn cli_mode() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        let mut bp = new_basepaths(
-            Mode::FromCLI,
-            vec![PathBuf::from("tests")],
-            root.path().to_owned(),
-        )?;
+        let helper = testhelper::TestHelper::new()?;
+        let mut bp = new_basepaths(Mode::FromCLI, vec![PathBuf::from("tests")], helper.root())?;
         let expect = bp.files_to_paths(
-            testhelper::paths()
+            helper
+                .all_files()
                 .iter()
                 .filter(|p| p.starts_with("tests/"))
                 .sorted_by(|a, b| a.cmp(b))
@@ -574,16 +560,17 @@ mod tests {
 
     #[test]
     fn cli_mode_given_dir_with_excluded_files() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
+        let helper = testhelper::TestHelper::new()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::FromCLI,
             vec![PathBuf::from(".")],
-            root.path().to_owned(),
+            helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_paths(
-            testhelper::paths()
+            helper
+                .all_files()
                 .iter()
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
@@ -595,32 +582,32 @@ mod tests {
 
     #[test]
     fn cli_mode_given_files_with_excluded_files() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
-        testhelper::write_file(&root, "vendor/foo/bar.txt", "initial content")?;
+        let helper = testhelper::TestHelper::new()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::FromCLI,
             vec![
-                PathBuf::from(testhelper::paths()[0]),
+                helper.all_files()[0].clone(),
                 PathBuf::from("vendor/foo/bar.txt"),
             ],
-            root.path().to_owned(),
+            helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = bp.files_to_paths(vec![PathBuf::from(testhelper::paths()[0])])?;
+        let expect = bp.files_to_paths(vec![helper.all_files()[0].clone()])?;
         assert_that(&bp.paths()?).is_equal_to(expect);
         Ok(())
     }
 
     #[test]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<(), Error> {
-        let root = testhelper::create_git_repo()?;
+        let helper = testhelper::TestHelper::new()?;
         let mut bp = new_basepaths(
             Mode::FromCLI,
             vec![
-                PathBuf::from(testhelper::paths()[0]),
+                helper.all_files()[0].clone(),
                 PathBuf::from("does/not/exist"),
             ],
-            root.path().to_owned(),
+            helper.root(),
         )?;
         let res = bp.paths();
         assert_that(&res).is_err();
