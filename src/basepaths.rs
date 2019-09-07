@@ -1,5 +1,5 @@
 use crate::command;
-use crate::excluder;
+use crate::path_matcher;
 use crate::vcs;
 use failure::Error;
 use ignore;
@@ -147,7 +147,7 @@ impl BasePaths {
                 })?;
             }
 
-            if excluder.path_is_excluded(&rel) {
+            if excluder.path_matches(&rel) {
                 continue;
             }
 
@@ -215,7 +215,7 @@ impl BasePaths {
                 self.relative_files(
                     s.lines()
                         .filter_map(|rel| {
-                            if excluder.path_is_excluded(&PathBuf::from(rel)) {
+                            if excluder.path_matches(&PathBuf::from(rel)) {
                                 return None;
                             }
 
@@ -230,11 +230,11 @@ impl BasePaths {
         }
     }
 
-    fn excluder(&self) -> Result<excluder::Excluder, Error> {
+    fn excluder(&self) -> Result<path_matcher::Matcher, Error> {
         let mut globs = self.exclude_globs.clone();
         let mut v = vcs::dirs().clone();
         globs.append(&mut v);
-        excluder::Excluder::new(globs.as_ref())
+        path_matcher::Matcher::new(globs.as_ref())
     }
 
     fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>, Error> {

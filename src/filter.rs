@@ -1,7 +1,6 @@
 use crate::command;
-use crate::excluder;
+use crate::path_matcher;
 use failure::Error;
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, info};
 use md5;
 use std::collections::{HashMap, HashSet};
@@ -67,8 +66,8 @@ pub struct Filter {
     root: PathBuf,
     pub name: String,
     typ: FilterType,
-    includer: Includer,
-    excluder: excluder::Excluder,
+    includer: path_matcher::Matcher,
+    excluder: path_matcher::Matcher,
     pub on_dir: bool,
     pub run_once: bool,
     implementation: Box<dyn FilterImplementation>,
@@ -171,7 +170,7 @@ impl Filter {
     }
 
     fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> Result<bool, Error> {
-        if self.excluder.path_is_excluded(path) {
+        if self.excluder.path_matches(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
                 path.to_string_lossy(),
@@ -180,7 +179,7 @@ impl Filter {
             return Ok(false);
         }
 
-        if self.includer.path_is_included(path) {
+        if self.includer.path_matches(path) {
             debug!(
                 "Path {} is included in the {} filter",
                 path.to_string_lossy(),
@@ -191,11 +190,11 @@ impl Filter {
 
         if self.on_dir {
             for f in files {
-                if self.excluder.path_is_excluded(f) {
+                if self.excluder.path_matches(f) {
                     continue;
                 }
 
-                if self.includer.path_is_included(f) {
+                if self.includer.path_matches(f) {
                     debug!(
                         "Directory {} is included in the {} filter because it contains {} which is included",
                         path.to_string_lossy(),
@@ -346,8 +345,8 @@ impl Command {
             root: params.root.clone(),
             name: params.name,
             typ: params.typ,
-            includer: Includer::new(&params.include)?,
-            excluder: excluder::Excluder::new(&params.exclude)?,
+            includer: path_matcher::Matcher::new(&params.include)?,
+            excluder: path_matcher::Matcher::new(&params.exclude)?,
             on_dir: params.on_dir,
             run_once: params.run_once,
             implementation: Box::new(Command {
@@ -475,7 +474,7 @@ impl FilterImplementation for Command {
 //     name: String,
 //     typ: FilterType,
 //     include: GlobSet,
-//     excluder: excluder::Excluder,
+//     excluder: path_matcher::Matcher,
 //     cmd: Vec<String>,
 //     on_dir: bool,
 //     port: u16,
@@ -490,25 +489,4 @@ fn replace_root(cmd: Vec<String>, root: &PathBuf) -> Vec<String> {
             )
         })
         .collect()
-}
-
-#[derive(Debug)]
-struct Includer {
-    include: GlobSet,
-}
-
-impl Includer {
-    fn new(globs: &[String]) -> Result<Includer, Error> {
-        let mut builder = GlobSetBuilder::new();
-        for g in globs {
-            builder.add(Glob::new(g.as_str())?);
-        }
-        Ok(Includer {
-            include: builder.build()?,
-        })
-    }
-
-    fn path_is_included(&self, path: &PathBuf) -> bool {
-        self.include.is_match(path)
-    }
 }

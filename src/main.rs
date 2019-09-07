@@ -11,8 +11,8 @@ extern crate failure_derive;
 mod basepaths;
 mod command;
 mod config;
-mod excluder;
 mod filter;
+mod path_matcher;
 mod vcs;
 
 use clap::{App, Arg, ArgGroup, SubCommand};
