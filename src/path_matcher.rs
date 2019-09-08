@@ -27,26 +27,58 @@ impl Matcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spectral::prelude::*;
+
+    struct TestSet {
+        globs: Vec<String>,
+        yes: &'static [&'static str],
+        no: &'static [&'static str],
+    }
 
     #[test]
     fn path_matches() -> Result<(), Error> {
-        let e1 = Matcher::new(&[String::from("*.foo")])?;
-        assert!(e1.path_matches(&PathBuf::from("file.foo")));
-        assert!(!e1.path_matches(&PathBuf::from("file.bar")));
-        assert!(e1.path_matches(&PathBuf::from("./file.foo")));
-        assert!(!e1.path_matches(&PathBuf::from("./file.bar")));
-
-        let e2 = Matcher::new(&[String::from("*.foo"), String::from("**/foo/*")])?;
-        assert!(e2.path_matches(&PathBuf::from("file.foo")));
-        assert!(!e2.path_matches(&PathBuf::from("file.bar")));
-        assert!(e2.path_matches(&PathBuf::from("/baz/bar/file.foo")));
-        assert!(!e2.path_matches(&PathBuf::from("/baz/bar/file.bar")));
-        assert!(e2.path_matches(&PathBuf::from("/contains/foo/any.txt")));
-        assert!(e2.path_matches(&PathBuf::from("./file.foo")));
-        assert!(!e2.path_matches(&PathBuf::from("./file.bar")));
-        assert!(e2.path_matches(&PathBuf::from("./baz/bar/file.foo")));
-        assert!(!e2.path_matches(&PathBuf::from("./baz/bar/file.bar")));
-        assert!(e2.path_matches(&PathBuf::from("./contains/foo/any.txt")));
+        let tests = vec![
+            TestSet {
+                globs: vec![String::from("*.foo")],
+                yes: &["file.foo", "./file.foo"],
+                no: &["file.bar", "./file.bar"],
+            },
+            TestSet {
+                globs: vec![String::from("*.foo"), String::from("**/foo/*")],
+                yes: &[
+                    "file.foo",
+                    "/baz/bar/file.foo",
+                    "/contains/foo/any.txt",
+                    "./file.foo",
+                    "./baz/bar/file.foo",
+                    "./contains/foo/any.txt",
+                ],
+                no: &[
+                    "file.bar",
+                    "/baz/bar/file.bar",
+                    "./file.bar",
+                    "./baz/bar/file.bar",
+                ],
+            },
+            TestSet {
+                globs: vec![String::from("/foo/**/*")],
+                yes: &["/foo/file.go", "/foo/bar/baz/file.go"],
+                no: &["/bar/file.go"],
+            },
+        ];
+        for t in tests {
+            let m = Matcher::new(&t.globs)?;
+            for y in t.yes {
+                assert_that(&m.path_matches(&PathBuf::from(y)))
+                    .named(format!("{} matches", y).as_str())
+                    .is_true();
+            }
+            for n in t.no {
+                assert_that(&m.path_matches(&PathBuf::from(n)))
+                    .named(format!("{} matches", n).as_str())
+                    .is_false();
+            }
+        }
 
         Ok(())
     }
