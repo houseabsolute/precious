@@ -69,10 +69,6 @@ matrix:
 
     # *BSD
     - env:
-        - TARGET=x86_64-unknown-freebsd
-        - DEPLOY=1
-      rust: stable
-    - env:
         - TARGET=x86_64-unknown-netbsd
         - DEPLOY=1
       rust: stable
