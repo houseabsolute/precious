@@ -490,3 +490,164 @@ fn replace_root(cmd: Vec<String>, root: &PathBuf) -> Vec<String> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::path_matcher;
+    use crate::testhelper;
+    use spectral::prelude::*;
+
+    type Mock = i8;
+
+    impl FilterImplementation for Mock {
+        fn tidy(&self, _: &str, _: &PathBuf, _: bool) -> Result<(), Error> {
+            Ok(())
+        }
+
+        fn lint(&self, _: &str, _: &PathBuf, _: bool) -> Result<LintResult, Error> {
+            Ok(LintResult {
+                ok: true,
+                stdout: None,
+                stderr: None,
+            })
+        }
+    }
+
+    fn mock_filter() -> Box<dyn FilterImplementation> {
+        Box::new(1 as Mock)
+    }
+
+    fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher, Error> {
+        path_matcher::Matcher::new(
+            &globs
+                .iter()
+                .map(|g| String::from(*g))
+                .collect::<Vec<String>>(),
+        )
+    }
+
+    #[test]
+    fn require_path_type_dir() -> Result<(), Error> {
+        let filter = Filter {
+            root: PathBuf::from("/foo/bar"),
+            name: String::from("Test"),
+            typ: FilterType::Lint,
+            includer: matcher(&[])?,
+            excluder: matcher(&[])?,
+            on_dir: true,
+            run_once: false,
+            implementation: mock_filter(),
+        };
+
+        let helper = testhelper::TestHelper::new()?;
+        assert_that(&filter.require_path_type("tidy", &helper.root())).is_ok();
+        assert_that(&filter.require_path_type("tidy", &helper.all_files()[0].clone())).is_err();
+
+        Ok(())
+    }
+
+    #[test]
+    fn require_path_type_file() -> Result<(), Error> {
+        let filter = Filter {
+            root: PathBuf::from("/foo/bar"),
+            name: String::from("Test"),
+            typ: FilterType::Lint,
+            includer: matcher(&[])?,
+            excluder: matcher(&[])?,
+            on_dir: false,
+            run_once: false,
+            implementation: mock_filter(),
+        };
+
+        let helper = testhelper::TestHelper::new()?;
+        assert_that(&filter.require_path_type("tidy", &helper.root())).is_err();
+        assert_that(&filter.require_path_type("tidy", &helper.all_files()[0].clone())).is_ok();
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_process_path() -> Result<(), Error> {
+        let filter = Filter {
+            root: PathBuf::from("/foo/bar"),
+            name: String::from("Test"),
+            typ: FilterType::Lint,
+            includer: matcher(&["**/*.go"])?,
+            excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
+            on_dir: false,
+            run_once: false,
+            implementation: mock_filter(),
+        };
+
+        let include = &["something.go", "dir/foo.go", ".foo.go", "bar/foo/x.go"];
+        for i in include.iter().map(PathBuf::from) {
+            let name = i.clone();
+            assert_that(&filter.should_process_path(&i.clone(), &[i])?)
+                .named(&name.to_string_lossy())
+                .is_true();
+        }
+
+        let exclude = &[
+            "something.pl",
+            "dir/foo.pl",
+            "foo/bar.go",
+            "baz/bar/anything/here/quux/file.go",
+        ];
+        for e in exclude.iter().map(PathBuf::from) {
+            let name = e.clone();
+            assert_that(&filter.should_process_path(&e.clone(), &[e])?)
+                .named(&name.to_string_lossy())
+                .is_false();
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_process_path_on_dir() -> Result<(), Error> {
+        let filter = Filter {
+            root: PathBuf::from("/foo/bar"),
+            name: String::from("Test"),
+            typ: FilterType::Lint,
+            includer: matcher(&["**/*.go"])?,
+            excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
+            on_dir: true,
+            run_once: false,
+            implementation: mock_filter(),
+        };
+
+        let include = &[
+            &[".", "foo.go", "README.md"],
+            &["dir/foo", "dir/foo/foo.pl", "dir/foo/file.go"],
+        ];
+        for i in include.iter() {
+            let dir = PathBuf::from(i[0]);
+            let files = i[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
+            let name = dir.clone();
+            assert_that(&filter.should_process_path(&dir, &files)?)
+                .named(&name.to_string_lossy())
+                .is_true();
+        }
+
+        let exclude = &[
+            &["foo", "foo/bar.go", "foo/baz.go"],
+            &[
+                "baz/bar/foo/quux",
+                "baz/bar/foo/quux/file.go",
+                "baz/bar/foo/quux/other.go",
+            ],
+            &["dir", "dir/foo.pl", "dir/file.txt"],
+        ];
+        for e in exclude.iter() {
+            let dir = PathBuf::from(e[0]);
+            let files = e[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
+            let name = dir.clone();
+            assert_that(&filter.should_process_path(&dir, &files)?)
+                .named(&name.to_string_lossy())
+                .is_false();
+        }
+
+        Ok(())
+    }
+}
