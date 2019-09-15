@@ -12,3 +12,11 @@ Hard to figure out parallel closure issues with type checking.
 
 Make a set of per-language examples showing how to configure common tools for
 those languages.
+
+# better error messages from config
+
+If a key is missing entirely for a string value we get a message like
+`precious: Found an invalid value for the type key. Expected one of "lint",
+"tidy", or "both" but this is a .
+
+It should say that the string is empty.
