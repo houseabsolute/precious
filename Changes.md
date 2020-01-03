@@ -23,7 +23,7 @@
   files changed, even files which shouldn't trigger a run.
 
 * Fixed a bug where a command with `on_dir` set to `true` would incorrectly be
-  run when it a file matched both an include _and_ exclude rule. Exclude rules
+  run when a file matched both an include _and_ exclude rule. Exclude rules
   should always win in these situations.
 
 
