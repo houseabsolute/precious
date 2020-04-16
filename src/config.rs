@@ -32,8 +32,7 @@ pub struct FilterCore {
     typ: filter::FilterType,
     include: Vec<String>,
     exclude: Vec<String>,
-    on_dir: bool,
-    run_once: bool,
+    run_mode: filter::RunMode,
     cmd: Vec<String>,
 }
 
@@ -79,6 +78,12 @@ pub enum ConfigError {
 
     #[fail(display = "Expected a value from {} to {} but got {}.", min, max, val)]
     IntegerConversionError { min: i64, max: i64, val: i64 },
+
+    #[fail(
+        display = "The run_mdoe key must be one of 'files', 'dirs', or 'root', not {}",
+        got
+    )]
+    InvalidRunMode { got: String },
 
     #[fail(display = "Servers are not yet implemented")]
     ServersAreNotYetImplemented,
@@ -208,8 +213,7 @@ impl Config {
         };
         let include = Self::toml_string_vec(table, "include")?;
         let exclude = Self::toml_string_vec(table, "exclude")?;
-        let on_dir = Self::toml_bool(table, "on_dir")?;
-        let run_once = Self::toml_bool(table, "run_once")?;
+        let toml_run_mode = Self::toml_string(table, "run_mode")?;
         let cmd = Self::toml_string_vec(table, "cmd")?;
 
         if include.is_empty() {
@@ -218,6 +222,16 @@ impl Config {
                 name,
             })?;
         }
+
+        let run_mode = match toml_run_mode.as_str() {
+            "" => filter::RunMode::Files,
+            "files" => filter::RunMode::Files,
+            "dirs" => filter::RunMode::Dirs,
+            "root" => filter::RunMode::Root,
+            _ => {
+                return Err(ConfigError::InvalidRunMode { got: toml_run_mode })?;
+            }
+        };
 
         if cmd.is_empty() {
             return Err(ConfigError::MissingTOMLKey { key: "cmd", name })?;
@@ -228,8 +242,7 @@ impl Config {
             typ,
             include,
             exclude,
-            on_dir,
-            run_once,
+            run_mode,
             cmd,
         })
     }
@@ -409,8 +422,7 @@ impl Config {
                     typ: filter.core.typ.clone(),
                     include: filter.core.include.clone(),
                     exclude: filter.core.exclude.clone(),
-                    on_dir: filter.core.on_dir,
-                    run_once: filter.core.run_once,
+                    run_mode: filter.core.run_mode.clone(),
                     chdir: c.chdir,
                     cmd: filter.core.cmd.clone(),
                     lint_flags: c.lint_flags.clone(),

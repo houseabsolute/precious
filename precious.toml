@@ -13,8 +13,7 @@ lint_failure_exit_codes = [1]
 [commands.clippy]
 type     = "lint"
 include  = "**/*.rs"
-on_dir   = true
-run_once = true
+run_mode = "root"
 chdir    = true
 cmd      = ["cargo", "clippy", "-q", "--", "-D", "clippy::all"]
 ok_exit_codes = [0]

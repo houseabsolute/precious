@@ -272,9 +272,9 @@ impl<'a> Main<'a> {
         let mut status = 0 as i32;
 
         for t in tidiers {
-            let map = if t.run_once {
+            let map = if t.run_mode_is(filter::RunMode::Root) {
                 self.root_as_paths()?
-            } else if t.on_dir {
+            } else if t.run_mode_is(filter::RunMode::Dirs) {
                 self.dirs()?
             } else {
                 self.files()?
@@ -337,9 +337,9 @@ impl<'a> Main<'a> {
         let mut status = 0 as i32;
 
         for l in linters {
-            let map = if l.run_once {
+            let map = if l.run_mode_is(filter::RunMode::Root) {
                 self.root_as_paths()?
-            } else if l.on_dir {
+            } else if l.run_mode_is(filter::RunMode::Dirs) {
                 self.dirs()?
             } else {
                 self.files()?

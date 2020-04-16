@@ -26,6 +26,23 @@ impl FilterType {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum RunMode {
+    Files,
+    Dirs,
+    Root,
+}
+
+impl RunMode {
+    fn what(&self) -> &'static str {
+        match self {
+            RunMode::Files => "files",
+            RunMode::Dirs => "dirs",
+            RunMode::Root => "root",
+        }
+    }
+}
+
 #[derive(Debug, Fail)]
 enum FilterError {
     #[fail(
@@ -68,8 +85,7 @@ pub struct Filter {
     typ: FilterType,
     includer: path_matcher::Matcher,
     excluder: path_matcher::Matcher,
-    pub on_dir: bool,
-    pub run_once: bool,
+    pub run_mode: RunMode,
     implementation: Box<dyn FilterImplementation>,
 }
 
@@ -83,8 +99,8 @@ impl fmt::Debug for Filter {
         // field so we'll just leave it out for now.
         write!(
             f,
-            "{{ root: {:?}, name: {:?}, typ: {:?}, includer: {:?}, excluder: {:?}, on_dir: {:?} }}",
-            self.root, self.name, self.typ, self.includer, self.excluder, self.on_dir,
+            "{{ root: {:?}, name: {:?}, typ: {:?}, includer: {:?}, excluder: {:?}, run_mode: {:?} }}",
+            self.root, self.name, self.typ, self.includer, self.excluder, self.run_mode,
         )
     }
 }
@@ -97,8 +113,8 @@ pub struct LintResult {
 }
 
 pub trait FilterImplementation {
-    fn tidy(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<(), Error>;
-    fn lint(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<LintResult, Error>;
+    fn tidy(&self, name: &str, path: &PathBuf) -> Result<(), Error>;
+    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult, Error>;
 }
 
 #[derive(Debug)]
@@ -106,6 +122,10 @@ struct PathInfo {
     mtime: SystemTime,
     size: u64,
     hash: md5::Digest,
+}
+
+fn run_mode_is(mode1: &RunMode, mode2: &RunMode) -> bool {
+    return std::mem::discriminant(mode1) == std::mem::discriminant(mode2);
 }
 
 impl Filter {
@@ -122,7 +142,7 @@ impl Filter {
         }
 
         let info = Self::path_info_map_for(&full)?;
-        self.implementation.tidy(&self.name, path, self.on_dir)?;
+        self.implementation.tidy(&self.name, path)?;
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
@@ -138,7 +158,7 @@ impl Filter {
             return Ok(None);
         }
 
-        let r = self.implementation.lint(&self.name, &path, self.on_dir)?;
+        let r = self.implementation.lint(&self.name, &path)?;
         Ok(Some(r))
     }
 
@@ -154,19 +174,27 @@ impl Filter {
     }
 
     fn require_path_type(&self, method: &'static str, path: &PathBuf) -> Result<(), Error> {
+        if self.run_mode_is(RunMode::Root) {
+            return Ok(());
+        }
+
         let is_dir = fs::metadata(path)?.is_dir();
-        if self.on_dir && !is_dir {
+        if self.run_mode_is(RunMode::Dirs) && !is_dir {
             return Err(FilterError::CanOnlyOperateOnDirectories {
                 method,
                 path: path.to_string_lossy().to_string(),
             })?;
-        } else if is_dir && !self.on_dir {
+        } else if self.run_mode_is(RunMode::Files) && is_dir {
             return Err(FilterError::CanOnlyOperateOnFiles {
                 method,
                 path: path.to_string_lossy().to_string(),
             })?;
         }
         Ok(())
+    }
+
+    pub fn run_mode_is(&self, mode: RunMode) -> bool {
+        return run_mode_is(&self.run_mode, &mode);
     }
 
     fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> Result<bool, Error> {
@@ -188,7 +216,7 @@ impl Filter {
             return Ok(true);
         }
 
-        if self.on_dir {
+        if !self.run_mode_is(RunMode::Files) {
             for f in files {
                 if self.excluder.path_matches(f) {
                     continue;
@@ -312,6 +340,7 @@ pub struct Command {
     path_flag: String,
     ok_exit_codes: HashSet<i32>,
     lint_failure_exit_codes: HashSet<i32>,
+    run_mode: RunMode,
     expect_stderr: bool,
 }
 
@@ -321,8 +350,7 @@ pub struct CommandParams {
     pub typ: FilterType,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
-    pub on_dir: bool,
-    pub run_once: bool,
+    pub run_mode: RunMode,
     pub chdir: bool,
     pub cmd: Vec<String>,
     pub lint_flags: Vec<String>,
@@ -347,8 +375,7 @@ impl Command {
             typ: params.typ,
             includer: path_matcher::Matcher::new(&params.include)?,
             excluder: path_matcher::Matcher::new(&params.exclude)?,
-            on_dir: params.on_dir,
-            run_once: params.run_once,
+            run_mode: params.run_mode.clone(),
             implementation: Box::new(Command {
                 cmd: replace_root(params.cmd, &params.root),
                 chdir: params.chdir,
@@ -363,6 +390,7 @@ impl Command {
                     &params.lint_failure_exit_codes,
                     None,
                 ),
+                run_mode: params.run_mode,
                 expect_stderr: params.expect_stderr,
             }),
         })
@@ -399,10 +427,14 @@ impl Command {
 
         Some(path.parent().unwrap().to_path_buf())
     }
+
+    fn run_mode_is(&self, mode: RunMode) -> bool {
+        return run_mode_is(&self.run_mode, &mode);
+    }
 }
 
 impl FilterImplementation for Command {
-    fn tidy(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<(), Error> {
+    fn tidy(&self, name: &str, path: &PathBuf) -> Result<(), Error> {
         let mut cmd = self.cmd.clone();
         if !self.tidy_flags.is_empty() {
             cmd.append(&mut self.tidy_flags.clone());
@@ -410,7 +442,7 @@ impl FilterImplementation for Command {
         if self.path_flag != "" {
             cmd.push(self.path_flag.clone());
         }
-        if !(on_dir && self.chdir) {
+        if self.run_mode_is(RunMode::Files) || !self.chdir {
             cmd.push(path.to_string_lossy().to_string());
         }
 
@@ -433,7 +465,7 @@ impl FilterImplementation for Command {
         }
     }
 
-    fn lint(&self, name: &str, path: &PathBuf, on_dir: bool) -> Result<LintResult, Error> {
+    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult, Error> {
         let mut cmd = self.cmd.clone();
         if !self.lint_flags.is_empty() {
             cmd.append(&mut self.lint_flags.clone());
@@ -441,7 +473,7 @@ impl FilterImplementation for Command {
         if self.path_flag != "" {
             cmd.push(self.path_flag.clone());
         }
-        if !(on_dir && self.chdir) {
+        if self.run_mode_is(RunMode::Files) || !self.chdir {
             cmd.push(path.to_string_lossy().to_string());
         }
 
@@ -476,7 +508,7 @@ impl FilterImplementation for Command {
 //     include: GlobSet,
 //     excluder: path_matcher::Matcher,
 //     cmd: Vec<String>,
-//     on_dir: bool,
+//     run_mode: RunMode,
 //     port: u16,
 // }
 
@@ -501,11 +533,11 @@ mod tests {
     type Mock = i8;
 
     impl FilterImplementation for Mock {
-        fn tidy(&self, _: &str, _: &PathBuf, _: bool) -> Result<(), Error> {
+        fn tidy(&self, _: &str, _: &PathBuf) -> Result<(), Error> {
             Ok(())
         }
 
-        fn lint(&self, _: &str, _: &PathBuf, _: bool) -> Result<LintResult, Error> {
+        fn lint(&self, _: &str, _: &PathBuf) -> Result<LintResult, Error> {
             Ok(LintResult {
                 ok: true,
                 stdout: None,
@@ -535,8 +567,7 @@ mod tests {
             typ: FilterType::Lint,
             includer: matcher(&[])?,
             excluder: matcher(&[])?,
-            on_dir: true,
-            run_once: false,
+            run_mode: RunMode::Dirs,
             implementation: mock_filter(),
         };
 
@@ -555,8 +586,7 @@ mod tests {
             typ: FilterType::Lint,
             includer: matcher(&[])?,
             excluder: matcher(&[])?,
-            on_dir: false,
-            run_once: false,
+            run_mode: RunMode::Files,
             implementation: mock_filter(),
         };
 
@@ -575,8 +605,7 @@ mod tests {
             typ: FilterType::Lint,
             includer: matcher(&["**/*.go"])?,
             excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
-            on_dir: false,
-            run_once: false,
+            run_mode: RunMode::Files,
             implementation: mock_filter(),
         };
 
@@ -605,15 +634,60 @@ mod tests {
     }
 
     #[test]
-    fn should_process_path_on_dir() -> Result<(), Error> {
+    fn should_process_path_run_mode_dirs() -> Result<(), Error> {
         let filter = Filter {
             root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
             typ: FilterType::Lint,
             includer: matcher(&["**/*.go"])?,
             excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
-            on_dir: true,
-            run_once: false,
+            run_mode: RunMode::Dirs,
+            implementation: mock_filter(),
+        };
+
+        let include = &[
+            &[".", "foo.go", "README.md"],
+            &["dir/foo", "dir/foo/foo.pl", "dir/foo/file.go"],
+        ];
+        for i in include.iter() {
+            let dir = PathBuf::from(i[0]);
+            let files = i[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
+            let name = dir.clone();
+            assert_that(&filter.should_process_path(&dir, &files)?)
+                .named(&name.to_string_lossy())
+                .is_true();
+        }
+
+        let exclude = &[
+            &["foo", "foo/bar.go", "foo/baz.go"],
+            &[
+                "baz/bar/foo/quux",
+                "baz/bar/foo/quux/file.go",
+                "baz/bar/foo/quux/other.go",
+            ],
+            &["dir", "dir/foo.pl", "dir/file.txt"],
+        ];
+        for e in exclude.iter() {
+            let dir = PathBuf::from(e[0]);
+            let files = e[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
+            let name = dir.clone();
+            assert_that(&filter.should_process_path(&dir, &files)?)
+                .named(&name.to_string_lossy())
+                .is_false();
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn should_process_path_run_mode_root() -> Result<(), Error> {
+        let filter = Filter {
+            root: PathBuf::from("/foo/bar"),
+            name: String::from("Test"),
+            typ: FilterType::Lint,
+            includer: matcher(&["**/*.go"])?,
+            excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
+            run_mode: RunMode::Root,
             implementation: mock_filter(),
         };
 

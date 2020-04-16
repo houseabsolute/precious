@@ -1,3 +1,11 @@
+## 0.0.6
+
+* Replaced the `on_dir` and `run_once` config flags with a single `run_mode`
+  flag, which can be one of "files" (the default)", "dirs", or "root". If the
+  mode is "root" then the command runs exactly once from the root of the
+  project.
+
+
 ## 0.0.5 - 2019-09-05
 
 * Renamed the config key `lint_flag` to `lint_flags` so it can now be an array
