@@ -64,7 +64,7 @@ pub enum ConfigError {
     },
 
     #[fail(
-        display = "Found an invalid value for the {} key. Expected {} but this is a {}.",
+        display = "Found an invalid value for the {} key. Expected {} but got {}.",
         key, want, got
     )]
     InvalidTOMLValue {
@@ -78,12 +78,6 @@ pub enum ConfigError {
 
     #[fail(display = "Expected a value from {} to {} but got {}.", min, max, val)]
     IntegerConversionError { min: i64, max: i64, val: i64 },
-
-    #[fail(
-        display = "The run_mdoe key must be one of 'files', 'dirs', or 'root', not {}",
-        got
-    )]
-    InvalidRunMode { got: String },
 
     #[fail(display = "Servers are not yet implemented")]
     ServersAreNotYetImplemented,
@@ -131,7 +125,7 @@ impl Config {
                     if f.is_table() {
                         constructed.push(constructor(name.to_string(), f.as_table().unwrap())?)
                     } else {
-                        return Err(ConfigError::InvalidTOMLArrayValue {
+                        return Err(ConfigError::InvalidTOMLValue {
                             key,
                             want: "a table",
                             got: f.type_str().to_string(),
@@ -203,11 +197,11 @@ impl Config {
             "lint" => filter::FilterType::Lint,
             "tidy" => filter::FilterType::Tidy,
             "both" => filter::FilterType::Both,
-            _ => {
+            s => {
                 return Err(ConfigError::InvalidTOMLValue {
                     key: "type",
                     want: "one of \"lint\", \"tidy\", or \"both\"",
-                    got: toml_typ.as_str().to_string(),
+                    got: Self::string_or_empty(s),
                 })?;
             }
         };
@@ -229,7 +223,11 @@ impl Config {
             "dirs" => filter::RunMode::Dirs,
             "root" => filter::RunMode::Root,
             _ => {
-                return Err(ConfigError::InvalidRunMode { got: toml_run_mode })?;
+                return Err(ConfigError::InvalidTOMLValue {
+                    key: "run_mode",
+                    want: "one of \"files\", \"dirs\", or \"root\"",
+                    got: Self::string_or_empty(toml_run_mode.as_str()),
+                })?;
             }
         };
 
@@ -385,6 +383,14 @@ impl Config {
         }
 
         Ok(i as u16)
+    }
+
+    fn string_or_empty(val: &str) -> String {
+        if val.is_empty() {
+            return String::from("an empty string");
+        }
+
+        return format!("\"{}\"", val);
     }
 
     pub fn tidy_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>, Error> {
