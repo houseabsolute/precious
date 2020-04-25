@@ -28,7 +28,8 @@ There are several ways to install this tool.
 ### Binary Releases
 
 The easiest way to install it is to grab a binary release from the [releases
-page](releases). Simply put this somewhere in your path and you're good to go.
+page](https://github.com/houseabsolute/precious/releases). Simply put this
+somewhere in your path and you're good to go.
 
 ### Cargo
 
