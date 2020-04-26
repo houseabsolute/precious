@@ -1,5 +1,6 @@
 use crate::filter;
 use failure::Error;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use toml;
@@ -34,6 +35,7 @@ pub struct FilterCore {
     exclude: Vec<String>,
     run_mode: filter::RunMode,
     cmd: Vec<String>,
+    env: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -209,6 +211,7 @@ impl Config {
         let exclude = Self::toml_string_vec(table, "exclude")?;
         let toml_run_mode = Self::toml_string(table, "run_mode")?;
         let cmd = Self::toml_string_vec(table, "cmd")?;
+        let env = Self::toml_string_string_hashmap(table, "env")?;
 
         if include.is_empty() {
             return Err(ConfigError::MissingTOMLKey {
@@ -242,6 +245,7 @@ impl Config {
             exclude,
             run_mode,
             cmd,
+            env,
         })
     }
 
@@ -277,6 +281,38 @@ impl Config {
             want: "a string or an array of strings",
             got: val.type_str().to_string(),
         })?
+    }
+
+    fn toml_string_string_hashmap(
+        table: &toml::value::Table,
+        key: &'static str,
+    ) -> Result<HashMap<String, String>, Error> {
+        let mut hm = HashMap::new();
+        if !table.contains_key(key) {
+            return Ok(hm);
+        }
+
+        let subtable = table.get(key).unwrap();
+        if !subtable.is_table() {
+            return Err(ConfigError::InvalidTOMLValue {
+                key,
+                want: "a table",
+                got: subtable.type_str().to_string(),
+            })?;
+        }
+
+        for (name, v) in subtable.as_table().unwrap() {
+            if !v.is_str() {
+                return Err(ConfigError::InvalidTOMLValue {
+                    key,
+                    want: "a string",
+                    got: v.type_str().to_string(),
+                })?;
+            }
+            hm.insert(name.to_string(), v.as_str().unwrap().to_string());
+        }
+
+        Ok(hm)
     }
 
     fn toml_string(table: &toml::value::Table, key: &'static str) -> Result<String, Error> {
@@ -431,6 +467,7 @@ impl Config {
                     run_mode: filter.core.run_mode.clone(),
                     chdir: c.chdir,
                     cmd: filter.core.cmd.clone(),
+                    env: filter.core.env.clone(),
                     lint_flags: c.lint_flags.clone(),
                     tidy_flags: c.tidy_flags.clone(),
                     path_flag: c.path_flag.clone(),

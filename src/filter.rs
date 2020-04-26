@@ -334,6 +334,7 @@ impl Filter {
 #[derive(Debug)]
 pub struct Command {
     cmd: Vec<String>,
+    env: HashMap<String, String>,
     chdir: bool,
     lint_flags: Vec<String>,
     tidy_flags: Vec<String>,
@@ -353,6 +354,7 @@ pub struct CommandParams {
     pub run_mode: RunMode,
     pub chdir: bool,
     pub cmd: Vec<String>,
+    pub env: HashMap<String, String>,
     pub lint_flags: Vec<String>,
     pub tidy_flags: Vec<String>,
     pub path_flag: String,
@@ -378,6 +380,7 @@ impl Command {
             run_mode: params.run_mode.clone(),
             implementation: Box::new(Command {
                 cmd: replace_root(params.cmd, &params.root),
+                env: params.env,
                 chdir: params.chdir,
                 lint_flags: params.lint_flags,
                 tidy_flags: params.tidy_flags,
@@ -456,6 +459,7 @@ impl FilterImplementation for Command {
         match command::run_command(
             cmd.remove(0),
             cmd,
+            &self.env,
             self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
             self.in_dir(path).as_ref(),
@@ -487,6 +491,7 @@ impl FilterImplementation for Command {
         match command::run_command(
             cmd.remove(0),
             cmd,
+            &self.env,
             self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
             self.in_dir(path).as_ref(),

@@ -1,5 +1,6 @@
 use failure::Error;
 use log::debug;
+use std::collections::HashMap;
 #[cfg(target_family = "unix")]
 use std::os::unix::prelude::*;
 use std::path::PathBuf;
@@ -34,6 +35,7 @@ pub struct CommandResult {
 pub fn run_command(
     cmd: String,
     args: Vec<String>,
+    env: &HashMap<String, String>,
     ok_exit_codes: Vec<i32>,
     expect_stderr: bool,
     in_dir: Option<&PathBuf>,
@@ -45,6 +47,8 @@ pub fn run_command(
     if in_dir.is_some() {
         c.current_dir(in_dir.unwrap());
     }
+
+    c.envs(env);
 
     let cstr = command_string(&cmd, &args);
     debug!("Running command: {}", cstr);
@@ -137,6 +141,8 @@ fn signal_from_status(status: process::ExitStatus) -> i32 {
 mod tests {
     use failure::Error;
     use spectral::prelude::*;
+    use std::collections::HashMap;
+    use std::env;
 
     #[test]
     fn command_string() {
@@ -164,6 +170,7 @@ mod tests {
         let res = super::run_command(
             String::from("echo"),
             vec![String::from("foo")],
+            &HashMap::new(),
             vec![0],
             false,
             None,
@@ -172,9 +179,39 @@ mod tests {
             .named("command exits 0")
             .is_equal_to(&0);
 
+        let env_key = "PRECIOUS_ENV_TEST";
+        let mut env = HashMap::new();
+        env.insert(String::from(env_key), String::from("foo"));
+        let res = super::run_command(
+            String::from("sh"),
+            vec![
+                String::from("-c"),
+                String::from(format!("echo ${}", env_key)),
+            ],
+            &env,
+            vec![0],
+            false,
+            None,
+        )?;
+        assert_that(&res.exit_code)
+            .named("command exits 0")
+            .is_equal_to(&0);
+        assert_that(&res.stdout.is_some())
+            .named("command has stdout output")
+            .is_true();
+        assert_that(&res.stdout.unwrap())
+            .named(format!("{} env var was set when command was run", env_key).as_str())
+            .is_equal_to(&String::from("foo\n"));
+
+        let val = env::var(env_key);
+        assert_that(&val.err().unwrap())
+            .named(format!("{} env var is not set after command was run", env_key).as_str())
+            .is_equal_to(&std::env::VarError::NotPresent);
+
         let res = super::run_command(
             String::from("sh"),
             vec![String::from("-c"), String::from("exit 32")],
+            &HashMap::new(),
             vec![0],
             false,
             None,

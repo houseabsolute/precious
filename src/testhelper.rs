@@ -2,6 +2,7 @@
 use crate::command;
 use failure::Error;
 use failure::ResultExt;
+use std::collections::HashMap;
 use std::fs;
 use std::io::prelude::*;
 use std::path::PathBuf;
@@ -52,6 +53,7 @@ impl TestHelper {
         command::run_command(
             "git".to_string(),
             ["init"].iter().map(|a| a.to_string()).collect(),
+            &HashMap::new(),
             [0].to_vec(),
             false,
             Some(&self.root),
@@ -63,6 +65,7 @@ impl TestHelper {
                 .iter()
                 .map(|a| a.to_string())
                 .collect(),
+            &HashMap::new(),
             [0].to_vec(),
             false,
             Some(&self.root),
@@ -83,6 +86,7 @@ impl TestHelper {
         command::run_command(
             "git".to_string(),
             ["add", "."].iter().map(|a| a.to_string()).collect(),
+            &HashMap::new(),
             [0].to_vec(),
             false,
             Some(&self.root()),
@@ -97,6 +101,7 @@ impl TestHelper {
                 .iter()
                 .map(|a| a.to_string())
                 .collect(),
+            &HashMap::new(),
             [0].to_vec(),
             false,
             Some(&self.root()),

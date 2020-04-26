@@ -5,6 +5,9 @@
   mode is "root" then the command runs exactly once from the root of the
   project.
 
+* Added an `env` config key for filters. This allows you to define env vars
+  that will be set when the filter's command is run.
+
 
 ## 0.0.5 - 2019-09-05
 

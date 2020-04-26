@@ -67,6 +67,7 @@ The keys that are allowed for each command are as follows:
 | `include` | array of strings | **yes** | all | | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter applies to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
 | `exclude` | array of strings | no | all | | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter should not be applied to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
 | `cmd` | array of strings | **yes** | all | | This is the executable to be run followed by any arguments that should always be passed. |
+| `env` | table of strings->string | no | all | | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings. |
 | `path_flag` | string | no | all | | By default, `precious` will pass each path being operated on to the command it executes as a final, positional, argument. However, if the command takes paths via a flag you need to specify that flag with this key.
 | `lint_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in linting mode. This is how you set that flag. |
 | `tidy_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in tidying mode. This is how you set that flag. |
@@ -199,6 +200,25 @@ type    = "tidy"
 include = "**/*.go"
 cmd     = ["goimports", "-w"]
 ok_exit_codes = 0
+```
+
+### [golangci-lint](https://github.com/golangci/golangci-lint)
+
+```toml
+[commands.golangci-lint]
+type = "lint"
+include = "**/*.go"
+run_mode = "root"
+cmd = [
+    "golangci-lint",
+    "run",
+    "-c",
+    "$PRECIOUS_ROOT/golangci-lint.yml",
+]
+# This is an undocumented env var that golangci-lint looks for.
+env = { "FAIL_ON_WARNINGS": "1" }
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
 ```
 
 ## Common Scenarios
