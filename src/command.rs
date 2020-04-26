@@ -44,8 +44,8 @@ pub fn run_command(
     for a in args.iter() {
         c.arg(a);
     }
-    if in_dir.is_some() {
-        c.current_dir(in_dir.unwrap());
+    if let Some(id) = in_dir {
+        c.current_dir(id);
     }
 
     c.envs(env);
@@ -59,7 +59,8 @@ pub fn run_command(
         return Err(CommandError::UnexpectedStderr {
             cmd: command_string(&cmd, &args),
             stderr: String::from_utf8(output.stderr)?,
-        })?;
+        }
+        .into());
     }
 
     let code = match output.status.code() {
@@ -90,7 +91,8 @@ fn output_from_command(
                     cmd: cstr,
                     code,
                     stderr: String::from_utf8(output.stderr)?,
-                })?;
+                }
+                .into());
             }
         }
         None => {
@@ -102,7 +104,7 @@ fn output_from_command(
                     cstr.clone(),
                     signal
                 );
-                return Err(CommandError::ProcessKilledBySignal { cmd: cstr, signal })?;
+                return Err(CommandError::ProcessKilledBySignal { cmd: cstr, signal }.into());
             }
         }
     }

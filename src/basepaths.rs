@@ -2,7 +2,6 @@ use crate::command;
 use crate::path_matcher;
 use crate::vcs;
 use failure::Error;
-use ignore;
 use itertools::Itertools;
 use log::{debug, error};
 use path_clean::PathClean;
@@ -76,7 +75,7 @@ impl BasePaths {
             Mode::FromCLI => (),
             _ => {
                 if !cli_paths.is_empty() {
-                    return Err(BasePathsError::GotPathsFromCLIWithWrongMode { mode })?;
+                    return Err(BasePathsError::GotPathsFromCLIWithWrongMode { mode }.into());
                 }
             }
         };
@@ -112,7 +111,7 @@ impl BasePaths {
                 String::from("git"),
                 ["stash", "--keep-index"]
                     .iter()
-                    .map(|a| a.to_string())
+                    .map(|a| (*a).to_string())
                     .collect(),
                 &HashMap::new(),
                 [0].to_vec(),
@@ -145,7 +144,8 @@ impl BasePaths {
             if !full.exists() {
                 return Err(BasePathsError::NonExistentPathOnCLI {
                     path: rel.to_string_lossy().to_string(),
-                })?;
+                }
+                .into());
             }
 
             if excluder.path_matches(&rel) {
@@ -187,7 +187,7 @@ impl BasePaths {
             .build()
         {
             if result.is_err() {
-                return Err(result.err().unwrap())?;
+                return Err(result.err().unwrap().into());
             }
 
             let ent = result.ok().unwrap();
@@ -234,7 +234,7 @@ impl BasePaths {
 
     fn excluder(&self) -> Result<path_matcher::Matcher, Error> {
         let mut globs = self.exclude_globs.clone();
-        let mut v = vcs::dirs().clone();
+        let mut v = vcs::dirs();
         globs.append(&mut v);
         path_matcher::Matcher::new(globs.as_ref())
     }
@@ -253,7 +253,8 @@ impl BasePaths {
         if entries.is_empty() {
             return Err(BasePathsError::AllPathsWereExcluded {
                 mode: self.mode.clone(),
-            })?;
+            }
+            .into());
         }
 
         Ok(Some(
@@ -300,7 +301,7 @@ impl Drop for BasePaths {
 
         let res = command::run_command(
             String::from("git"),
-            ["stash", "pop"].iter().map(|a| a.to_string()).collect(),
+            ["stash", "pop"].iter().map(|a| (*a).to_string()).collect(),
             &HashMap::new(),
             [0].to_vec(),
             false,

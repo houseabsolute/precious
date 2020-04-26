@@ -3,7 +3,6 @@ use failure::Error;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use toml;
 
 #[derive(Debug)]
 pub struct Server {
@@ -93,7 +92,8 @@ impl Config {
         if !root.is_table() {
             return Err(ConfigError::FileIsNotTOML {
                 file: path.to_string_lossy().to_string(),
-            })?;
+            }
+            .into());
         }
 
         let table = root.as_table().unwrap();
@@ -131,7 +131,8 @@ impl Config {
                             key,
                             want: "a table",
                             got: f.type_str().to_string(),
-                        })?;
+                        }
+                        .into());
                     }
                 }
             } else {
@@ -139,7 +140,8 @@ impl Config {
                     key,
                     want: "an array of tables",
                     got: filters.type_str().to_string(),
-                })?;
+                }
+                .into());
             }
         }
 
@@ -159,7 +161,8 @@ impl Config {
             return Err(ConfigError::MissingTOMLKey {
                 key: "ok_exit_codes",
                 name,
-            })?;
+            }
+            .into());
         }
 
         let toml_typ = Self::toml_string(table, "type")?;
@@ -167,7 +170,8 @@ impl Config {
             return Err(ConfigError::MissingTOMLKey {
                 key: "lint_failure_exit_codes",
                 name,
-            })?;
+            }
+            .into());
         }
 
         Ok(Filter {
@@ -204,7 +208,8 @@ impl Config {
                     key: "type",
                     want: "one of \"lint\", \"tidy\", or \"both\"",
                     got: Self::string_or_empty(s),
-                })?;
+                }
+                .into());
             }
         };
         let include = Self::toml_string_vec(table, "include")?;
@@ -217,7 +222,8 @@ impl Config {
             return Err(ConfigError::MissingTOMLKey {
                 key: "include",
                 name,
-            })?;
+            }
+            .into());
         }
 
         let run_mode = match toml_run_mode.as_str() {
@@ -230,12 +236,13 @@ impl Config {
                     key: "run_mode",
                     want: "one of \"files\", \"dirs\", or \"root\"",
                     got: Self::string_or_empty(toml_run_mode.as_str()),
-                })?;
+                }
+                .into());
             }
         };
 
         if cmd.is_empty() {
-            return Err(ConfigError::MissingTOMLKey { key: "cmd", name })?;
+            return Err(ConfigError::MissingTOMLKey { key: "cmd", name }.into());
         }
 
         Ok(FilterCore {
@@ -270,7 +277,8 @@ impl Config {
                         key,
                         want: "a string",
                         got: v.type_str().to_string(),
-                    })?;
+                    }
+                    .into());
                 }
             }
             return Ok(i);
@@ -280,7 +288,8 @@ impl Config {
             key,
             want: "a string or an array of strings",
             got: val.type_str().to_string(),
-        })?
+        }
+        .into())
     }
 
     fn toml_string_string_hashmap(
@@ -298,7 +307,8 @@ impl Config {
                 key,
                 want: "a table",
                 got: subtable.type_str().to_string(),
-            })?;
+            }
+            .into());
         }
 
         for (name, v) in subtable.as_table().unwrap() {
@@ -307,7 +317,8 @@ impl Config {
                     key,
                     want: "a string",
                     got: v.type_str().to_string(),
-                })?;
+                }
+                .into());
             }
             hm.insert(name.to_string(), v.as_str().unwrap().to_string());
         }
@@ -329,7 +340,8 @@ impl Config {
             key,
             want: "a string",
             got: val.type_str().to_string(),
-        })?
+        }
+        .into())
     }
 
     fn toml_bool(table: &toml::value::Table, key: &'static str) -> Result<bool, Error> {
@@ -346,7 +358,8 @@ impl Config {
             key,
             want: "a bool",
             got: val.type_str().to_string(),
-        })?
+        }
+        .into())
     }
 
     fn toml_u8_vec(table: &toml::value::Table, key: &'static str) -> Result<Vec<u8>, Error> {
@@ -367,7 +380,8 @@ impl Config {
                         key,
                         want: "value from 0-255",
                         got: v.type_str().to_string(),
-                    })?;
+                    }
+                    .into());
                 }
             }
             return Ok(i);
@@ -377,7 +391,8 @@ impl Config {
             key,
             want: "an integer of array of integers",
             got: val.type_str().to_string(),
-        })?
+        }
+        .into())
     }
 
     fn toml_u16(table: &toml::value::Table, key: &'static str) -> Result<u16, Error> {
@@ -394,7 +409,8 @@ impl Config {
             key,
             want: "an integer from 0-65535",
             got: val.type_str().to_string(),
-        })?
+        }
+        .into())
     }
 
     fn toml_int_to_u8(i: i64) -> Result<u8, Error> {
@@ -403,7 +419,8 @@ impl Config {
                 min: 0 as i64,
                 max: i64::from(std::u8::MAX),
                 val: i,
-            })?;
+            }
+            .into());
         }
 
         Ok(i as u8)
@@ -415,7 +432,8 @@ impl Config {
                 min: 0 as i64,
                 max: i64::from(std::u16::MAX),
                 val: i,
-            })?;
+            }
+            .into());
         }
 
         Ok(i as u16)
@@ -477,7 +495,7 @@ impl Config {
                 })?;
                 Ok(n)
             }
-            FilterImplementation::S(_) => Err(ConfigError::ServersAreNotYetImplemented)?,
+            FilterImplementation::S(_) => Err(ConfigError::ServersAreNotYetImplemented.into()),
         }
     }
 }

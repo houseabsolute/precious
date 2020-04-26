@@ -27,8 +27,8 @@ fn main() {
     let matches = make_app().get_matches();
     init_logger(&matches);
     let main = Main::new(&matches);
-    let status = if main.is_ok() {
-        main.unwrap().run()
+    let status = if let Ok(mut m) = main {
+        m.run()
     } else {
         error!("{}", main.unwrap_err());
         127 as i32
@@ -266,7 +266,7 @@ impl<'a> Main<'a> {
 
         let tidiers = self.config().tidy_filters(&self.root_dir())?;
         if tidiers.is_empty() {
-            return Err(MainError::NoTidiers)?;
+            return Err(MainError::NoTidiers.into());
         }
 
         let mut status = 0 as i32;
@@ -331,7 +331,7 @@ impl<'a> Main<'a> {
 
         let linters = self.config().lint_filters(&self.root_dir())?;
         if linters.is_empty() {
-            return Err(MainError::NoLinters)?;
+            return Err(MainError::NoLinters.into());
         }
 
         let mut status = 0 as i32;
@@ -546,7 +546,8 @@ impl<'a> Main<'a> {
 
         Err(MainError::CannotFindRoot {
             cwd: cwd.to_string_lossy().to_string(),
-        })?
+        }
+        .into())
     }
 
     fn is_checkout_root(path: &Path) -> bool {

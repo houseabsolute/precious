@@ -2,7 +2,6 @@ use crate::command;
 use crate::path_matcher;
 use failure::Error;
 use log::{debug, info};
-use md5;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
@@ -115,7 +114,7 @@ struct PathInfo {
 }
 
 fn run_mode_is(mode1: &RunMode, mode2: &RunMode) -> bool {
-    return std::mem::discriminant(mode1) == std::mem::discriminant(mode2);
+    std::mem::discriminant(mode1) == std::mem::discriminant(mode2)
 }
 
 impl Filter {
@@ -158,7 +157,8 @@ impl Filter {
                 what: "command",
                 typ: self.typ.what(),
                 method: "tidy",
-            })?;
+            }
+            .into());
         }
         Ok(())
     }
@@ -173,18 +173,20 @@ impl Filter {
             return Err(FilterError::CanOnlyOperateOnDirectories {
                 method,
                 path: path.to_string_lossy().to_string(),
-            })?;
+            }
+            .into());
         } else if self.run_mode_is(RunMode::Files) && is_dir {
             return Err(FilterError::CanOnlyOperateOnFiles {
                 method,
                 path: path.to_string_lossy().to_string(),
-            })?;
+            }
+            .into());
         }
         Ok(())
     }
 
     pub fn run_mode_is(&self, mode: RunMode) -> bool {
-        return run_mode_is(&self.run_mode, &mode);
+        run_mode_is(&self.run_mode, &mode)
     }
 
     fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> Result<bool, Error> {
@@ -244,7 +246,8 @@ impl Filter {
             if !prev.contains_key(path) {
                 return Err(FilterError::CannotComparePaths {
                     path: path.to_string_lossy().to_string(),
-                })?;
+                }
+                .into());
             }
             let prev_info = prev.get(path).unwrap();
             // If the mtime is unchanged we don't need to compare anything
@@ -265,23 +268,22 @@ impl Filter {
         }
 
         for entry in path.read_dir()? {
-            match entry {
-                Ok(e) => {
-                    if !e.metadata()?.is_dir() {
-                        if prev.contains_key(&e.path()) {
-                            if Self::path_was_changed(&e.path(), &prev)? {
-                                return Ok(true);
-                            }
-                        } else {
-                            // We can only assume that when an entry is not
-                            // found in the previous hash that the filter must
-                            // have added a new file.
-                            return Ok(true);
-                        }
-                    }
-                }
-                Err(e) => Err(e)?,
+            if let Err(e) = entry {
+                return Err(e.into());
             }
+
+            let e = entry.unwrap();
+            if e.metadata()?.is_dir() {
+                continue;
+            }
+
+            if prev.contains_key(&e.path()) && Self::path_was_changed(&e.path(), &prev)? {
+                return Ok(true);
+            }
+
+            // We can only assume that when an entry is not found in the
+            // previous hash that the filter must have added a new file.
+            return Ok(true);
         }
         Ok(false)
     }
@@ -302,7 +304,7 @@ impl Filter {
                             }
                         }
                     }
-                    Err(e) => return Err(e)?,
+                    Err(e) => return Err(e.into()),
                 }
             }
             return Ok(info);
@@ -357,7 +359,7 @@ impl Command {
     pub fn build(params: CommandParams) -> Result<Filter, Error> {
         if let FilterType::Both = params.typ {
             if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
-                return Err(FilterError::CommandWhichIsBothRequiresLintOrTidyFlags)?;
+                return Err(FilterError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
             }
         }
 
@@ -394,15 +396,15 @@ impl Command {
         lint_failure_exit_codes: Option<&[u8]>,
     ) -> HashSet<i32> {
         let mut len = ok_exit_codes.len();
-        if lint_failure_exit_codes.is_some() {
-            len += lint_failure_exit_codes.unwrap().len();
+        if let Some(lfec) = lint_failure_exit_codes {
+            len += lfec.len();
         }
         let mut hash: HashSet<i32> = HashSet::with_capacity(len);
         for c in ok_exit_codes {
             hash.insert(i32::from(*c));
         }
-        if lint_failure_exit_codes.is_some() {
-            for c in lint_failure_exit_codes.unwrap() {
+        if let Some(lfec) = lint_failure_exit_codes {
+            for c in lfec {
                 hash.insert(i32::from(*c));
             }
         }
@@ -422,7 +424,7 @@ impl Command {
     }
 
     fn run_mode_is(&self, mode: RunMode) -> bool {
-        return run_mode_is(&self.run_mode, &mode);
+        run_mode_is(&self.run_mode, &mode)
     }
 }
 
