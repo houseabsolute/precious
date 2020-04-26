@@ -33,16 +33,6 @@ pub enum RunMode {
     Root,
 }
 
-impl RunMode {
-    fn what(&self) -> &'static str {
-        match self {
-            RunMode::Files => "files",
-            RunMode::Dirs => "dirs",
-            RunMode::Root => "root",
-        }
-    }
-}
-
 #[derive(Debug, Fail)]
 enum FilterError {
     #[fail(
