@@ -1,3 +1,4 @@
+use crate::cache;
 use crate::command;
 use crate::path_matcher;
 use failure::Error;
@@ -75,6 +76,7 @@ pub struct Filter {
     includer: path_matcher::Matcher,
     excluder: path_matcher::Matcher,
     pub run_mode: RunMode,
+    cache: Box<dyn cache::CacheImplementation>,
     implementation: Box<dyn FilterImplementation>,
 }
 
@@ -344,6 +346,7 @@ pub struct CommandParams {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub run_mode: RunMode,
+    pub cache: Box<dyn cache::CacheImplementation>,
     pub chdir: bool,
     pub cmd: Vec<String>,
     pub env: HashMap<String, String>,
@@ -370,6 +373,7 @@ impl Command {
             includer: path_matcher::Matcher::new(&params.include)?,
             excluder: path_matcher::Matcher::new(&params.exclude)?,
             run_mode: params.run_mode.clone(),
+            cache_type: params.cache,
             implementation: Box::new(Command {
                 cmd: replace_root(params.cmd, &params.root),
                 env: params.env,
@@ -632,12 +636,14 @@ mod tests {
 
     #[test]
     fn should_process_path_run_mode_dirs() -> Result<(), Error> {
+        let root = PathBuf::from("/foo/bar");
         let filter = Filter {
-            root: PathBuf::from("/foo/bar"),
+            root: root,
             name: String::from("Test"),
             typ: FilterType::Lint,
             includer: matcher(&["**/*.go"])?,
             excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
+            cache: cache::new_from_type(cache::CacheType::Null, &root)?,
             run_mode: RunMode::Dirs,
             implementation: mock_filter(),
         };

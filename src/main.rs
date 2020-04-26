@@ -9,6 +9,7 @@ mod testhelper;
 extern crate failure_derive;
 
 mod basepaths;
+mod cache;
 mod command;
 mod config;
 mod filter;

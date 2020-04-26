@@ -1,3 +1,4 @@
+use crate::cache;
 use crate::filter;
 use failure::Error;
 use std::collections::HashMap;
@@ -47,6 +48,8 @@ pub struct Filter {
 pub struct Config {
     pub exclude: Vec<String>,
     filters: Vec<Filter>,
+    cache_type: cache::CacheType,
+    cache: Option<Box<dyn cache::CacheImplementation>>,
 }
 
 #[derive(Debug, Fail)]
@@ -98,9 +101,23 @@ impl Config {
 
         let table = root.as_table().unwrap();
 
+        let toml_cache_str = Self::toml_string(table, "run_mode")?;
+        let cache_type = match toml_cache_str.as_str() {
+            "" => cache::CacheType::Null,
+            "local" => cache::CacheType::Local,
+            got => {
+                return Err(ConfigError::InvalidTOMLValue {
+                    key: "cache",
+                    want: "one of \"null\" or \"local\"",
+                    got: Self::string_or_empty(got),
+                })?;
+            }
+        };
+
         Ok(Config {
             exclude: Self::toml_string_vec(table, "exclude")?,
             filters: Self::toml_filters(table)?,
+            cache_type,
         })
     }
 
@@ -478,6 +495,7 @@ impl Config {
             FilterImplementation::C(c) => {
                 let n = filter::Command::build(filter::CommandParams {
                     root: root.clone(),
+                    cache: self.cache(root)?,
                     name: filter.core.name.clone(),
                     typ: filter.core.typ.clone(),
                     include: filter.core.include.clone(),
@@ -497,5 +515,12 @@ impl Config {
             }
             FilterImplementation::S(_) => Err(ConfigError::ServersAreNotYetImplemented.into()),
         }
+    }
+
+    fn cache(&mut self, root: &PathBuf) -> Result<Box<dyn cache::CacheImplementation>, Error> {
+        if self.cache.is_none() {
+            self.cache = Some(cache::new_from_type(self.cache_type, root)?);
+        }
+        Ok(self.cache.unwrap())
     }
 }
