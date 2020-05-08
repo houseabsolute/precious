@@ -1,8 +1,7 @@
 [commands.golangci-lint]
 type = "lint"
 include = "**/*.go"
-on_dir = true
-run_once = true
+run_mode = "root"
 chdir = true
 cmd = [
     "golangci-lint",
@@ -17,8 +16,7 @@ lint_failure_exit_codes = [1]
 [commands.check-go-mod]
 type = "lint"
 include = "**/*.go"
-on_dir = true
-run_once = true
+run_mode = "dir"
 chdir = true
 cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
 expect_stderr = true
