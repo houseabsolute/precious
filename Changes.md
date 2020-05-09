@@ -1,5 +1,8 @@
 ## 0.0.7
 
+* Fix a bug where lint failures would still result in precious exiting
+  with 0. I'm not sure when this bug was introduced.
+
 * Replaced deprecated failure and failure_derive crates with anyhow and
   thiserror.
 

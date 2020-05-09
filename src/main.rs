@@ -358,6 +358,7 @@ impl<'a> Main<'a> {
                                         p.to_string_lossy()
                                     );
                                 }
+                                0
                             } else {
                                 println!(
                                     "{} Failed {}: {}",
@@ -371,8 +372,8 @@ impl<'a> Main<'a> {
                                 if r.stderr.is_some() {
                                     println!("{}", r.stderr.unwrap());
                                 }
+                                1
                             }
-                            0
                         }
                         Ok(None) => 0,
                         Err(e) => {
