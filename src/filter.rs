@@ -1,12 +1,13 @@
 use crate::command;
 use crate::path_matcher;
-use failure::Error;
+use anyhow::Result;
 use log::{debug, info};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use std::time::SystemTime;
+use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub enum FilterType {
@@ -32,38 +33,32 @@ pub enum RunMode {
     Root,
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 enum FilterError {
-    #[fail(
-        display = "You cannot create a Command which lints and tidies without lint_flags and/or tidy_flags"
+    #[error(
+        "You cannot create a Command which lints and tidies without lint_flags and/or tidy_flags"
     )]
     CommandWhichIsBothRequiresLintOrTidyFlags,
 
-    #[fail(
-        display = "You can only pass paths to files to the {} method for this filter, you passed {}",
-        method, path
+    #[error(
+        "You can only pass paths to files to the {method:} method for this filter, you passed {path:}"
     )]
     CanOnlyOperateOnFiles { method: &'static str, path: String },
 
-    #[fail(
-        display = "You can only pass paths to directories to the {} method for this filter, you passed {}",
-        method, path
+    #[error(
+        "You can only pass paths to directories to the {method:} method for this filter, you passed {path:}"
     )]
     CanOnlyOperateOnDirectories { method: &'static str, path: String },
 
-    #[fail(
-        display = "This {} is a {}. You cannot call {}() on it.",
-        what, typ, method
-    )]
+    #[error("")]
     CannotX {
         what: &'static str,
         typ: &'static str,
         method: &'static str,
     },
 
-    #[fail(
-        display = "Cannot compare previous state of {} to its current state because we did not record its previous state!",
-        path
+    #[error(
+        "Cannot compare previous state of {path:} to its current state because we did not record its previous state!"
     )]
     CannotComparePaths { path: String },
 }
@@ -102,8 +97,8 @@ pub struct LintResult {
 }
 
 pub trait FilterImplementation {
-    fn tidy(&self, name: &str, path: &PathBuf) -> Result<(), Error>;
-    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult, Error>;
+    fn tidy(&self, name: &str, path: &PathBuf) -> Result<()>;
+    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult>;
 }
 
 #[derive(Debug)]
@@ -118,7 +113,7 @@ fn run_mode_is(mode1: &RunMode, mode2: &RunMode) -> bool {
 }
 
 impl Filter {
-    pub fn tidy(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<bool>, Error> {
+    pub fn tidy(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<bool>> {
         self.require_is_not_filter_type(FilterType::Lint)?;
 
         let mut full = self.root.clone();
@@ -135,7 +130,7 @@ impl Filter {
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
-    pub fn lint(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<LintResult>, Error> {
+    pub fn lint(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<LintResult>> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
@@ -151,7 +146,7 @@ impl Filter {
         Ok(Some(r))
     }
 
-    fn require_is_not_filter_type(&self, not_allowed: FilterType) -> Result<(), Error> {
+    fn require_is_not_filter_type(&self, not_allowed: FilterType) -> Result<()> {
         if std::mem::discriminant(&not_allowed) == std::mem::discriminant(&self.typ) {
             return Err(FilterError::CannotX {
                 what: "command",
@@ -163,7 +158,7 @@ impl Filter {
         Ok(())
     }
 
-    fn require_path_type(&self, method: &'static str, path: &PathBuf) -> Result<(), Error> {
+    fn require_path_type(&self, method: &'static str, path: &PathBuf) -> Result<()> {
         if self.run_mode_is(RunMode::Root) {
             return Ok(());
         }
@@ -189,7 +184,7 @@ impl Filter {
         run_mode_is(&self.run_mode, &mode)
     }
 
-    fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> Result<bool, Error> {
+    fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> Result<bool> {
         if self.excluder.path_matches(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
@@ -240,7 +235,7 @@ impl Filter {
         Ok(false)
     }
 
-    fn path_was_changed(path: &PathBuf, prev: &HashMap<PathBuf, PathInfo>) -> Result<bool, Error> {
+    fn path_was_changed(path: &PathBuf, prev: &HashMap<PathBuf, PathInfo>) -> Result<bool> {
         let meta = fs::metadata(path)?;
         if meta.is_file() {
             if !prev.contains_key(path) {
@@ -288,7 +283,7 @@ impl Filter {
         Ok(false)
     }
 
-    fn path_info_map_for(path: &PathBuf) -> Result<HashMap<PathBuf, PathInfo>, Error> {
+    fn path_info_map_for(path: &PathBuf) -> Result<HashMap<PathBuf, PathInfo>> {
         let meta = fs::metadata(path)?;
         if meta.is_dir() {
             let mut info = HashMap::new();
@@ -356,7 +351,7 @@ pub struct CommandParams {
 }
 
 impl Command {
-    pub fn build(params: CommandParams) -> Result<Filter, Error> {
+    pub fn build(params: CommandParams) -> Result<Filter> {
         if let FilterType::Both = params.typ {
             if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
                 return Err(FilterError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
@@ -429,7 +424,7 @@ impl Command {
 }
 
 impl FilterImplementation for Command {
-    fn tidy(&self, name: &str, path: &PathBuf) -> Result<(), Error> {
+    fn tidy(&self, name: &str, path: &PathBuf) -> Result<()> {
         let mut cmd = self.cmd.clone();
         if !self.tidy_flags.is_empty() {
             cmd.append(&mut self.tidy_flags.clone());
@@ -461,7 +456,7 @@ impl FilterImplementation for Command {
         }
     }
 
-    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult, Error> {
+    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult> {
         let mut cmd = self.cmd.clone();
         if !self.lint_flags.is_empty() {
             cmd.append(&mut self.lint_flags.clone());
@@ -525,16 +520,17 @@ mod tests {
     use super::*;
     use crate::path_matcher;
     use crate::testhelper;
+    use anyhow::Result;
     use spectral::prelude::*;
 
     type Mock = i8;
 
     impl FilterImplementation for Mock {
-        fn tidy(&self, _: &str, _: &PathBuf) -> Result<(), Error> {
+        fn tidy(&self, _: &str, _: &PathBuf) -> Result<()> {
             Ok(())
         }
 
-        fn lint(&self, _: &str, _: &PathBuf) -> Result<LintResult, Error> {
+        fn lint(&self, _: &str, _: &PathBuf) -> Result<LintResult> {
             Ok(LintResult {
                 ok: true,
                 stdout: None,
@@ -547,7 +543,7 @@ mod tests {
         Box::new(1 as Mock)
     }
 
-    fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher, Error> {
+    fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher> {
         path_matcher::Matcher::new(
             &globs
                 .iter()
@@ -557,7 +553,7 @@ mod tests {
     }
 
     #[test]
-    fn require_path_type_dir() -> Result<(), Error> {
+    fn require_path_type_dir() -> Result<()> {
         let filter = Filter {
             root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
@@ -576,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn require_path_type_file() -> Result<(), Error> {
+    fn require_path_type_file() -> Result<()> {
         let filter = Filter {
             root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
@@ -595,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn should_process_path() -> Result<(), Error> {
+    fn should_process_path() -> Result<()> {
         let filter = Filter {
             root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
@@ -631,7 +627,7 @@ mod tests {
     }
 
     #[test]
-    fn should_process_path_run_mode_dirs() -> Result<(), Error> {
+    fn should_process_path_run_mode_dirs() -> Result<()> {
         let filter = Filter {
             root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
@@ -677,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn should_process_path_run_mode_root() -> Result<(), Error> {
+    fn should_process_path_run_mode_root() -> Result<()> {
         let filter = Filter {
             root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),

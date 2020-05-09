@@ -1,8 +1,9 @@
 use crate::filter;
-use failure::Error;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct Server {
@@ -49,14 +50,13 @@ pub struct Config {
     filters: Vec<Filter>,
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum ConfigError {
-    #[fail(display = "File at {} does not contain a TOML table", file)]
+    #[error("File at {file:} does not contain a TOML table")]
     FileIsNotTOML { file: String },
 
-    #[fail(
-        display = "Found an invalid value for an array value of the {} key. Expected an array of {} but this is a {}.",
-        key, want, got
+    #[error(
+        "Found an invalid value for an array value of the {key:} key. Expected an array of {want:} but this is a {got:}."
     )]
     InvalidTOMLArrayValue {
         key: &'static str,
@@ -64,28 +64,25 @@ pub enum ConfigError {
         got: String,
     },
 
-    #[fail(
-        display = "Found an invalid value for the {} key. Expected {} but got {}.",
-        key, want, got
-    )]
+    #[error("Found an invalid value for the {key:} key. Expected {want:} but got {got:}.")]
     InvalidTOMLValue {
         key: &'static str,
         want: &'static str,
         got: String,
     },
 
-    #[fail(display = "You must define a {} for the {} entry.", key, name)]
+    #[error("You must define a {key:} for the {name:} entry.")]
     MissingTOMLKey { key: &'static str, name: String },
 
-    #[fail(display = "Expected a value from {} to {} but got {}.", min, max, val)]
+    #[error("Expected a value from {min:} to {max:} but got {val:}.")]
     IntegerConversionError { min: i64, max: i64, val: i64 },
 
-    #[fail(display = "Servers are not yet implemented")]
+    #[error("Servers are not yet implemented")]
     ServersAreNotYetImplemented,
 }
 
 impl Config {
-    pub fn new_from_file(path: PathBuf) -> Result<Config, Error> {
+    pub fn new_from_file(path: PathBuf) -> Result<Config> {
         let bytes = fs::read(path.clone())?;
         let raw = String::from_utf8_lossy(&bytes);
         let root: toml::Value = toml::from_str(&raw)?;
@@ -104,7 +101,7 @@ impl Config {
         })
     }
 
-    fn toml_filters(table: &toml::value::Table) -> Result<Vec<Filter>, Error> {
+    fn toml_filters(table: &toml::value::Table) -> Result<Vec<Filter>> {
         let mut filters: Vec<Filter> = vec![];
         let mut c = Self::toml_filters_by_key("commands", table, Self::toml_to_command)?;
         filters.append(&mut c);
@@ -117,8 +114,8 @@ impl Config {
     fn toml_filters_by_key(
         key: &'static str,
         table: &toml::value::Table,
-        constructor: fn(String, &toml::value::Table) -> Result<Filter, Error>,
-    ) -> Result<Vec<Filter>, Error> {
+        constructor: fn(String, &toml::value::Table) -> Result<Filter>,
+    ) -> Result<Vec<Filter>> {
         let mut constructed: Vec<Filter> = vec![];
         if table.contains_key(key) {
             let filters = table.get(key).unwrap();
@@ -148,7 +145,7 @@ impl Config {
         Ok(constructed)
     }
 
-    fn toml_to_command(name: String, table: &toml::value::Table) -> Result<Filter, Error> {
+    fn toml_to_command(name: String, table: &toml::value::Table) -> Result<Filter> {
         let chdir = Self::toml_bool(table, "chdir")?;
         let lint_flags = Self::toml_string_vec(table, "lint_flags")?;
         let tidy_flags = Self::toml_string_vec(table, "tidy_flags")?;
@@ -188,7 +185,7 @@ impl Config {
         })
     }
 
-    fn toml_to_server(name: String, table: &toml::value::Table) -> Result<Filter, Error> {
+    fn toml_to_server(name: String, table: &toml::value::Table) -> Result<Filter> {
         let port = Self::toml_u16(table, "port")?;
 
         Ok(Filter {
@@ -197,7 +194,7 @@ impl Config {
         })
     }
 
-    fn toml_to_filter_core(name: String, table: &toml::value::Table) -> Result<FilterCore, Error> {
+    fn toml_to_filter_core(name: String, table: &toml::value::Table) -> Result<FilterCore> {
         let toml_typ = Self::toml_string(table, "type")?;
         let typ = match toml_typ.as_str() {
             "lint" => filter::FilterType::Lint,
@@ -256,10 +253,7 @@ impl Config {
         })
     }
 
-    fn toml_string_vec(
-        table: &toml::value::Table,
-        key: &'static str,
-    ) -> Result<Vec<String>, Error> {
+    fn toml_string_vec(table: &toml::value::Table, key: &'static str) -> Result<Vec<String>> {
         if !table.contains_key(key) {
             return Ok(Vec::new());
         }
@@ -295,7 +289,7 @@ impl Config {
     fn toml_string_string_hashmap(
         table: &toml::value::Table,
         key: &'static str,
-    ) -> Result<HashMap<String, String>, Error> {
+    ) -> Result<HashMap<String, String>> {
         let mut hm = HashMap::new();
         if !table.contains_key(key) {
             return Ok(hm);
@@ -326,7 +320,7 @@ impl Config {
         Ok(hm)
     }
 
-    fn toml_string(table: &toml::value::Table, key: &'static str) -> Result<String, Error> {
+    fn toml_string(table: &toml::value::Table, key: &'static str) -> Result<String> {
         if !table.contains_key(key) {
             return Ok(String::from(""));
         }
@@ -344,7 +338,7 @@ impl Config {
         .into())
     }
 
-    fn toml_bool(table: &toml::value::Table, key: &'static str) -> Result<bool, Error> {
+    fn toml_bool(table: &toml::value::Table, key: &'static str) -> Result<bool> {
         if !table.contains_key(key) {
             return Ok(false);
         }
@@ -362,7 +356,7 @@ impl Config {
         .into())
     }
 
-    fn toml_u8_vec(table: &toml::value::Table, key: &'static str) -> Result<Vec<u8>, Error> {
+    fn toml_u8_vec(table: &toml::value::Table, key: &'static str) -> Result<Vec<u8>> {
         if !table.contains_key(key) {
             return Ok(Vec::new());
         }
@@ -395,7 +389,7 @@ impl Config {
         .into())
     }
 
-    fn toml_u16(table: &toml::value::Table, key: &'static str) -> Result<u16, Error> {
+    fn toml_u16(table: &toml::value::Table, key: &'static str) -> Result<u16> {
         if !table.contains_key(key) {
             return Ok(0);
         }
@@ -413,7 +407,7 @@ impl Config {
         .into())
     }
 
-    fn toml_int_to_u8(i: i64) -> Result<u8, Error> {
+    fn toml_int_to_u8(i: i64) -> Result<u8> {
         if i > i64::from(std::u8::MAX) {
             return Err(ConfigError::IntegerConversionError {
                 min: 0 as i64,
@@ -426,7 +420,7 @@ impl Config {
         Ok(i as u8)
     }
 
-    fn toml_int_to_u16(i: i64) -> Result<u16, Error> {
+    fn toml_int_to_u16(i: i64) -> Result<u16> {
         if i > i64::from(std::u16::MAX) {
             return Err(ConfigError::IntegerConversionError {
                 min: 0 as i64,
@@ -447,7 +441,7 @@ impl Config {
         return format!("\"{}\"", val);
     }
 
-    pub fn tidy_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>, Error> {
+    pub fn tidy_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>> {
         let mut tidiers: Vec<filter::Filter> = vec![];
         for f in self.filters.iter() {
             if let filter::FilterType::Lint = f.core.typ {
@@ -460,7 +454,7 @@ impl Config {
         Ok(tidiers)
     }
 
-    pub fn lint_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>, Error> {
+    pub fn lint_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>> {
         let mut linters: Vec<filter::Filter> = vec![];
         for f in self.filters.iter() {
             if let filter::FilterType::Tidy = f.core.typ {
@@ -473,7 +467,7 @@ impl Config {
         Ok(linters)
     }
 
-    fn make_filter(&self, root: &PathBuf, filter: &Filter) -> Result<filter::Filter, Error> {
+    fn make_filter(&self, root: &PathBuf, filter: &Filter) -> Result<filter::Filter> {
         match &filter.implementation {
             FilterImplementation::C(c) => {
                 let n = filter::Command::build(filter::CommandParams {

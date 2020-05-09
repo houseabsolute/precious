@@ -3,11 +3,6 @@
 #[cfg(test)]
 mod testhelper;
 
-// For some reason I don't understand this needs to be loaded via "extern
-// crate" and not "use".
-#[macro_use]
-extern crate failure_derive;
-
 mod basepaths;
 mod command;
 mod config;
@@ -15,23 +10,25 @@ mod filter;
 mod path_matcher;
 mod vcs;
 
+use anyhow::{Error, Result};
 use clap::{App, Arg, ArgGroup, SubCommand};
-use failure::Error;
 use log::{debug, error};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 
 fn main() {
     let matches = make_app().get_matches();
     init_logger(&matches);
     let main = Main::new(&matches);
-    let status = if let Ok(mut m) = main {
-        m.run()
-    } else {
-        error!("{}", main.unwrap_err());
-        127 as i32
+    let status = match main {
+        Ok(mut m) => m.run(),
+        _ => {
+            error!("{}", main.unwrap_err());
+            127 as i32
+        }
     };
     std::process::exit(status);
 }
@@ -135,15 +132,15 @@ fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a, 'a> {
         )
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 enum MainError {
-    #[fail(display = "Could not find a VCS checkout root starting from {}", cwd)]
+    #[error("Could not find a VCS checkout root starting from {cwd:}")]
     CannotFindRoot { cwd: String },
 
-    #[fail(display = "No tidiers defined in your config")]
+    #[error("No tidiers defined in your config")]
     NoTidiers,
 
-    #[fail(display = "No linters defined in your config")]
+    #[error("No linters defined in your config")]
     NoLinters,
 }
 
@@ -203,7 +200,7 @@ struct Main<'a> {
 }
 
 impl<'a> Main<'a> {
-    fn new(matches: &'a clap::ArgMatches) -> Result<Main<'a>, Error> {
+    fn new(matches: &'a clap::ArgMatches) -> Result<Main<'a>> {
         let chars = if matches.is_present("ascii") {
             BORING_CHARS
         } else {
@@ -236,16 +233,12 @@ impl<'a> Main<'a> {
             }
             Err(e) => {
                 error!("Failed to run precious: {}", e);
-                let bt = format!("{}", e.backtrace());
-                if !bt.is_empty() {
-                    debug!("{}", bt);
-                }
                 127 as i32
             }
         }
     }
 
-    fn run_subcommand(&mut self) -> Result<Exit, Error> {
+    fn run_subcommand(&mut self) -> Result<Exit> {
         if self.matches.subcommand_matches("tidy").is_some() {
             return self.tidy();
         } else if self.matches.subcommand_matches("lint").is_some() {
@@ -261,7 +254,7 @@ impl<'a> Main<'a> {
         })
     }
 
-    fn tidy(&mut self) -> Result<Exit, Error> {
+    fn tidy(&mut self) -> Result<Exit> {
         println!("{} Tidying {}", self.chars.ring, self.mode());
 
         let tidiers = self.config().tidy_filters(&self.root_dir())?;
@@ -323,10 +316,11 @@ impl<'a> Main<'a> {
                 status += f;
             }
         }
+
         Ok(Self::exit_from_status(status, "tidying"))
     }
 
-    fn lint(&mut self) -> Result<Exit, Error> {
+    fn lint(&mut self) -> Result<Exit> {
         println!("{} Linting {}", self.chars.ring, self.mode());
 
         let linters = self.config().lint_filters(&self.root_dir())?;
@@ -466,7 +460,7 @@ impl<'a> Main<'a> {
         Ok(Some(map))
     }
 
-    fn basepaths(&mut self) -> Result<&mut basepaths::BasePaths, Error> {
+    fn basepaths(&mut self) -> Result<&mut basepaths::BasePaths> {
         if self.basepaths.is_none() {
             let (mode, paths) = self.mode_and_paths_from_args();
             self.basepaths = Some(basepaths::BasePaths::new(
@@ -513,7 +507,7 @@ impl<'a> Main<'a> {
         }
     }
 
-    fn set_config(&mut self) -> Result<(), Error> {
+    fn set_config(&mut self) -> Result<()> {
         self.set_root()?;
         let file = if self.matches.is_present("config") {
             let conf_file = self.matches.value_of("config").unwrap();
@@ -533,7 +527,7 @@ impl<'a> Main<'a> {
         Ok(())
     }
 
-    fn set_root(&mut self) -> Result<(), Error> {
+    fn set_root(&mut self) -> Result<()> {
         let cwd = env::current_dir()?;
         let mut root = PathBuf::new();
         for anc in cwd.ancestors() {

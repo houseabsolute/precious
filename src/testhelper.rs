@@ -1,7 +1,6 @@
 #[cfg(test)]
 use crate::command;
-use failure::Error;
-use failure::ResultExt;
+use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::io::prelude::*;
@@ -31,7 +30,7 @@ impl TestHelper {
         "tests/data/generated.txt",
     ];
 
-    pub fn new() -> Result<TestHelper, Error> {
+    pub fn new() -> Result<TestHelper> {
         let tempdir = TempDir::new("precious-testhelper")?;
         let root = tempdir.path().to_owned();
         let helper = TestHelper {
@@ -45,7 +44,7 @@ impl TestHelper {
         Ok(helper)
     }
 
-    fn create_git_repo(&self) -> Result<(), Error> {
+    fn create_git_repo(&self) -> Result<()> {
         for p in self.paths.iter() {
             self.write_file(&p, "some content")?;
         }
@@ -82,7 +81,7 @@ impl TestHelper {
         self.paths.iter().map(|p| p.clone()).collect()
     }
 
-    pub fn stage_all(&self) -> Result<(), Error> {
+    pub fn stage_all(&self) -> Result<()> {
         command::run_command(
             "git".to_string(),
             ["add", "."].iter().map(|a| a.to_string()).collect(),
@@ -94,7 +93,7 @@ impl TestHelper {
         Ok(())
     }
 
-    pub fn commit_all(&self) -> Result<(), Error> {
+    pub fn commit_all(&self) -> Result<()> {
         command::run_command(
             "git".to_string(),
             ["commit", "-a", "-m", "committed"]
@@ -131,7 +130,7 @@ generated.*
             .collect()
     }
 
-    pub fn add_gitignore_files(&self) -> Result<Vec<PathBuf>, Error> {
+    pub fn add_gitignore_files(&self) -> Result<Vec<PathBuf>> {
         self.write_file(&self.root_gitignore_file, Self::ROOT_GITIGNORE)?;
         self.write_file(&self.tests_data_gitignore_file, Self::TESTS_DATA_GITIGNORE)?;
 
@@ -143,7 +142,7 @@ generated.*
 
     const TO_MODIFY: &'static [&'static str] = &["src/module.rs", "tests/data/foo.txt"];
 
-    pub fn modify_files(&self) -> Result<Vec<PathBuf>, Error> {
+    pub fn modify_files(&self) -> Result<Vec<PathBuf>> {
         let mut paths: Vec<PathBuf> = vec![];
         for p in Self::TO_MODIFY.iter().map(|p| PathBuf::from(p)) {
             self.write_file(&p, "new content")?;
@@ -152,13 +151,15 @@ generated.*
         Ok(paths)
     }
 
-    pub fn write_file(&self, rel: &PathBuf, content: &str) -> Result<(), Error> {
+    pub fn write_file(&self, rel: &PathBuf, content: &str) -> Result<()> {
         let mut full = self.root.clone();
         full.push(rel);
-        fs::create_dir_all(full.parent().unwrap()).context(format!(
-            "Creating dir at {}",
-            full.parent().unwrap().to_string_lossy(),
-        ))?;
+        fs::create_dir_all(full.parent().unwrap()).with_context(|| {
+            format!(
+                "Creating dir at {}",
+                full.parent().unwrap().to_string_lossy(),
+            )
+        })?;
         let mut file = fs::File::create(full.clone())
             .context(format!("Creating file at {}", full.to_string_lossy()))?;
         file.write_all(content.as_bytes())

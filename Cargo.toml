@@ -12,9 +12,8 @@ edition = "2018"
 travis-ci = { repository = "houseabsolute/precious" }
 
 [dependencies]
+anyhow = "1"
 clap = "2"
-failure = "0.1"
-failure_derive = "0.1"
 globset = "0.4"
 ignore = "0.4"
 itertools = "0.9"
@@ -23,6 +22,7 @@ loggerv = "0.7"
 md5 = "0.7"
 path-clean = "0.1"
 rayon = "1.3"
+thiserror = "1.0"
 toml = "0.5"
 
 [dev-dependencies]

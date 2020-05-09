@@ -1,7 +1,7 @@
 use crate::command;
 use crate::path_matcher;
 use crate::vcs;
-use failure::Error;
+use anyhow::Result;
 use itertools::Itertools;
 use log::{debug, error};
 use path_clean::PathClean;
@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::str;
+use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
@@ -46,21 +47,15 @@ pub struct Paths {
     pub files: Vec<PathBuf>,
 }
 
-#[derive(Debug, Fail, PartialEq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum BasePathsError {
-    #[fail(
-        display = "You cannot pass an explicit list of files when looking for {}",
-        mode
-    )]
+    #[error("You cannot pass an explicit list of files when looking for {mode:}")]
     GotPathsFromCLIWithWrongMode { mode: Mode },
 
-    #[fail(
-        display = "Found some paths when looking for {} but they were all excluded",
-        mode
-    )]
+    #[error("Found some paths when looking for {mode:} but they were all excluded")]
     AllPathsWereExcluded { mode: Mode },
 
-    #[fail(display = "Found a path on the CLI which does not exist: {}", path)]
+    #[error("Found a path on the CLI which does not exist: {path:}")]
     NonExistentPathOnCLI { path: String },
 }
 
@@ -70,7 +65,7 @@ impl BasePaths {
         cli_paths: Vec<PathBuf>,
         root: PathBuf,
         exclude_globs: Vec<String>,
-    ) -> Result<BasePaths, Error> {
+    ) -> Result<BasePaths> {
         match mode {
             Mode::FromCLI => (),
             _ => {
@@ -89,7 +84,7 @@ impl BasePaths {
         })
     }
 
-    pub fn paths(&mut self) -> Result<Option<Vec<Paths>>, Error> {
+    pub fn paths(&mut self) -> Result<Option<Vec<Paths>>> {
         if self.paths.is_some() {
             return Ok(self.paths.as_ref().unwrap().clone());
         }
@@ -126,7 +121,7 @@ impl BasePaths {
         Ok(self.paths.as_ref().unwrap().clone())
     }
 
-    fn all_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
+    fn all_files(&self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Getting all files under {}", self.root.to_string_lossy());
         match self.walkdir_files(&self.root)? {
             Some(all) => Ok(Some(self.relative_files(all)?)),
@@ -134,7 +129,7 @@ impl BasePaths {
         }
     }
 
-    fn files_from_cli(&self) -> Result<Option<Vec<PathBuf>>, Error> {
+    fn files_from_cli(&self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Using the list of files passed from the command line");
         let excluder = self.excluder()?;
 
@@ -161,17 +156,17 @@ impl BasePaths {
         Ok(Some(files))
     }
 
-    fn git_modified_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
+    fn git_modified_files(&self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Getting modified files according to git");
         self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM"])
     }
 
-    fn git_staged_files(&self) -> Result<Option<Vec<PathBuf>>, Error> {
+    fn git_staged_files(&self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Getting staged files according to git");
         self.files_from_git(&["diff", "--cached", "--name-only", "--diff-filter=ACM"])
     }
 
-    fn walkdir_files(&self, root: &PathBuf) -> Result<Option<Vec<PathBuf>>, Error> {
+    fn walkdir_files(&self, root: &PathBuf) -> Result<Option<Vec<PathBuf>>> {
         let mut excludes = ignore::overrides::OverrideBuilder::new(root);
         for e in self.exclude_globs.clone() {
             excludes.add(format!("!{}", e).as_ref())?;
@@ -201,7 +196,7 @@ impl BasePaths {
         Ok(Some(self.relative_files(files)?))
     }
 
-    fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>, Error> {
+    fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
         let result = command::run_command(
             String::from("git"),
             args.iter().map(|a| String::from(*a)).collect(),
@@ -232,14 +227,14 @@ impl BasePaths {
         }
     }
 
-    fn excluder(&self) -> Result<path_matcher::Matcher, Error> {
+    fn excluder(&self) -> Result<path_matcher::Matcher> {
         let mut globs = self.exclude_globs.clone();
         let mut v = vcs::dirs();
         globs.append(&mut v);
         path_matcher::Matcher::new(globs.as_ref())
     }
 
-    fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>, Error> {
+    fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>> {
         let mut entries: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
         for f in files {
@@ -275,7 +270,7 @@ impl BasePaths {
 
     // We want to make all files relative. This lets us consistently produce
     // path names starting at the root dir (without "./").
-    fn relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>, Error> {
+    fn relative_files(&self, files: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
         let mut relative: Vec<PathBuf> = vec![];
 
         for mut f in files {
@@ -320,14 +315,11 @@ impl Drop for BasePaths {
 mod tests {
     use super::*;
     use crate::testhelper;
+    use anyhow::Result;
     use spectral::prelude::*;
     use std::fs;
 
-    fn new_basepaths(
-        mode: Mode,
-        cli_paths: Vec<PathBuf>,
-        root: PathBuf,
-    ) -> Result<BasePaths, Error> {
+    fn new_basepaths(mode: Mode, cli_paths: Vec<PathBuf>, root: PathBuf) -> Result<BasePaths> {
         new_basepaths_with_excludes(mode, cli_paths, root, vec![])
     }
 
@@ -336,12 +328,12 @@ mod tests {
         cli_paths: Vec<PathBuf>,
         root: PathBuf,
         exclude: Vec<String>,
-    ) -> Result<BasePaths, Error> {
+    ) -> Result<BasePaths> {
         BasePaths::new(mode, cli_paths, root, exclude)
     }
 
     #[test]
-    fn files_to_paths() -> Result<(), Error> {
+    fn files_to_paths() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
 
         let bp = new_basepaths(Mode::All, vec![], helper.root())?;
@@ -384,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn all_mode() -> Result<(), Error> {
+    fn all_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let mut bp = new_basepaths(Mode::All, vec![], helper.root())?;
         assert_that(&bp.paths()?).is_equal_to(bp.files_to_paths(helper.all_files())?);
@@ -392,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn all_mode_with_gitignore() -> Result<(), Error> {
+    fn all_mode_with_gitignore() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let mut gitignores = helper.add_gitignore_files()?;
         let mut expect = testhelper::TestHelper::non_ignored_files();
@@ -404,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn git_modified_mode_empty() -> Result<(), Error> {
+    fn git_modified_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
         let res = bp.paths();
@@ -414,7 +406,7 @@ mod tests {
     }
 
     #[test]
-    fn git_modified_mode_with_changes() -> Result<(), Error> {
+    fn git_modified_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let modified = helper.modify_files()?;
         let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
@@ -430,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn git_modified_mode_with_excluded_files() -> Result<(), Error> {
+    fn git_modified_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
@@ -457,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn git_staged_mode_empty() -> Result<(), Error> {
+    fn git_staged_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
         let res = bp.paths();
@@ -467,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn git_staged_mode_with_changes() -> Result<(), Error> {
+    fn git_staged_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let modified = helper.modify_files()?;
 
@@ -495,7 +487,7 @@ mod tests {
     }
 
     #[test]
-    fn git_staged_mode_with_excluded_files() -> Result<(), Error> {
+    fn git_staged_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let modified = helper.modify_files()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
@@ -519,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn git_staged_mode_stashes_unindexed() -> Result<(), Error> {
+    fn git_staged_mode_stashes_unindexed() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let modified = helper.modify_files()?;
         helper.stage_all()?;
@@ -546,7 +538,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_mode() -> Result<(), Error> {
+    fn cli_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let mut bp = new_basepaths(Mode::FromCLI, vec![PathBuf::from("tests")], helper.root())?;
         let expect = bp.files_to_paths(
@@ -563,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_mode_given_dir_with_excluded_files() -> Result<(), Error> {
+    fn cli_mode_given_dir_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
@@ -585,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_mode_given_files_with_excluded_files() -> Result<(), Error> {
+    fn cli_mode_given_files_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
@@ -603,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_mode_given_files_with_nonexistent_path() -> Result<(), Error> {
+    fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?;
         let mut bp = new_basepaths(
             Mode::FromCLI,
@@ -616,11 +608,7 @@ mod tests {
         let res = bp.paths();
         assert_that(&res).is_err();
         assert_that(&std::mem::discriminant(
-            res.unwrap_err()
-                .as_fail()
-                .find_root_cause()
-                .downcast_ref()
-                .unwrap(),
+            res.unwrap_err().downcast_ref().unwrap(),
         ))
         .is_equal_to(std::mem::discriminant(
             &BasePathsError::NonExistentPathOnCLI {

@@ -1,4 +1,4 @@
-use failure::Error;
+use anyhow::Result;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::path::PathBuf;
 
@@ -8,7 +8,7 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(globs: &[String]) -> Result<Matcher, Error> {
+    pub fn new(globs: &[String]) -> Result<Matcher> {
         let mut builder = GlobSetBuilder::new();
         for g in globs {
             builder.add(Glob::new(g.as_str())?);
@@ -27,6 +27,7 @@ impl Matcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
     use spectral::prelude::*;
 
     struct TestSet {
@@ -36,7 +37,7 @@ mod tests {
     }
 
     #[test]
-    fn path_matches() -> Result<(), Error> {
+    fn path_matches() -> Result<()> {
         let tests = vec![
             TestSet {
                 globs: vec![String::from("*.foo")],

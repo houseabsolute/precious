@@ -1,27 +1,25 @@
-use failure::Error;
+use anyhow::Result;
 use log::debug;
 use std::collections::HashMap;
 #[cfg(target_family = "unix")]
 use std::os::unix::prelude::*;
 use std::path::PathBuf;
 use std::process;
+use thiserror::Error;
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum CommandError {
-    #[fail(
-        display = "Got unexpected exit code {} from `{}`. Stderr was {}",
-        code, cmd, stderr
-    )]
+    #[error("Got unexpected exit code {code:} from `{cmd:}`. Stderr was {stderr:}")]
     ExitCodeIsNotZero {
         cmd: String,
         code: i32,
         stderr: String,
     },
 
-    #[fail(display = "Ran `{}` and it was killed by signal {}", cmd, signal)]
+    #[error("Ran `{cmd:}` and it was killed by signal {signal:}")]
     ProcessKilledBySignal { cmd: String, signal: i32 },
 
-    #[fail(display = "Got unexpected stderr output from `{}`: {}", cmd, stderr)]
+    #[error("Got unexpected stderr output from `{cmd:}`: {stderr:}")]
     UnexpectedStderr { cmd: String, stderr: String },
 }
 
@@ -39,7 +37,7 @@ pub fn run_command(
     ok_exit_codes: Vec<i32>,
     expect_stderr: bool,
     in_dir: Option<&PathBuf>,
-) -> Result<CommandResult, Error> {
+) -> Result<CommandResult> {
     let mut c = process::Command::new(cmd.clone());
     for a in args.iter() {
         c.arg(a);
@@ -80,7 +78,7 @@ fn output_from_command(
     ok_exit_codes: Vec<i32>,
     cmd: &str,
     args: &[String],
-) -> Result<process::Output, Error> {
+) -> Result<process::Output> {
     let output = c.output()?;
     match output.status.code() {
         Some(code) => {
@@ -141,7 +139,7 @@ fn signal_from_status(status: process::ExitStatus) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use failure::Error;
+    use anyhow::Result;
     use spectral::prelude::*;
     use std::collections::HashMap;
     use std::env;
@@ -168,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn run_command() -> Result<(), Error> {
+    fn run_command() -> Result<()> {
         let res = super::run_command(
             String::from("echo"),
             vec![String::from("foo")],
@@ -223,10 +221,7 @@ mod tests {
         match res {
             Ok(_) => assert!(false, "did not get an error in the returned Result"),
             Err(e) => {
-                let r = e
-                    .as_fail()
-                    .find_root_cause()
-                    .downcast_ref::<super::CommandError>();
+                let r = e.downcast_ref::<super::CommandError>();
                 match r {
                     Some(c) => match c {
                         super::CommandError::ExitCodeIsNotZero {
