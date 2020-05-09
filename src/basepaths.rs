@@ -85,8 +85,8 @@ impl BasePaths {
     }
 
     pub fn paths(&mut self) -> Result<Option<Vec<Paths>>> {
-        if self.paths.is_some() {
-            return Ok(self.paths.as_ref().unwrap().clone());
+        if let Some(paths) = &self.paths {
+            return Ok(paths.clone());
         }
 
         let files = match self.mode {
@@ -181,16 +181,15 @@ impl BasePaths {
             .overrides(excludes.build()?)
             .build()
         {
-            if result.is_err() {
-                return Err(result.err().unwrap().into());
-            }
-
-            let ent = result.ok().unwrap();
-            if ent.path().is_dir() {
-                continue;
-            }
-
-            files.push(ent.into_path());
+            match result {
+                Ok(ent) => {
+                    if ent.path().is_dir() {
+                        continue;
+                    }
+                    files.push(ent.into_path());
+                }
+                Err(e) => return Err(e.into()),
+            };
         }
 
         Ok(Some(self.relative_files(files)?))

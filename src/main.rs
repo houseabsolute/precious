@@ -223,11 +223,11 @@ impl<'a> Main<'a> {
     fn run(&mut self) -> i32 {
         match self.run_subcommand() {
             Ok(e) => {
-                if e.error.is_some() {
-                    error!("{}", e.error.unwrap());
+                if let Some(err) = e.error {
+                    error!("{}", err);
                 }
-                if e.message.is_some() {
-                    println!("{} {}", self.chars.empty, e.message.unwrap());
+                if let Some(msg) = e.message {
+                    println!("{} {}", self.chars.empty, msg);
                 }
                 e.status
             }
@@ -366,11 +366,11 @@ impl<'a> Main<'a> {
                                     l.name,
                                     p.to_string_lossy()
                                 );
-                                if r.stdout.is_some() {
-                                    println!("{}", r.stdout.unwrap());
+                                if let Some(s) = r.stdout {
+                                    println!("{}", s);
                                 }
-                                if r.stderr.is_some() {
-                                    println!("{}", r.stderr.unwrap());
+                                if let Some(s) = r.stderr {
+                                    println!("{}", s);
                                 }
                                 1
                             }
