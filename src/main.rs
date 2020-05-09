@@ -411,7 +411,7 @@ impl<'a> Main<'a> {
         }
     }
 
-    fn root_as_paths(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
+    fn root_as_paths(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>> {
         let mut m = HashMap::new();
         let paths = self.basepaths()?.paths()?;
         if paths.is_none() {
@@ -431,7 +431,7 @@ impl<'a> Main<'a> {
         Ok(Some(m))
     }
 
-    fn dirs(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
+    fn dirs(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>> {
         let mut map = HashMap::new();
         let paths = self.basepaths()?.paths()?;
         if paths.is_none() {
@@ -444,7 +444,7 @@ impl<'a> Main<'a> {
         Ok(Some(map))
     }
 
-    fn files(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>, Error> {
+    fn files(&mut self) -> Result<Option<HashMap<PathBuf, basepaths::Paths>>> {
         let mut map = HashMap::new();
         let paths = self.basepaths()?.paths()?;
         if paths.is_none() {
