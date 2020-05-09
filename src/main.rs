@@ -4,6 +4,7 @@
 mod testhelper;
 
 mod basepaths;
+mod chars;
 mod command;
 mod config;
 mod filter;
@@ -162,56 +163,28 @@ impl From<Error> for Exit {
 }
 
 #[derive(Debug)]
-struct Chars {
-    ring: &'static str,
-    tidied: &'static str,
-    unchanged: &'static str,
-    lint_free: &'static str,
-    lint_dirty: &'static str,
-    empty: &'static str,
-}
-
-const FUN_CHARS: Chars = Chars {
-    ring: "💍",
-    tidied: "💧",
-    unchanged: "✨",
-    lint_free: "💯",
-    lint_dirty: "💩",
-    empty: "⚫",
-};
-
-const BORING_CHARS: Chars = Chars {
-    ring: ":",
-    tidied: "*",
-    unchanged: "|",
-    lint_free: "|",
-    lint_dirty: "*",
-    empty: "_",
-};
-
-#[derive(Debug)]
 struct Main<'a> {
     matches: &'a clap::ArgMatches<'a>,
     config: Option<config::Config>,
     root: Option<PathBuf>,
-    chars: Chars,
+    chars: chars::Chars,
     quiet: bool,
     basepaths: Option<basepaths::BasePaths>,
 }
 
 impl<'a> Main<'a> {
     fn new(matches: &'a clap::ArgMatches) -> Result<Main<'a>> {
-        let chars = if matches.is_present("ascii") {
-            BORING_CHARS
+        let c = if matches.is_present("ascii") {
+            chars::BORING_CHARS
         } else {
-            FUN_CHARS
+            chars::FUN_CHARS
         };
 
         let mut s = Main {
             matches,
             config: None,
             root: None,
-            chars,
+            chars: c,
             quiet: matches.is_present("quiet"),
             basepaths: None,
         };
