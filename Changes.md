@@ -1,5 +1,9 @@
 ## 0.0.6
 
+* Precious can now be run outside of a VCS repo, as long as there is a
+  `precious.toml` file in the current directory. There is probably more work
+  to be done for precious to not expect to be run inside a VCS repo.
+
 * Fixed a bug where lint failures would still result in precious exiting
   with 0. I'm not sure when this bug was introduced.
 

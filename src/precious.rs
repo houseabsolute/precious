@@ -466,6 +466,11 @@ impl<'a> Precious<'a> {
             }
         }
 
+        if Self::has_config_file(&cwd) {
+            self.root = Some(cwd);
+            return Ok(());
+        }
+
         Err(PreciousError::CannotFindRoot {
             cwd: cwd.to_string_lossy().to_string(),
         }
@@ -481,6 +486,12 @@ impl<'a> Precious<'a> {
             }
         }
         false
+    }
+
+    fn has_config_file(path: &Path) -> bool {
+        let mut file = path.to_path_buf();
+        file.push("precious.toml");
+        file.exists()
     }
 
     fn default_config_file(&self) -> PathBuf {
