@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::prelude::*;
 use std::path::PathBuf;
-use tempdir::TempDir;
+use tempfile::{tempdir, TempDir};
 
 pub struct TestHelper {
     // While we never access this field we need to hold onto the tempdir or
@@ -30,11 +30,11 @@ impl TestHelper {
         "tests/data/generated.txt",
     ];
 
-    pub fn new() -> Result<TestHelper> {
-        let tempdir = TempDir::new("precious-testhelper")?;
-        let root = tempdir.path().to_owned();
+    pub fn new() -> Result<Self> {
+        let temp = tempdir()?;
+        let root = temp.path().to_owned();
         let helper = TestHelper {
-            _tempdir: tempdir,
+            _tempdir: temp,
             root: root,
             paths: Self::PATHS.iter().map(|p| PathBuf::from(p)).collect(),
             root_gitignore_file: PathBuf::from(".gitignore"),
