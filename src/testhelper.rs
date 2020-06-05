@@ -2,6 +2,7 @@
 use crate::command;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::io::prelude::*;
 use std::path::PathBuf;
@@ -40,8 +41,21 @@ impl TestHelper {
             root_gitignore_file: PathBuf::from(".gitignore"),
             tests_data_gitignore_file: PathBuf::from("tests/data/.gitignore"),
         };
-        helper.create_git_repo()?;
         Ok(helper)
+    }
+
+    pub fn with_git_repo(self) -> Result<Self> {
+        self.create_git_repo()?;
+        Ok(self)
+    }
+
+    pub fn with_config_file(self, content: &str) -> Result<Self> {
+        self.write_file(&self.config_file(), content)?;
+        Ok(self)
+    }
+
+    pub fn pushd_to_root(&self) -> Result<Pushd> {
+        Pushd::new(self.root.clone())
     }
 
     fn create_git_repo(&self) -> Result<()> {
@@ -75,6 +89,12 @@ impl TestHelper {
 
     pub fn root(&self) -> PathBuf {
         self.root.clone()
+    }
+
+    pub fn config_file(&self) -> PathBuf {
+        let mut path = self.root.clone();
+        path.push("precious.toml");
+        path
     }
 
     pub fn all_files(&self) -> Vec<PathBuf> {
@@ -166,5 +186,33 @@ generated.*
             .context(format!("Writing to file at {}", full.to_string_lossy()))?;
 
         Ok(())
+    }
+}
+
+pub struct Pushd(PathBuf);
+
+impl Pushd {
+    pub fn new(path: PathBuf) -> Result<Pushd> {
+        let cwd = env::current_dir()?;
+        env::set_current_dir(path)?;
+        Ok(Pushd(cwd))
+    }
+}
+
+impl Drop for Pushd {
+    fn drop(&mut self) {
+        // If the original path was a tempdir it may be gone now.
+        if !self.0.exists() {
+            return;
+        }
+
+        let res = env::set_current_dir(&self.0);
+        if let Err(e) = res {
+            panic!(
+                "Could not return to original dir, {}: {}",
+                self.0.to_string_lossy(),
+                e,
+            );
+        }
     }
 }

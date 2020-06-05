@@ -564,9 +564,22 @@ mod tests {
             implementation: mock_filter(),
         };
 
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         assert_that(&filter.require_path_type("tidy", &helper.root())).is_ok();
-        assert_that(&filter.require_path_type("tidy", &helper.all_files()[0].clone())).is_err();
+
+        let mut file = helper.root().clone();
+        file.push(helper.all_files()[0].clone());
+        let res = filter.require_path_type("tidy", &file.clone());
+        assert_that(&res).is_err();
+        assert_that(&std::mem::discriminant(
+            res.unwrap_err().downcast_ref().unwrap(),
+        ))
+        .is_equal_to(std::mem::discriminant(
+            &FilterError::CanOnlyOperateOnDirectories {
+                method: "tidy",
+                path: file.to_string_lossy().to_string(),
+            },
+        ));
 
         Ok(())
     }
@@ -583,9 +596,22 @@ mod tests {
             implementation: mock_filter(),
         };
 
-        let helper = testhelper::TestHelper::new()?;
-        assert_that(&filter.require_path_type("tidy", &helper.root())).is_err();
-        assert_that(&filter.require_path_type("tidy", &helper.all_files()[0].clone())).is_ok();
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let res = filter.require_path_type("tidy", &helper.root());
+        assert_that(&res).is_err();
+        assert_that(&std::mem::discriminant(
+            res.unwrap_err().downcast_ref().unwrap(),
+        ))
+        .is_equal_to(std::mem::discriminant(
+            &FilterError::CanOnlyOperateOnFiles {
+                method: "tidy",
+                path: helper.root().to_string_lossy().to_string(),
+            },
+        ));
+
+        let mut file = helper.root().clone();
+        file.push(helper.all_files()[0].clone());
+        assert_that(&filter.require_path_type("tidy", &file)).is_ok();
 
         Ok(())
     }

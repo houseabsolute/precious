@@ -77,27 +77,34 @@ pub enum ConfigError {
     #[error("Expected a value from {min:} to {max:} but got {val:}.")]
     IntegerConversionError { min: i64, max: i64, val: i64 },
 
+    #[error("You must define at least one filter")]
+    NoFiltersDefined,
+
     #[error("Servers are not yet implemented")]
     ServersAreNotYetImplemented,
 }
 
 impl Config {
-    pub fn new_from_file(path: PathBuf) -> Result<Config> {
-        let bytes = fs::read(path.clone())?;
+    pub fn new(file: PathBuf) -> Result<Config> {
+        let bytes = fs::read(file.clone())?;
         let raw = String::from_utf8_lossy(&bytes);
         let root: toml::Value = toml::from_str(&raw)?;
         if !root.is_table() {
             return Err(ConfigError::FileIsNotTOML {
-                file: path.to_string_lossy().to_string(),
+                file: file.to_string_lossy().to_string(),
             }
             .into());
         }
 
         let table = root.as_table().unwrap();
+        let filters = Self::toml_filters(table)?;
+        if filters.is_empty() {
+            return Err(ConfigError::NoFiltersDefined.into());
+        }
 
         Ok(Config {
             exclude: Self::toml_string_vec(table, "exclude")?,
-            filters: Self::toml_filters(table)?,
+            filters,
         })
     }
 

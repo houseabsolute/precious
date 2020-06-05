@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn files_to_paths() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
         let bp = new_basepaths(Mode::All, vec![], helper.root())?;
         let paths = bp.files_to_paths(helper.all_files())?.unwrap();
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn all_mode() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(Mode::All, vec![], helper.root())?;
         assert_that(&bp.paths()?).is_equal_to(bp.files_to_paths(helper.all_files())?);
         Ok(())
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn all_mode_with_gitignore() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut gitignores = helper.add_gitignore_files()?;
         let mut expect = testhelper::TestHelper::non_ignored_files();
         expect.append(&mut gitignores);
@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn git_modified_mode_empty() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
         let res = bp.paths();
         assert_that(&res).is_ok();
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn git_modified_mode_with_changes() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
         let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
         let expect = bp.files_to_paths(
@@ -422,7 +422,7 @@ mod tests {
 
     #[test]
     fn git_modified_mode_with_excluded_files() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         helper.commit_all()?;
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn git_staged_mode_empty() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
         let res = bp.paths();
         assert_that(&res).is_ok();
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn git_staged_mode_with_changes() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
 
         {
@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn git_staged_mode_with_excluded_files() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn git_staged_mode_stashes_unindexed() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
         helper.stage_all()?;
         let unstaged = "tests/data/bar.txt";
@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn cli_mode() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(Mode::FromCLI, vec![PathBuf::from("tests")], helper.root())?;
         let expect = bp.files_to_paths(
             helper
@@ -555,7 +555,7 @@ mod tests {
 
     #[test]
     fn cli_mode_given_dir_with_excluded_files() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::FromCLI,
@@ -577,7 +577,7 @@ mod tests {
 
     #[test]
     fn cli_mode_given_files_with_excluded_files() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::FromCLI,
@@ -595,7 +595,7 @@ mod tests {
 
     #[test]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?;
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(
             Mode::FromCLI,
             vec![

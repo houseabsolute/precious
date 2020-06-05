@@ -150,6 +150,7 @@ impl<'a> Precious<'a> {
             matches,
             config: None,
             root: None,
+            config_file: None,
             chars: c,
             quiet: matches.is_present("quiet"),
             basepaths: None,
@@ -174,7 +175,8 @@ impl<'a> Precious<'a> {
             default
         };
 
-        self.config = Some(config::Config::new_from_file(file)?);
+        self.config_file = Some(file.clone());
+        self.config = Some(config::Config::new(file)?);
 
         Ok(())
     }
@@ -447,7 +449,7 @@ impl<'a> Precious<'a> {
         (basepaths::Mode::FromCLI, paths)
     }
 
-    fn matched_subcommand(&self) -> &clap::ArgMatches<'a> {
+    fn matched_subcommand(&self) -> &ArgMatches<'a> {
         match self.matches.subcommand() {
             ("tidy", Some(m)) => m,
             ("lint", Some(m)) => m,
@@ -507,4 +509,75 @@ impl<'a> Precious<'a> {
     fn config(&self) -> &config::Config {
         self.config.as_ref().unwrap()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testhelper;
+    use spectral::prelude::*;
+
+    const SIMPLE_CONFIG: &'static str = "
+[commands.rustfmt]
+type    = \"both\"
+include = \"**/*.rs\"
+cmd     = [\"rustfmt\"]
+lint_flags = \"--check\"
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
+";
+
+    #[test]
+    fn new() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "tidy", "--all"])?;
+
+        let p = Precious::new(&matches)?;
+        assert_that(&p.chars).is_equal_to(chars::FUN_CHARS);
+        let mut expect_config_file = p.root_dir().clone();
+        expect_config_file.push("precious.toml");
+        assert_that(&p.config_file.unwrap()).is_equal_to(expect_config_file);
+        assert_that(&p.quiet).is_equal_to(false);
+
+        Ok(())
+    }
+
+    #[test]
+    fn new_with_ascii_flag() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--ascii", "tidy", "--all"])?;
+
+        let p = Precious::new(&matches)?;
+        assert_that(&p.chars).is_equal_to(chars::BORING_CHARS);
+
+        Ok(())
+    }
+
+    #[test]
+    fn new_with_config_path() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&[
+            "precious",
+            "--config",
+            helper.config_file().to_str().unwrap(),
+            "tidy",
+            "--all",
+        ])?;
+
+        let p = Precious::new(&matches)?;
+        assert_that(&p.config_file.unwrap()).is_equal_to(helper.config_file());
+
+        Ok(())
+    }
+
+    // Test status code on various tidy & lint scenarios.
 }
