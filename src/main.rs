@@ -12,12 +12,19 @@ mod path_matcher;
 mod precious;
 mod vcs;
 
+use anyhow::Result;
 use clap::ArgMatches;
+use fern::colors::{Color, ColoredLevelConfig};
+use fern::Dispatch;
 use log::error;
 
 fn main() {
     let matches = precious::app().get_matches();
-    init_logger(&matches);
+    let res = init_logger(&matches);
+    if let Err(e) = res {
+        eprintln!("Error creating logger: {}", e);
+        std::process::exit(126);
+    }
     let p = precious::Precious::new(&matches);
     let status = match p {
         Ok(mut p) => p.run(),
@@ -29,15 +36,39 @@ fn main() {
     std::process::exit(status);
 }
 
-fn init_logger(matches: &ArgMatches) {
-    let level: u64 = if matches.is_present("trace") {
-        3 // trace level
+fn init_logger(matches: &ArgMatches) -> Result<(), log::SetLoggerError> {
+    let line_colors = ColoredLevelConfig::new()
+        .error(Color::Red)
+        .warn(Color::Yellow)
+        .info(Color::BrightBlack)
+        .debug(Color::BrightBlack)
+        .trace(Color::BrightBlack);
+
+    let level = if matches.is_present("trace") {
+        log::LevelFilter::Trace
     } else if matches.is_present("debug") {
-        2 // debug level
+        log::LevelFilter::Debug
     } else if matches.is_present("verbose") {
-        1 // info level
+        log::LevelFilter::Info
     } else {
-        0 // warn level
+        log::LevelFilter::Warn
     };
-    loggerv::init_with_verbosity(level).unwrap();
+
+    let level_colors = line_colors.clone().info(Color::Green).debug(Color::Black);
+    Dispatch::new()
+        .format(move |out, message, record| {
+            out.finish(format_args!(
+                "{color_line}[{target}][{level}{color_line}] {message}\x1B[0m",
+                color_line = format_args!(
+                    "\x1B[{}m",
+                    line_colors.get_color(&record.level()).to_fg_str()
+                ),
+                target = record.target(),
+                level = level_colors.color(record.level()),
+                message = message,
+            ));
+        })
+        .level(level)
+        .chain(std::io::stdout())
+        .apply()
 }

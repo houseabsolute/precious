@@ -14,11 +14,11 @@ travis-ci = { repository = "houseabsolute/precious" }
 [dependencies]
 anyhow = "~1"
 clap = "~2"
+fern = { version = "~0.6", features = ["colored"] }
 globset = "~0.4"
 ignore = "~0.4"
 itertools = "~0.9"
 log = "~0.4"
-loggerv = "~0.7"
 md5 = "~0.7"
 path-clean = "~0.1"
 rayon = "~1"
