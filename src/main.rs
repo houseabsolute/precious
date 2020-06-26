@@ -30,7 +30,7 @@ fn main() {
         Ok(mut p) => p.run(),
         Err(e) => {
             error!("{}", e);
-            127 as i32
+            127
         }
     };
     std::process::exit(status);
