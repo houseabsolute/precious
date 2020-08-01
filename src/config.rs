@@ -52,6 +52,9 @@ pub struct Config {
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
+    #[error("File at {file:} cannot be read: {error:}")]
+    FileCannotBeRead { file: String, error: std::io::Error },
+
     #[error("File at {file:} does not contain a TOML table")]
     FileIsNotTOML { file: String },
 
@@ -86,7 +89,16 @@ pub enum ConfigError {
 
 impl Config {
     pub fn new(file: PathBuf) -> Result<Config> {
-        let bytes = fs::read(file.clone())?;
+        let res = fs::read(file.clone());
+        if let Err(e) = res {
+            return Err(ConfigError::FileCannotBeRead {
+                file: file.to_string_lossy().to_string(),
+                error: e,
+            }
+            .into());
+        }
+
+        let bytes = res.unwrap();
         let raw = String::from_utf8_lossy(&bytes);
         let root: toml::Value = toml::from_str(&raw)?;
         if !root.is_table() {
