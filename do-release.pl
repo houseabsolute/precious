@@ -25,12 +25,12 @@ sub main {
         die 'Cannot do a release from a dirty working directory';
     }
 
-    my $cargo_toml = path('Cargo.toml');
-    my $content    = $cargo_toml->slurp_utf8;
+    my $cargo_toml    = path('Cargo.toml');
+    my $content       = $cargo_toml->slurp_utf8;
     my ($cur_version) = $content =~ /version = "([^"]+)"/
         or die 'Cannot find version in Cargo.toml';
 
-    my $next_version = next_version($cli_version, $cur_version);
+    my $next_version = next_version( $cli_version, $cur_version );
     check_changes($next_version);
 
     $content =~ s/version = "([^"]+)"/version = "$next_version"/
@@ -44,7 +44,10 @@ sub main {
         qw( git commit -a -m ),
         "Bump version to $next_version for release"
     );
-    system( qw( git tag --annotate ), 'v' . $next_version, '-m', "Tagging $next_version for release" );
+    system(
+        qw( git tag --annotate ), 'v' . $next_version, '-m',
+        "Tagging $next_version for release"
+    );
 
     say
         'Tagged and ready for release. Run `git push --follow-tags` to start the release process.'
@@ -57,7 +60,8 @@ sub check_changes {
     my $changes = path('Changes.md')->slurp_utf8;
 
     return
-        if $changes =~ /^\Q## $next_version\E - \d\d\d\d-\d\d-\d\d\n\n\* \S+/ms;
+        if $changes
+        =~ /^\Q## $next_version\E - \d\d\d\d-\d\d-\d\d\n\n\* \S+/ms;
 
     die "There are no changes entries for the next release, $next_version";
 }
