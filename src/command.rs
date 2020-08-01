@@ -133,13 +133,16 @@ fn to_option_string(v: Vec<u8>) -> Option<String> {
     }
 }
 
+#[cfg(target_family = "unix")]
 fn signal_from_status(status: process::ExitStatus) -> i32 {
-    #[cfg(target_family = "unix")]
     match status.signal() {
         Some(s) => s,
         None => 0,
     }
-    #[cfg(target_family = "windows")]
+}
+
+#[cfg(target_family = "windows")]
+fn signal_from_status(_: process::ExitStatus) -> i32 {
     0
 }
 
