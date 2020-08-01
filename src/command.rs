@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::debug;
+use log::{debug, error};
 use std::collections::HashMap;
 #[cfg(target_family = "unix")]
 use std::os::unix::prelude::*;
@@ -57,6 +57,7 @@ pub fn run_command(
     let output = output_from_command(c, ok_exit_codes, &cmd, &args)?;
 
     if !output.stderr.is_empty() && !expect_stderr {
+        debug!("Got unexpected stderr when running command");
         return Err(CommandError::UnexpectedStderr {
             cmd: command_string(&cmd, &args),
             stderr: String::from_utf8(output.stderr)?,
@@ -85,9 +86,9 @@ fn output_from_command(
     let output = c.output()?;
     match output.status.code() {
         Some(code) => {
+            let cstr = command_string(cmd, args);
+            debug!("Ran {} and got exit code of {}", cstr, code);
             if !ok_exit_codes.contains(&code) {
-                let cstr = command_string(cmd, args);
-                debug!("Ran {} and got exit code of {}", cstr, code);
                 if output.stderr.is_empty() {
                     return Err(CommandError::UnexpectedExitCode { cmd: cstr, code }.into());
                 } else {
@@ -101,8 +102,10 @@ fn output_from_command(
             }
         }
         None => {
-            if !output.status.success() {
-                let cstr = command_string(cmd, args);
+            let cstr = command_string(cmd, args);
+            if output.status.success() {
+                error!("Ran {} successfully but it had no exit code", cstr);
+            } else {
                 let signal = signal_from_status(output.status);
                 debug!("Ran {} which exited because of signal {}", cstr, signal);
                 return Err(CommandError::ProcessKilledBySignal { cmd: cstr, signal }.into());

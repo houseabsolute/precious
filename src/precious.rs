@@ -671,4 +671,54 @@ ok_exit_codes = [0]
 
         Ok(())
     }
+
+    #[test]
+    #[serial]
+    fn test_lint_succeeds() -> Result<()> {
+        let config = "
+[commands.true]
+type    = \"lint\"
+include = \"**/*\"
+cmd     = [\"true\"]
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
+";
+        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+
+        let mut p = Precious::new(&matches)?;
+        let status = p.run();
+
+        assert_that(&status).is_equal_to(0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_lint_fails() -> Result<()> {
+        let config = "
+[commands.true]
+type    = \"lint\"
+include = \"**/*\"
+cmd     = [\"false\"]
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
+";
+        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+
+        let mut p = Precious::new(&matches)?;
+        let status = p.run();
+
+        assert_that(&status).is_equal_to(1);
+
+        Ok(())
+    }
 }
