@@ -9,8 +9,11 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CommandError {
+    #[error("Got unexpected exit code {code:} from `{cmd:}`")]
+    UnexpectedExitCode { cmd: String, code: i32 },
+
     #[error("Got unexpected exit code {code:} from `{cmd:}`. Stderr was {stderr:}")]
-    ExitCodeIsNotZero {
+    UnexpectedExitCodeWithStderr {
         cmd: String,
         code: i32,
         stderr: String,
@@ -85,12 +88,16 @@ fn output_from_command(
             if !ok_exit_codes.contains(&code) {
                 let cstr = command_string(cmd, args);
                 debug!("Ran {} and got exit code of {}", cstr, code);
-                return Err(CommandError::ExitCodeIsNotZero {
-                    cmd: cstr,
-                    code,
-                    stderr: String::from_utf8(output.stderr)?,
+                if output.stderr.is_empty() {
+                    return Err(CommandError::UnexpectedExitCode { cmd: cstr, code }.into());
+                } else {
+                    return Err(CommandError::UnexpectedExitCodeWithStderr {
+                        cmd: cstr,
+                        code,
+                        stderr: String::from_utf8(output.stderr)?,
+                    }
+                    .into());
                 }
-                .into());
             }
         }
         None => {
@@ -220,16 +227,12 @@ mod tests {
                 let r = e.downcast_ref::<super::CommandError>();
                 match r {
                     Some(c) => match c {
-                        super::CommandError::ExitCodeIsNotZero {
-                            code,
-                            cmd: _,
-                            stderr: _,
-                        } => {
+                        super::CommandError::UnexpectedExitCode { cmd: _, code } => {
                             assert_that(code)
                                 .named("command unexpectedly exits 32")
                                 .is_equal_to(&32);
                         }
-                        _ => assert!(false, "expected a CommandError::ExitCodeIsNotZero "),
+                        _ => assert!(false, "expected a CommandError::UnexpectedExitCode "),
                     },
                     None => assert!(false, "expected an error, not a None"),
                 }
