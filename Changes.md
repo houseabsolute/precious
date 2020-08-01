@@ -1,4 +1,4 @@
-## 0.0.6
+## 0.0.6 - 2020-08-01
 
 * Precious can now be run outside of a VCS repo, as long as there is a
   `precious.toml` file in the current directory. There is probably more work
