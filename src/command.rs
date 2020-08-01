@@ -84,7 +84,7 @@ fn output_from_command(
         Some(code) => {
             if !ok_exit_codes.contains(&code) {
                 let cstr = command_string(cmd, args);
-                debug!("Ran {} and got exit code of {}", cstr.clone(), code);
+                debug!("Ran {} and got exit code of {}", cstr, code);
                 return Err(CommandError::ExitCodeIsNotZero {
                     cmd: cstr,
                     code,
@@ -97,11 +97,7 @@ fn output_from_command(
             if !output.status.success() {
                 let cstr = command_string(cmd, args);
                 let signal = signal_from_status(output.status);
-                debug!(
-                    "Ran {} which exited because of signal {}",
-                    cstr.clone(),
-                    signal
-                );
+                debug!("Ran {} which exited because of signal {}", cstr, signal);
                 return Err(CommandError::ProcessKilledBySignal { cmd: cstr, signal }.into());
             }
         }
