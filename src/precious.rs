@@ -221,6 +221,28 @@ impl<'a> Precious<'a> {
         Ok(())
     }
 
+    fn set_root(&mut self) -> Result<()> {
+        let cwd = env::current_dir()?;
+        let mut root = PathBuf::new();
+        for anc in cwd.ancestors() {
+            if Self::is_checkout_root(&anc) {
+                root.push(anc);
+                self.root = Some(root);
+                return Ok(());
+            }
+        }
+
+        if Self::has_config_file(&cwd) {
+            self.root = Some(cwd);
+            return Ok(());
+        }
+
+        Err(PreciousError::CannotFindRoot {
+            cwd: cwd.to_string_lossy().to_string(),
+        }
+        .into())
+    }
+
     pub fn run(&mut self) -> i32 {
         match self.run_subcommand() {
             Ok(e) => {
@@ -497,28 +519,6 @@ impl<'a> Precious<'a> {
         }
     }
 
-    fn set_root(&mut self) -> Result<()> {
-        let cwd = env::current_dir()?;
-        let mut root = PathBuf::new();
-        for anc in cwd.ancestors() {
-            if Self::is_checkout_root(&anc) {
-                root.push(anc);
-                self.root = Some(root);
-                return Ok(());
-            }
-        }
-
-        if Self::has_config_file(&cwd) {
-            self.root = Some(cwd);
-            return Ok(());
-        }
-
-        Err(PreciousError::CannotFindRoot {
-            cwd: cwd.to_string_lossy().to_string(),
-        }
-        .into())
-    }
-
     fn is_checkout_root(path: &Path) -> bool {
         for dir in vcs::dirs() {
             let mut poss = PathBuf::from(path);
@@ -555,6 +555,8 @@ impl<'a> Precious<'a> {
 mod tests {
     use super::*;
     use crate::testhelper;
+    // Anything that does pushd must be run serially or else chaos ensues.
+    use serial_test::serial;
     use spectral::prelude::*;
 
     const SIMPLE_CONFIG: &'static str = "
@@ -568,6 +570,7 @@ lint_failure_exit_codes = [1]
 ";
 
     #[test]
+    #[serial]
     fn new() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
@@ -586,6 +589,7 @@ lint_failure_exit_codes = [1]
     }
 
     #[test]
+    #[serial]
     fn new_with_ascii_flag() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
@@ -600,6 +604,7 @@ lint_failure_exit_codes = [1]
     }
 
     #[test]
+    #[serial]
     fn new_with_config_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
@@ -619,5 +624,51 @@ lint_failure_exit_codes = [1]
         Ok(())
     }
 
-    // Test status code on various tidy & lint scenarios.
+    #[test]
+    #[serial]
+    fn test_tidy_succeeds() -> Result<()> {
+        let config = "
+[commands.true]
+type    = \"tidy\"
+include = \"**/*\"
+cmd     = [\"true\"]
+ok_exit_codes = [0]
+";
+        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+
+        let mut p = Precious::new(&matches)?;
+        let status = p.run();
+
+        assert_that(&status).is_equal_to(0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_tidy_fails() -> Result<()> {
+        let config = "
+[commands.true]
+type    = \"tidy\"
+include = \"**/*\"
+cmd     = [\"false\"]
+ok_exit_codes = [0]
+";
+        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+
+        let mut p = Precious::new(&matches)?;
+        let status = p.run();
+
+        assert_that(&status).is_equal_to(1);
+
+        Ok(())
+    }
 }

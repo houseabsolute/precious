@@ -26,6 +26,7 @@ thiserror = "~1"
 toml = "~0.5"
 
 [dev-dependencies]
+serial_test = "~0.4"
 spectral = "~0.6"
 tempfile = "~3"
 
