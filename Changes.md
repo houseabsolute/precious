@@ -1,13 +1,10 @@
-## 0.0.7
+## 0.0.6
 
 * Fix a bug where lint failures would still result in precious exiting
   with 0. I'm not sure when this bug was introduced.
 
 * Replaced deprecated failure and failure_derive crates with anyhow and
   thiserror.
-
-
-## 0.0.6
 
 * Replaced the `on_dir` and `run_once` config flags with a single `run_mode`
   flag, which can be one of "files" (the default)", "dirs", or "root". If the
