@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - os_name: Linux,
+          - os_name: Linux
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           - os_name: macOS
@@ -77,18 +77,18 @@ jobs:
     strategy:
       matrix:
         platform:
-          - os: ubuntu-latest
-            rust: stable
+          - os_name: Linux
+            os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bin: precious
             name: precious-Linux-x86_64.tar.gz
-          - os: windows-latest
-            rust: stable
+          - os_name: Windows
+            os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-x86_64.zip
-          - os: macOS-latest
-            rust: stable
+          - os_name: macOS
+            os: macOS-latest
             target: x86_64-apple-darwin
             bin: precious
             name: precious-Darwin-x86_64.tar.gz
