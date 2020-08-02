@@ -72,7 +72,7 @@ The keys that are allowed for each command are as follows:
 | `lint_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in linting mode. This is how you set that flag. |
 | `tidy_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in tidying mode. This is how you set that flag. |
 | `run_mode` | "files", "dirs", "root" | no | all | "files" | This determines how the command is run. The default, "files", means that the command is given a list of files that matched its include/exclude settings to run against. If this is set to "dirs", then the command is given a list of directories containing files that matched its include/exclude settings. If it's set to "root", then it is run exactly once from the root of the project. |
-| `chdir` |  boolean | no | all | false | If this is true, then the command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if both `on_dir` and `chdir` are true then `precious` will not pass the path to the executable as an argument. |
+| `chdir` |  boolean | no | all | false | If this is true, then the command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if `run_mode` is `dirs` and `chdir` is true then `precious` will not pass the path to the executable as an argument. |
 | `ok_exit_codes` | array of integers | **yes** | all | | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit. |
 | `lint_failure_exit_codes` | array of integers | no | linters |  | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue. |
 | `expect_stderr` | boolean | all | false | | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. If this is not the case, set this to true. |
@@ -151,10 +151,10 @@ which paths.
 * The base paths are selected based on the command line option specified.
 * VCS ignore rules are applied to remove paths from this list.
 * Each filter is given either the files or directories from the list of paths,
-  depending on the `on_dir` setting for that filter.
-  * Except for `run_once` filters, which will get all of the files in all
-    directories and will use those to determine whether to run or not. These
-    filters are always run exactly once.
+  depending on the `run_mode` setting for that filter.
+  * If the filter's `run_mode` is `root`, then it will get all of the files in
+    all directories and will use those to determine whether to run or
+    not. These filters are always run exactly once.
 * The filter will check its include and exclude rules. The path must match at
   least one include rule *and* not match any exclude rules to be accepted.
   * If the filter is per-file, it matches each path against its rules as is.
@@ -184,9 +184,8 @@ lint_failure_exit_codes = [1]
 [commands.clippy]
 type     = "lint"
 include  = "**/*.rs"
-on_dir   = true
+run_mode = "root"
 chdir    = true
-run_once = true
 cmd      = ["cargo", "clippy", "-q", "--", "-D", "clippy::all"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
@@ -236,8 +235,7 @@ In order to make that happen you should use the following config:
 
 ```toml
 include = "."
-on_dir  = true
-run_once = true
+run_mode = "root"
 ```
 
 This combination of flags will cause `precious` to run the command exactly
@@ -246,17 +244,13 @@ once in the project root.
 ### Linter runs in the same directory as the files it lints and does not accept path as arguments
 
 If you want to run the command without passing the path being operated on to
-the command, add the `chdir` flag:
+the command, set `run_mode` to `dirs` and add the `chdir` flag:
 
 ```toml
-include = "**/*.rs"
-on_dir  = true
-chdir   = true
+include  = "**/*.rs"
+run_mode = "dirs"
+chdir    = true
 ```
-
-You will probably want to set the `on_dir` flag to true in such cases, but
-these two flags are independent in case there are tools where setting just
-`chdir` makes sense.
 
 ### You want a command to exclude an entire directory (tree) except for one file
 
