@@ -370,7 +370,6 @@ mod tests {
             .map(PathBuf::from)
             .collect(),
         });
-
         Ok(())
     }
 
@@ -443,7 +442,6 @@ mod tests {
                 .collect::<Vec<PathBuf>>(),
         )?;
         assert_that(&bp.paths()?).is_equal_to(expect);
-
         Ok(())
     }
 
@@ -481,7 +479,6 @@ mod tests {
             )?;
             assert_that(&bp.paths()?).is_equal_to(expect);
         }
-
         Ok(())
     }
 
@@ -505,7 +502,6 @@ mod tests {
                 .collect::<Vec<PathBuf>>(),
         )?;
         assert_that(&bp.paths()?).is_equal_to(expect);
-
         Ok(())
     }
 
@@ -532,7 +528,27 @@ mod tests {
         }
         assert_that(&String::from_utf8(fs::read(helper.root().join(unstaged))?)?)
             .is_equal_to(String::from("new content"));
+        Ok(())
+    }
 
+    // I originally wrote this test because I thought precious might have the
+    // same merge stash bug as tidyall
+    // (https://github.com/houseabsolute/perl-code-tidyall/issues/100). However,
+    // since precious only calls `git stash` if there are modified files being
+    // committed, this isn't an issue. That's because, at least from my
+    // testing, `git status` doesn't show any files at all when committing a
+    // merge commit.
+    #[test]
+    fn git_staged_mode_merge_stash() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.modify_files()?;
+        helper.commit_all()?;
+        helper.switch_to_branch()?;
+        helper.reset_backwards(1)?;
+        helper.merge_master()?;
+
+        let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
+        assert_that(&bp.paths()?).is_equal_to(None);
         Ok(())
     }
 

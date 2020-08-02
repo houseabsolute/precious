@@ -150,6 +150,56 @@ generated.*
             .collect()
     }
 
+    pub fn switch_to_branch(&self) -> Result<()> {
+        command::run_command(
+            "git".to_string(),
+            ["checkout", "--quiet", "-b", "new-branch"]
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
+            &HashMap::new(),
+            [0].to_vec(),
+            false,
+            Some(&self.root()),
+        )?;
+        Ok(())
+    }
+
+    pub fn reset_backwards(&self, back: i8) -> Result<()> {
+        command::run_command(
+            "git".to_string(),
+            [
+                "reset",
+                "--quiet",
+                "--hard",
+                format!("HEAD~{}", back).as_str(),
+            ]
+            .iter()
+            .map(|a| a.to_string())
+            .collect(),
+            &HashMap::new(),
+            [0].to_vec(),
+            false,
+            Some(&self.root()),
+        )?;
+        Ok(())
+    }
+
+    pub fn merge_master(&self) -> Result<()> {
+        command::run_command(
+            "git".to_string(),
+            ["merge", "--quiet", "--no-ff", "--no-commit", "master"]
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
+            &HashMap::new(),
+            [0].to_vec(),
+            true,
+            Some(&self.root()),
+        )?;
+        Ok(())
+    }
+
     pub fn add_gitignore_files(&self) -> Result<Vec<PathBuf>> {
         self.write_file(&self.root_gitignore_file, Self::ROOT_GITIGNORE)?;
         self.write_file(&self.tests_data_gitignore_file, Self::TESTS_DATA_GITIGNORE)?;
