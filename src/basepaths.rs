@@ -169,10 +169,10 @@ impl BasePaths {
     fn walkdir_files(&self, root: &PathBuf) -> Result<Option<Vec<PathBuf>>> {
         let mut excludes = ignore::overrides::OverrideBuilder::new(root);
         for e in self.exclude_globs.clone() {
-            excludes.add(format!("!{}", e).as_ref())?;
+            excludes.add(&format!("!{}", e))?;
         }
         for d in vcs::dirs() {
-            excludes.add(format!("!{}/**/*", d).as_ref())?;
+            excludes.add(&format!("!{}/**/*", d))?;
         }
 
         let mut files: Vec<PathBuf> = vec![];
