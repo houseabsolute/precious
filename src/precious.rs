@@ -298,43 +298,38 @@ impl<'a> Precious<'a> {
     }
 
     fn run_one_tidier(&mut self, t: &filter::Filter) -> Result<i32> {
-        let statuses: Vec<i32> = self
-            .path_map(t)?
-            .par_iter()
-            .map(|(p, paths)| -> i32 {
-                match t.tidy(p, &paths.files) {
-                    Ok(Some(true)) => {
-                        if !self.quiet {
-                            println!(
-                                "{} Tidied by {}:    {}",
-                                self.chars.tidied,
-                                t.name,
-                                p.to_string_lossy()
-                            );
-                        }
-                        0
+        let runner = |s: &Self, p: &PathBuf, paths: &basepaths::Paths| -> i32 {
+            match t.tidy(p, &paths.files) {
+                Ok(Some(true)) => {
+                    if !s.quiet {
+                        println!(
+                            "{} Tidied by {}:    {}",
+                            s.chars.tidied,
+                            t.name,
+                            p.to_string_lossy()
+                        );
                     }
-                    Ok(Some(false)) => {
-                        if !self.quiet {
-                            println!(
-                                "{} Unchanged by {}: {}",
-                                self.chars.unchanged,
-                                t.name,
-                                p.to_string_lossy()
-                            );
-                        }
-                        0
-                    }
-                    Ok(None) => 0,
-                    Err(e) => {
-                        error!("{}", e);
-                        1
-                    }
+                    0
                 }
-            })
-            .collect();
-
-        Ok(statuses.iter().sum())
+                Ok(Some(false)) => {
+                    if !s.quiet {
+                        println!(
+                            "{} Unchanged by {}: {}",
+                            s.chars.unchanged,
+                            t.name,
+                            p.to_string_lossy()
+                        );
+                    }
+                    0
+                }
+                Ok(None) => 0,
+                Err(e) => {
+                    error!("{}", e);
+                    1
+                }
+            }
+        };
+        self.run_parallel(t, runner)
     }
 
     fn lint(&mut self) -> Result<Exit> {
@@ -357,45 +352,54 @@ impl<'a> Precious<'a> {
     }
 
     fn run_one_linter(&mut self, l: &filter::Filter) -> Result<i32> {
-        let statuses: Vec<i32> = self
-            .path_map(l)?
-            .par_iter()
-            .map(|(p, paths)| -> i32 {
-                match l.lint(p, &paths.files) {
-                    Ok(Some(r)) => {
-                        if r.ok {
-                            if !self.quiet {
-                                println!(
-                                    "{} Passed {}: {}",
-                                    self.chars.lint_free,
-                                    l.name,
-                                    p.to_string_lossy()
-                                );
-                            }
-                            0
-                        } else {
+        let runner = |s: &Self, p: &PathBuf, paths: &basepaths::Paths| -> i32 {
+            match l.lint(p, &paths.files) {
+                Ok(Some(r)) => {
+                    if r.ok {
+                        if !s.quiet {
                             println!(
-                                "{} Failed {}: {}",
-                                self.chars.lint_dirty,
+                                "{} Passed {}: {}",
+                                s.chars.lint_free,
                                 l.name,
                                 p.to_string_lossy()
                             );
-                            if let Some(s) = r.stdout {
-                                println!("{}", s);
-                            }
-                            if let Some(s) = r.stderr {
-                                println!("{}", s);
-                            }
-                            1
                         }
-                    }
-                    Ok(None) => 0,
-                    Err(e) => {
-                        error!("{}", e);
+                        0
+                    } else {
+                        println!(
+                            "{} Failed {}: {}",
+                            s.chars.lint_dirty,
+                            l.name,
+                            p.to_string_lossy()
+                        );
+                        if let Some(s) = r.stdout {
+                            println!("{}", s);
+                        }
+                        if let Some(s) = r.stderr {
+                            println!("{}", s);
+                        }
                         1
                     }
                 }
-            })
+                Ok(None) => 0,
+                Err(e) => {
+                    error!("{}", e);
+                    1
+                }
+            }
+        };
+
+        self.run_parallel(l, runner)
+    }
+
+    fn run_parallel<R>(&mut self, f: &filter::Filter, runner: R) -> Result<i32>
+    where
+        R: Fn(&Self, &PathBuf, &basepaths::Paths) -> i32 + Sync,
+    {
+        let statuses: Vec<i32> = self
+            .path_map(f)?
+            .par_iter()
+            .map(|(p, paths)| runner(self, p, paths))
             .collect();
 
         Ok(statuses.iter().sum())
