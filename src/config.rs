@@ -429,7 +429,7 @@ impl Config {
     fn toml_int_to_u8(i: i64) -> Result<u8> {
         if i > i64::from(std::u8::MAX) {
             return Err(ConfigError::IntegerConversionError {
-                min: 0 as i64,
+                min: 0,
                 max: i64::from(std::u8::MAX),
                 val: i,
             }
@@ -442,7 +442,7 @@ impl Config {
     fn toml_int_to_u16(i: i64) -> Result<u16> {
         if i > i64::from(std::u16::MAX) {
             return Err(ConfigError::IntegerConversionError {
-                min: 0 as i64,
+                min: 0,
                 max: i64::from(std::u16::MAX),
                 val: i,
             }

@@ -65,10 +65,7 @@ pub fn run_command(
         .into());
     }
 
-    let code = match output.status.code() {
-        Some(code) => code,
-        None => -1,
-    };
+    let code = output.status.code().unwrap_or(-1);
 
     Ok(CommandResult {
         exit_code: code,
@@ -135,10 +132,7 @@ fn to_option_string(v: Vec<u8>) -> Option<String> {
 
 #[cfg(target_family = "unix")]
 fn signal_from_status(status: process::ExitStatus) -> i32 {
-    match status.signal() {
-        Some(s) => s,
-        None => 0,
-    }
+    status.signal().unwrap_or(0)
 }
 
 #[cfg(target_family = "windows")]

@@ -121,7 +121,7 @@ impl Filter {
 
         self.require_path_type("tidy", &full)?;
 
-        if !self.should_process_path(path, files)? {
+        if !self.should_process_path(path, files) {
             return Ok(None);
         }
 
@@ -138,7 +138,7 @@ impl Filter {
 
         self.require_path_type("lint", &full)?;
 
-        if !self.should_process_path(path, files)? {
+        if !self.should_process_path(path, files) {
             return Ok(None);
         }
 
@@ -184,14 +184,14 @@ impl Filter {
         run_mode_is(&self.run_mode, &mode)
     }
 
-    fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> Result<bool> {
+    fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> bool {
         if self.excluder.path_matches(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
                 path.to_string_lossy(),
                 self.name,
             );
-            return Ok(false);
+            return false;
         }
 
         if self.includer.path_matches(path) {
@@ -200,7 +200,7 @@ impl Filter {
                 path.to_string_lossy(),
                 self.name
             );
-            return Ok(true);
+            return true;
         }
 
         if !self.run_mode_is(RunMode::Files) {
@@ -216,7 +216,7 @@ impl Filter {
                         self.name,
                         f.to_string_lossy(),
                     );
-                    return Ok(true);
+                    return true;
                 }
             }
             debug!(
@@ -224,7 +224,7 @@ impl Filter {
                 path.to_string_lossy(),
                 self.name
             );
-            return Ok(false);
+            return false;
         }
 
         debug!(
@@ -232,7 +232,7 @@ impl Filter {
             path.to_string_lossy(),
             self.name
         );
-        Ok(false)
+        false
     }
 
     fn path_was_changed(path: &PathBuf, prev: &HashMap<PathBuf, PathInfo>) -> Result<bool> {
@@ -429,7 +429,7 @@ impl FilterImplementation for Command {
         if !self.tidy_flags.is_empty() {
             cmd.append(&mut self.tidy_flags.clone());
         }
-        if self.path_flag != "" {
+        if self.path_flag.is_empty() {
             cmd.push(self.path_flag.clone());
         }
         if self.run_mode_is(RunMode::Files) || !self.chdir {
@@ -461,7 +461,7 @@ impl FilterImplementation for Command {
         if !self.lint_flags.is_empty() {
             cmd.append(&mut self.lint_flags.clone());
         }
-        if self.path_flag != "" {
+        if self.path_flag.is_empty() {
             cmd.push(self.path_flag.clone());
         }
         if self.run_mode_is(RunMode::Files) || !self.chdir {
@@ -631,7 +631,7 @@ mod tests {
         let include = &["something.go", "dir/foo.go", ".foo.go", "bar/foo/x.go"];
         for i in include.iter().map(PathBuf::from) {
             let name = i.clone();
-            assert_that(&filter.should_process_path(&i.clone(), &[i])?)
+            assert_that(&filter.should_process_path(&i.clone(), &[i]))
                 .named(&name.to_string_lossy())
                 .is_true();
         }
@@ -644,7 +644,7 @@ mod tests {
         ];
         for e in exclude.iter().map(PathBuf::from) {
             let name = e.clone();
-            assert_that(&filter.should_process_path(&e.clone(), &[e])?)
+            assert_that(&filter.should_process_path(&e.clone(), &[e]))
                 .named(&name.to_string_lossy())
                 .is_false();
         }
@@ -672,7 +672,7 @@ mod tests {
             let dir = PathBuf::from(i[0]);
             let files = i[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files)?)
+            assert_that(&filter.should_process_path(&dir, &files))
                 .named(&name.to_string_lossy())
                 .is_true();
         }
@@ -690,7 +690,7 @@ mod tests {
             let dir = PathBuf::from(e[0]);
             let files = e[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files)?)
+            assert_that(&filter.should_process_path(&dir, &files))
                 .named(&name.to_string_lossy())
                 .is_false();
         }
@@ -718,7 +718,7 @@ mod tests {
             let dir = PathBuf::from(i[0]);
             let files = i[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files)?)
+            assert_that(&filter.should_process_path(&dir, &files))
                 .named(&name.to_string_lossy())
                 .is_true();
         }
@@ -736,7 +736,7 @@ mod tests {
             let dir = PathBuf::from(e[0]);
             let files = e[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files)?)
+            assert_that(&filter.should_process_path(&dir, &files))
                 .named(&name.to_string_lossy())
                 .is_false();
         }

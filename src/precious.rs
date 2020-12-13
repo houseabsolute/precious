@@ -256,7 +256,7 @@ impl<'a> Precious<'a> {
             }
             Err(e) => {
                 error!("Failed to run precious: {}", e);
-                127 as i32
+                127
             }
         }
     }
@@ -289,7 +289,7 @@ impl<'a> Precious<'a> {
             return Ok(self.no_files_exit());
         }
 
-        let mut status = 0 as i32;
+        let mut status = 0;
         for t in tidiers {
             status += self.run_one_tidier(&t)?;
         }
@@ -344,7 +344,7 @@ impl<'a> Precious<'a> {
             return Ok(self.no_files_exit());
         }
 
-        let mut status = 0 as i32;
+        let mut status = 0;
         for l in linters {
             status += self.run_one_linter(&l)?;
         }
