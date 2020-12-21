@@ -1,6 +1,8 @@
 use anyhow::Result;
-use log::{debug, error};
+use log::Level::Debug;
+use log::{debug, error, log_enabled};
 use std::collections::HashMap;
+use std::env::current_dir;
 #[cfg(target_family = "unix")]
 use std::os::unix::prelude::*;
 use std::path::PathBuf;
@@ -51,8 +53,14 @@ pub fn run_command(
 
     c.envs(env);
 
-    let cstr = command_string(&cmd, &args);
-    debug!("Running command: {}", cstr);
+    if log_enabled!(Debug) {
+        let cstr = command_string(&cmd, &args);
+        debug!(
+            "Running command [{}] with cwd = {}",
+            cstr,
+            current_dir()?.to_string_lossy()
+        );
+    }
 
     let output = output_from_command(c, ok_exit_codes, &cmd, &args)?;
 
