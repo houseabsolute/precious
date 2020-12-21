@@ -429,7 +429,7 @@ impl FilterImplementation for Command {
         if !self.tidy_flags.is_empty() {
             cmd.append(&mut self.tidy_flags.clone());
         }
-        if self.path_flag.is_empty() {
+        if !self.path_flag.is_empty() {
             cmd.push(self.path_flag.clone());
         }
         if self.run_mode_is(RunMode::Files) || !self.chdir {
@@ -461,7 +461,7 @@ impl FilterImplementation for Command {
         if !self.lint_flags.is_empty() {
             cmd.append(&mut self.lint_flags.clone());
         }
-        if self.path_flag.is_empty() {
+        if !self.path_flag.is_empty() {
             cmd.push(self.path_flag.clone());
         }
         if self.run_mode_is(RunMode::Files) || !self.chdir {
