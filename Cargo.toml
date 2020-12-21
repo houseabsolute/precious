@@ -8,9 +8,6 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 edition = "2018"
 
-[badges]
-travis-ci = { repository = "houseabsolute/precious" }
-
 [dependencies]
 anyhow = "~1"
 clap = "~2"
