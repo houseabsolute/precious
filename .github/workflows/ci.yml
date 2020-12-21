@@ -42,7 +42,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target              
-          key: cargo-and-target-${{ matrix.platform.os }}-${{ matrix.platform.target }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.lock') }}
+          key: cargo-and-target-${{ matrix.platform.os }}-${{ matrix.platform.target }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.lock') }}-v2
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
