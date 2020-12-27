@@ -25,11 +25,31 @@ place and easily run `precious` from your commit hooks and in CI.
 
 There are several ways to install this tool.
 
+### Installer Script
+
+There is an entirely self-contained Perl script at
+[dev/bin/install-precious.packed.pl](https://github.com/houseabsolute/precious/tree/master/dev/bin/install-precious.packed.pl)
+that you can use:
+
+    $> curl https://raw.githubusercontent.com/houseabsolute/precious/master/dev/bin/install-precious.packed.pl \
+           | perl
+
+This will install `precious` at `./bin/precious` by default, but you can
+specify a directory in which to install the binary by passing a `--to
+/path/to/install/at` argument:
+
+    $> curl https://raw.githubusercontent.com/houseabsolute/precious/master/dev/bin/install-precious.packed.pl \
+           | perl - --to ./some/directory
+
+This script requires Perl 5.10 or greater, but does not require any additional
+libraries beyond what ships with the Perl core.
+
 ### Binary Releases
 
-The easiest way to install it is to grab a binary release from the [releases
-page](https://github.com/houseabsolute/precious/releases). Simply put this
-somewhere in your path and you're good to go.
+You can also grab a binary release from the [releases
+page](https://github.com/houseabsolute/precious/releases). Untar the tarball
+and put the executable it contains somewhere in your path and you're good to
+go.
 
 ### Cargo
 

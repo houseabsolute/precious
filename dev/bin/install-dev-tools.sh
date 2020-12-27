@@ -8,7 +8,7 @@ function run () {
 }
 
 function install_tools () {
-    run "./dev/bin/download-precious.sh"
+    run "./dev/bin/download-precious.packed.pl"
     run "rustup component add clippy"
 }
 
