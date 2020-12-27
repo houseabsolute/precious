@@ -50,7 +50,7 @@ sub main {
     );
 
     say
-        'Tagged and ready for release. Run `git push --follow-tags` to start the release process.'
+        'Tagged and ready for release. Run `git push --follow-tags` to start the release process, and also run cargo publish.'
         or die $!;
 }
 
