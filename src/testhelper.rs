@@ -33,7 +33,14 @@ impl TestHelper {
 
     pub fn new() -> Result<Self> {
         let temp = tempdir()?;
-        let root = temp.path().to_owned();
+        let root = if cfg!(windows) {
+            temp.path().to_owned()
+        } else {
+            // The temp directory on macOS in GitHub Actions appears to be a
+            // symlink, but canonicalizing on Windows breaks tests for some
+            // reason.
+            fs::canonicalize(temp.path().to_owned())?
+        };
         let helper = TestHelper {
             _tempdir: temp,
             root,
