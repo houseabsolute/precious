@@ -57,7 +57,11 @@ impl TestHelper {
     }
 
     pub fn with_config_file(self, content: &str) -> Result<Self> {
-        self.write_file(&self.config_file(), content)?;
+        if cfg!(windows) {
+            self.write_file(&self.config_file(), &content.replace("\n", "\r\n"))?;
+        } else {
+            self.write_file(&self.config_file(), content)?;
+        }
         Ok(self)
     }
 
