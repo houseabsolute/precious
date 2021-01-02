@@ -326,7 +326,7 @@ impl<'a> Precious<'a> {
                 }
                 Ok(None) => 0,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{:#}", e);
                     1
                 }
             }
@@ -385,7 +385,7 @@ impl<'a> Precious<'a> {
                 }
                 Ok(None) => 0,
                 Err(e) => {
-                    error!("{}", e);
+                    error!("{:#}", e);
                     1
                 }
             }

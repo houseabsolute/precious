@@ -6,6 +6,9 @@
 * Use the current directory as the root for finding files, rather than the VCS
   checkout root.
 
+* When a filter command does not exist, the error output now shows the full
+  command that was run, including any arguments. Fixes GH #6.
+
 
 ## 0.0.6 - 2020-08-01
 

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::Level::Debug;
 use log::{debug, error, log_enabled};
 use std::collections::HashMap;
@@ -62,7 +62,12 @@ pub fn run_command(
         );
     }
 
-    let output = output_from_command(c, ok_exit_codes, &cmd, &args)?;
+    let output = output_from_command(c, ok_exit_codes, &cmd, &args).with_context(|| {
+        format!(
+            r#"Failed to execute command "{}""#,
+            command_string(&cmd, &args)
+        )
+    })?;
 
     if !output.stderr.is_empty() && !expect_stderr {
         debug!("Got unexpected stderr when running command");
@@ -245,6 +250,28 @@ mod tests {
                     None => assert!(false, "expected an error, not a None"),
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn executable_does_not_exist() -> Result<()> {
+        let exe = "I hope this binary does not exist on any system!";
+        let args = vec![String::from("--arg"), String::from("42")];
+        let args_str = args.join(" ");
+        let res = super::run_command(
+            String::from(exe),
+            args,
+            &HashMap::new(),
+            vec![0],
+            false,
+            None,
+        );
+        assert_that!(res.is_err());
+        if let Err(e) = res {
+            assert_that(&e.to_string())
+                .contains(format!(r#"Failed to execute command "{} {}""#, exe, args_str).as_str());
         }
 
         Ok(())
