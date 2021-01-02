@@ -1,4 +1,4 @@
-## 0.0.7
+## 0.0.7 - 2021-01-02
 
 * Look for a `precious.toml` file in the current directory before trying to
   find one in the root of the current VCS checkout.
