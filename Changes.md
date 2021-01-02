@@ -1,3 +1,12 @@
+## 0.0.7
+
+* Look for a `precious.toml` file in the current directory before trying to
+  find one in the root of the current VCS checkout.
+
+* Use the current directory as the root for finding files, rather than the VCS
+  checkout root.
+
+
 ## 0.0.6 - 2020-08-01
 
 * Precious can now be run outside of a VCS repo, as long as there is a

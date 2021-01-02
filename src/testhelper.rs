@@ -36,7 +36,7 @@ impl TestHelper {
         let root = temp.path().to_owned();
         let helper = TestHelper {
             _tempdir: temp,
-            root: root,
+            root,
             paths: Self::PATHS.iter().map(|p| PathBuf::from(p)).collect(),
             root_gitignore_file: PathBuf::from(".gitignore"),
             tests_data_gitignore_file: PathBuf::from("tests/data/.gitignore"),

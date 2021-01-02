@@ -47,6 +47,7 @@ impl From<Error> for Exit {
 pub struct Precious<'a> {
     matches: &'a ArgMatches<'a>,
     config: Option<config::Config>,
+    cwd: PathBuf,
     root: Option<PathBuf>,
     config_file: Option<PathBuf>,
     chars: chars::Chars,
@@ -189,6 +190,7 @@ impl<'a> Precious<'a> {
         let mut s = Precious {
             matches,
             config: None,
+            cwd: env::current_dir()?,
             root: None,
             config_file: None,
             chars: c,
@@ -222,9 +224,14 @@ impl<'a> Precious<'a> {
     }
 
     fn set_root(&mut self) -> Result<()> {
-        let cwd = env::current_dir()?;
         let mut root = PathBuf::new();
-        for anc in cwd.ancestors() {
+
+        if Self::has_config_file(&self.cwd) {
+            self.root = Some(self.cwd.clone());
+            return Ok(());
+        }
+
+        for anc in self.cwd.ancestors() {
             if Self::is_checkout_root(&anc) {
                 root.push(anc);
                 self.root = Some(root);
@@ -232,13 +239,8 @@ impl<'a> Precious<'a> {
             }
         }
 
-        if Self::has_config_file(&cwd) {
-            self.root = Some(cwd);
-            return Ok(());
-        }
-
         Err(PreciousError::CannotFindRoot {
-            cwd: cwd.to_string_lossy().to_string(),
+            cwd: self.cwd.to_string_lossy().to_string(),
         }
         .into())
     }
@@ -482,7 +484,7 @@ impl<'a> Precious<'a> {
             self.basepaths = Some(basepaths::BasePaths::new(
                 mode,
                 paths,
-                self.root_dir(),
+                self.cwd.clone(),
                 self.config().exclude.clone(),
             )?);
         }
@@ -624,6 +626,56 @@ lint_failure_exit_codes = [1]
 
         let p = Precious::new(&matches)?;
         assert_that(&p.config_file.unwrap()).is_equal_to(helper.config_file());
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_set_root_prefers_config_file() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+
+        let mut src_dir = helper.root().clone();
+        src_dir.push("src");
+        let mut subdir_config = src_dir.clone();
+        subdir_config.push("precious.toml");
+        helper.write_file(&subdir_config, SIMPLE_CONFIG)?;
+        let _pushd = testhelper::Pushd::new(src_dir.clone())?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+
+        let p = Precious::new(&matches)?;
+        assert_that(&p.root_dir()).is_equal_to(src_dir);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_basepaths_uses_cwd() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?
+            .with_config_file(SIMPLE_CONFIG)?
+            .with_git_repo()?;
+
+        let mut src_dir = helper.root().clone();
+        src_dir.push("src");
+        let _pushd = testhelper::Pushd::new(src_dir.clone())?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+
+        let mut p = Precious::new(&matches)?;
+        let paths = p.basepaths()?;
+
+        let expect = vec![basepaths::Paths {
+            dir: PathBuf::from("."),
+            files: ["bar.rs", "can_ignore.rs", "main.rs", "module.rs"]
+                .iter()
+                .map(PathBuf::from)
+                .collect(),
+        }];
+        assert_that(&paths.paths()?).is_equal_to(Some(expect));
 
         Ok(())
     }
