@@ -565,15 +565,15 @@ mod tests {
     use serial_test::serial;
     use spectral::prelude::*;
 
-    const SIMPLE_CONFIG: &'static str = "
+    const SIMPLE_CONFIG: &'static str = r#"
 [commands.rustfmt]
-type    = \"both\"
-include = \"**/*.rs\"
-cmd     = [\"rustfmt\"]
-lint_flags = \"--check\"
+type    = "both"
+include = "**/*.rs"
+cmd     = ["rustfmt"]
+lint_flags = "--check"
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
-";
+"#;
 
     #[test]
     #[serial]
@@ -683,13 +683,13 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn test_tidy_succeeds() -> Result<()> {
-        let config = "
+        let config = r#"
 [commands.true]
-type    = \"tidy\"
-include = \"**/*\"
-cmd     = [\"true\"]
+type    = "tidy"
+include = "**/*"
+cmd     = ["true"]
 ok_exit_codes = [0]
-";
+"#;
         let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
         let _pushd = helper.pushd_to_root()?;
 
@@ -707,13 +707,13 @@ ok_exit_codes = [0]
     #[test]
     #[serial]
     fn test_tidy_fails() -> Result<()> {
-        let config = "
-[commands.true]
-type    = \"tidy\"
-include = \"**/*\"
-cmd     = [\"false\"]
+        let config = r#"
+[commands.false]
+type    = "tidy"
+include = "**/*"
+cmd     = ["false"]
 ok_exit_codes = [0]
-";
+"#;
         let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
         let _pushd = helper.pushd_to_root()?;
 
@@ -731,14 +731,14 @@ ok_exit_codes = [0]
     #[test]
     #[serial]
     fn test_lint_succeeds() -> Result<()> {
-        let config = "
+        let config = r#"
 [commands.true]
-type    = \"lint\"
-include = \"**/*\"
-cmd     = [\"true\"]
+type    = "lint"
+include = "**/*"
+cmd     = ["true"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
-";
+"#;
         let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
         let _pushd = helper.pushd_to_root()?;
 
@@ -756,14 +756,14 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn test_lint_fails() -> Result<()> {
-        let config = "
-[commands.true]
-type    = \"lint\"
-include = \"**/*\"
-cmd     = [\"false\"]
+        let config = r#"
+[commands.false]
+type    = "lint"
+include = "**/*"
+cmd     = ["false"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
-";
+"#;
         let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
         let _pushd = helper.pushd_to_root()?;
 

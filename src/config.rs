@@ -222,7 +222,7 @@ impl Config {
             s => {
                 return Err(ConfigError::InvalidTOMLValue {
                     key: "type",
-                    want: "one of \"lint\", \"tidy\", or \"both\"",
+                    want: r#"one of "lint", "tidy", or "both""#,
                     got: Self::string_or_empty(s),
                 }
                 .into());
@@ -250,7 +250,7 @@ impl Config {
             _ => {
                 return Err(ConfigError::InvalidTOMLValue {
                     key: "run_mode",
-                    want: "one of \"files\", \"dirs\", or \"root\"",
+                    want: r#"one of "files", "dirs", or "root""#,
                     got: Self::string_or_empty(toml_run_mode.as_str()),
                 }
                 .into());
@@ -457,7 +457,7 @@ impl Config {
             return String::from("an empty string");
         }
 
-        return format!("\"{}\"", val);
+        return format!(r#""{}""#, val);
     }
 
     pub fn tidy_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>> {
