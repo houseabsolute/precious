@@ -1,6 +1,6 @@
 use anyhow::Result;
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct Matcher {
@@ -19,7 +19,7 @@ impl Matcher {
         })
     }
 
-    pub fn path_matches(&self, path: &PathBuf) -> bool {
+    pub fn path_matches(&self, path: &Path) -> bool {
         self.globs.is_match(path)
     }
 }
@@ -29,6 +29,7 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use spectral::prelude::*;
+    use std::path::PathBuf;
 
     struct TestSet {
         globs: Vec<String>,

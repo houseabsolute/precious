@@ -3,11 +3,12 @@ use log::Level::Debug;
 use log::{debug, error, log_enabled};
 use std::collections::HashMap;
 use std::env::current_dir;
-#[cfg(target_family = "unix")]
-use std::os::unix::prelude::*;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process;
 use thiserror::Error;
+
+#[cfg(target_family = "unix")]
+use std::os::unix::prelude::*;
 
 #[derive(Debug, Error)]
 pub enum CommandError {
@@ -41,7 +42,7 @@ pub fn run_command(
     env: &HashMap<String, String>,
     ok_exit_codes: Vec<i32>,
     expect_stderr: bool,
-    in_dir: Option<&PathBuf>,
+    in_dir: Option<&Path>,
 ) -> Result<CommandResult> {
     let mut c = process::Command::new(cmd.clone());
     for a in args.iter() {

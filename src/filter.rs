@@ -5,7 +5,7 @@ use log::{debug, info};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use thiserror::Error;
 
@@ -97,8 +97,8 @@ pub struct LintResult {
 }
 
 pub trait FilterImplementation {
-    fn tidy(&self, name: &str, path: &PathBuf) -> Result<()>;
-    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult>;
+    fn tidy(&self, name: &str, path: &Path) -> Result<()>;
+    fn lint(&self, name: &str, path: &Path) -> Result<LintResult>;
 }
 
 #[derive(Debug)]
@@ -113,11 +113,11 @@ fn run_mode_is(mode1: &RunMode, mode2: &RunMode) -> bool {
 }
 
 impl Filter {
-    pub fn tidy(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<bool>> {
+    pub fn tidy(&self, path: &Path, files: &[PathBuf]) -> Result<Option<bool>> {
         self.require_is_not_filter_type(FilterType::Lint)?;
 
         let mut full = self.root.clone();
-        full.push(path.clone());
+        full.push(path);
 
         self.require_path_type("tidy", &full)?;
 
@@ -130,11 +130,11 @@ impl Filter {
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
-    pub fn lint(&self, path: &PathBuf, files: &[PathBuf]) -> Result<Option<LintResult>> {
+    pub fn lint(&self, path: &Path, files: &[PathBuf]) -> Result<Option<LintResult>> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
-        full.push(path.clone());
+        full.push(path);
 
         self.require_path_type("lint", &full)?;
 
@@ -158,7 +158,7 @@ impl Filter {
         Ok(())
     }
 
-    fn require_path_type(&self, method: &'static str, path: &PathBuf) -> Result<()> {
+    fn require_path_type(&self, method: &'static str, path: &Path) -> Result<()> {
         if self.run_mode_is(RunMode::Root) {
             return Ok(());
         }
@@ -184,7 +184,7 @@ impl Filter {
         run_mode_is(&self.run_mode, &mode)
     }
 
-    fn should_process_path(&self, path: &PathBuf, files: &[PathBuf]) -> bool {
+    fn should_process_path(&self, path: &Path, files: &[PathBuf]) -> bool {
         if self.excluder.path_matches(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
@@ -235,7 +235,7 @@ impl Filter {
         false
     }
 
-    fn path_was_changed(path: &PathBuf, prev: &HashMap<PathBuf, PathInfo>) -> Result<bool> {
+    fn path_was_changed(path: &Path, prev: &HashMap<PathBuf, PathInfo>) -> Result<bool> {
         let meta = fs::metadata(path)?;
         if meta.is_file() {
             if !prev.contains_key(path) {
@@ -283,7 +283,7 @@ impl Filter {
         Ok(false)
     }
 
-    fn path_info_map_for(path: &PathBuf) -> Result<HashMap<PathBuf, PathInfo>> {
+    fn path_info_map_for(path: &Path) -> Result<HashMap<PathBuf, PathInfo>> {
         let meta = fs::metadata(path)?;
         if meta.is_dir() {
             let mut info = HashMap::new();
@@ -307,7 +307,7 @@ impl Filter {
 
         let mut info = HashMap::new();
         info.insert(
-            path.clone(),
+            path.to_owned(),
             PathInfo {
                 mtime: meta.modified()?,
                 size: meta.len(),
@@ -406,16 +406,16 @@ impl Command {
         hash
     }
 
-    fn in_dir(&self, path: &PathBuf) -> Option<PathBuf> {
+    fn in_dir<'a>(&self, path: &'a Path) -> Option<&'a Path> {
         if !self.chdir {
             return None;
         }
 
         if path.is_dir() {
-            return Some(path.clone());
+            return Some(path);
         }
 
-        Some(path.parent().unwrap().to_path_buf())
+        Some(path.parent().unwrap())
     }
 
     fn run_mode_is(&self, mode: RunMode) -> bool {
@@ -424,7 +424,7 @@ impl Command {
 }
 
 impl FilterImplementation for Command {
-    fn tidy(&self, name: &str, path: &PathBuf) -> Result<()> {
+    fn tidy(&self, name: &str, path: &Path) -> Result<()> {
         let mut cmd = self.cmd.clone();
         if !self.tidy_flags.is_empty() {
             cmd.append(&mut self.tidy_flags.clone());
@@ -449,14 +449,14 @@ impl FilterImplementation for Command {
             &self.env,
             self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
-            self.in_dir(path).as_ref(),
+            self.in_dir(path),
         ) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
     }
 
-    fn lint(&self, name: &str, path: &PathBuf) -> Result<LintResult> {
+    fn lint(&self, name: &str, path: &Path) -> Result<LintResult> {
         let mut cmd = self.cmd.clone();
         if !self.lint_flags.is_empty() {
             cmd.append(&mut self.lint_flags.clone());
@@ -481,7 +481,7 @@ impl FilterImplementation for Command {
             &self.env,
             self.ok_exit_codes.iter().cloned().collect(),
             self.expect_stderr,
-            self.in_dir(path).as_ref(),
+            self.in_dir(path),
         ) {
             Ok(result) => Ok(LintResult {
                 ok: !self.lint_failure_exit_codes.contains(&result.exit_code),
@@ -504,7 +504,7 @@ impl FilterImplementation for Command {
 //     port: u16,
 // }
 
-fn replace_root(cmd: Vec<String>, root: &PathBuf) -> Vec<String> {
+fn replace_root(cmd: Vec<String>, root: &Path) -> Vec<String> {
     cmd.iter()
         .map(|c| {
             c.replace(
@@ -526,11 +526,11 @@ mod tests {
     type Mock = i8;
 
     impl FilterImplementation for Mock {
-        fn tidy(&self, _: &str, _: &PathBuf) -> Result<()> {
+        fn tidy(&self, _: &str, _: &Path) -> Result<()> {
             Ok(())
         }
 
-        fn lint(&self, _: &str, _: &PathBuf) -> Result<LintResult> {
+        fn lint(&self, _: &str, _: &Path) -> Result<LintResult> {
             Ok(LintResult {
                 ok: true,
                 stdout: None,

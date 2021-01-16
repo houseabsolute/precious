@@ -2,7 +2,7 @@ use crate::filter;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -460,7 +460,7 @@ impl Config {
         return format!(r#""{}""#, val);
     }
 
-    pub fn tidy_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>> {
+    pub fn tidy_filters(&self, root: &Path) -> Result<Vec<filter::Filter>> {
         let mut tidiers: Vec<filter::Filter> = vec![];
         for f in self.filters.iter() {
             if let filter::FilterType::Lint = f.core.typ {
@@ -473,7 +473,7 @@ impl Config {
         Ok(tidiers)
     }
 
-    pub fn lint_filters(&self, root: &PathBuf) -> Result<Vec<filter::Filter>> {
+    pub fn lint_filters(&self, root: &Path) -> Result<Vec<filter::Filter>> {
         let mut linters: Vec<filter::Filter> = vec![];
         for f in self.filters.iter() {
             if let filter::FilterType::Tidy = f.core.typ {
@@ -486,11 +486,11 @@ impl Config {
         Ok(linters)
     }
 
-    fn make_filter(&self, root: &PathBuf, filter: &Filter) -> Result<filter::Filter> {
+    fn make_filter(&self, root: &Path, filter: &Filter) -> Result<filter::Filter> {
         match &filter.implementation {
             FilterImplementation::C(c) => {
                 let n = filter::Command::build(filter::CommandParams {
-                    root: root.clone(),
+                    root: root.to_owned(),
                     name: filter.core.name.clone(),
                     typ: filter.core.typ.clone(),
                     include: filter.core.include.clone(),

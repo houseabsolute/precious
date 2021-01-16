@@ -282,7 +282,7 @@ impl<'a> Precious<'a> {
     fn tidy(&mut self) -> Result<Exit> {
         println!("{} Tidying {}", self.chars.ring, self.mode());
 
-        let tidiers = self.config().tidy_filters(&self.root_dir())?;
+        let tidiers = self.config().tidy_filters(self.root_dir().as_path())?;
         if tidiers.is_empty() {
             return Err(PreciousError::NoTidiers.into());
         }
@@ -300,7 +300,7 @@ impl<'a> Precious<'a> {
     }
 
     fn run_one_tidier(&mut self, t: &filter::Filter) -> Result<i32> {
-        let runner = |s: &Self, p: &PathBuf, paths: &basepaths::Paths| -> i32 {
+        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> i32 {
             match t.tidy(p, &paths.files) {
                 Ok(Some(true)) => {
                     if !s.quiet {
@@ -337,7 +337,7 @@ impl<'a> Precious<'a> {
     fn lint(&mut self) -> Result<Exit> {
         println!("{} Linting {}", self.chars.ring, self.mode());
 
-        let linters = self.config().lint_filters(&self.root_dir())?;
+        let linters = self.config().lint_filters(self.root_dir().as_path())?;
         if linters.is_empty() {
             return Err(PreciousError::NoLinters.into());
         }
@@ -354,7 +354,7 @@ impl<'a> Precious<'a> {
     }
 
     fn run_one_linter(&mut self, l: &filter::Filter) -> Result<i32> {
-        let runner = |s: &Self, p: &PathBuf, paths: &basepaths::Paths| -> i32 {
+        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> i32 {
             match l.lint(p, &paths.files) {
                 Ok(Some(r)) => {
                     if r.ok {
@@ -396,7 +396,7 @@ impl<'a> Precious<'a> {
 
     fn run_parallel<R>(&mut self, f: &filter::Filter, runner: R) -> Result<i32>
     where
-        R: Fn(&Self, &PathBuf, &basepaths::Paths) -> i32 + Sync,
+        R: Fn(&Self, &Path, &basepaths::Paths) -> i32 + Sync,
     {
         let statuses: Vec<i32> = self
             .path_map(f)?

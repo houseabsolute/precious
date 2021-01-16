@@ -7,7 +7,7 @@ use log::{debug, error};
 use path_clean::PathClean;
 use std::collections::HashMap;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str;
 use thiserror::Error;
 
@@ -123,7 +123,7 @@ impl BasePaths {
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Getting all files under {}", self.root.to_string_lossy());
-        match self.walkdir_files(&self.root)? {
+        match self.walkdir_files(self.root.as_path())? {
             Some(all) => Ok(Some(self.relative_files(all)?)),
             None => Ok(None),
         }
@@ -166,7 +166,7 @@ impl BasePaths {
         self.files_from_git(&["diff", "--cached", "--name-only", "--diff-filter=ACM"])
     }
 
-    fn walkdir_files(&self, root: &PathBuf) -> Result<Option<Vec<PathBuf>>> {
+    fn walkdir_files(&self, root: &Path) -> Result<Option<Vec<PathBuf>>> {
         let mut excludes = ignore::overrides::OverrideBuilder::new(root);
         for e in self.exclude_globs.clone() {
             excludes.add(&format!("!{}", e))?;
