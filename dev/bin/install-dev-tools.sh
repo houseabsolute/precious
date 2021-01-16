@@ -8,7 +8,9 @@ function run () {
 }
 
 function install_tools () {
-    run "./dev/bin/download-precious.packed.pl"
+    curl --silent --location \
+         https://raw.githubusercontent.com/houseabsolute/ubi/master/bootstrap/bootstrap-ubi.sh |
+        sh
     run "rustup component add clippy"
 }
 
@@ -16,7 +18,6 @@ if [ "$1" == "-v" ]; then
     set -x
 fi
 
-mkdir -p bin
 install_tools
 
 exit 0
