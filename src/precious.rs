@@ -604,7 +604,7 @@ mod tests {
     use serial_test::serial;
     use spectral::prelude::*;
 
-    const SIMPLE_CONFIG: &'static str = r#"
+    const SIMPLE_CONFIG: &str = r#"
 [commands.rustfmt]
 type    = "both"
 include = "**/*.rs"
@@ -625,7 +625,7 @@ lint_failure_exit_codes = [1]
 
         let p = Precious::new(&matches)?;
         assert_that(&p.chars).is_equal_to(chars::FUN_CHARS);
-        let mut expect_config_file = p.root_dir().clone();
+        let mut expect_config_file = p.root_dir();
         expect_config_file.push("precious.toml");
         assert_that(&p.config_file.unwrap()).is_equal_to(expect_config_file);
         assert_that(&p.quiet).is_equal_to(false);
@@ -674,7 +674,7 @@ lint_failure_exit_codes = [1]
     fn test_set_root_prefers_config_file() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
-        let mut src_dir = helper.root().clone();
+        let mut src_dir = helper.root();
         src_dir.push("src");
         let mut subdir_config = src_dir.clone();
         subdir_config.push("precious.toml");
@@ -697,9 +697,9 @@ lint_failure_exit_codes = [1]
             .with_config_file(SIMPLE_CONFIG)?
             .with_git_repo()?;
 
-        let mut src_dir = helper.root().clone();
+        let mut src_dir = helper.root();
         src_dir.push("src");
-        let _pushd = testhelper::Pushd::new(src_dir.clone())?;
+        let _pushd = testhelper::Pushd::new(src_dir)?;
 
         let app = app();
         let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;

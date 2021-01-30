@@ -72,7 +72,7 @@ impl TestHelper {
         let helper = TestHelper {
             _tempdir: temp,
             root,
-            paths: Self::PATHS.iter().map(|p| PathBuf::from(p)).collect(),
+            paths: Self::PATHS.iter().map(PathBuf::from).collect(),
             root_gitignore_file: PathBuf::from(".gitignore"),
             tests_data_gitignore_file: PathBuf::from("tests/data/.gitignore"),
         };
@@ -137,7 +137,7 @@ impl TestHelper {
     }
 
     pub fn all_files(&self) -> Vec<PathBuf> {
-        self.paths.iter().map(|p| p.clone()).collect()
+        self.paths.to_vec()
     }
 
     pub fn stage_all(&self) -> Result<()> {
@@ -253,7 +253,7 @@ generated.*
 
     pub fn modify_files(&self) -> Result<Vec<PathBuf>> {
         let mut paths: Vec<PathBuf> = vec![];
-        for p in Self::TO_MODIFY.iter().map(|p| PathBuf::from(p)) {
+        for p in Self::TO_MODIFY.iter().map(PathBuf::from) {
             self.write_file(&p, "new content")?;
             paths.push(p.clone());
         }

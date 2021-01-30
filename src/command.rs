@@ -163,20 +163,20 @@ mod tests {
 
     #[test]
     fn command_string() {
-        assert_that(&super::command_string(&String::from("foo"), &vec![]))
+        assert_that(&super::command_string(&String::from("foo"), &[]))
             .named("command without args")
             .is_equal_to(String::from("foo"));
 
         assert_that(&super::command_string(
             &String::from("foo"),
-            &vec![String::from("bar")],
+            &[String::from("bar")],
         ))
         .named("command with one arg")
         .is_equal_to(String::from("foo bar"));
 
         assert_that(&super::command_string(
             &String::from("foo"),
-            &vec![String::from("--bar"), String::from("baz")],
+            &[String::from("--bar"), String::from("baz")],
         ))
         .named("command with multiple args")
         .is_equal_to(String::from("foo --bar baz"));
@@ -201,10 +201,7 @@ mod tests {
         env.insert(String::from(env_key), String::from("foo"));
         let res = super::run_command(
             String::from("sh"),
-            vec![
-                String::from("-c"),
-                String::from(format!("echo ${}", env_key)),
-            ],
+            vec![String::from("-c"), format!("echo ${}", env_key)],
             &env,
             vec![0],
             false,
@@ -236,7 +233,7 @@ mod tests {
         assert_that(&res).named("command exits non-zero").is_err();
 
         match res {
-            Ok(_) => assert!(false, "did not get an error in the returned Result"),
+            Ok(_) => panic!("did not get an error in the returned Result"),
             Err(e) => {
                 let r = e.downcast_ref::<super::CommandError>();
                 match r {
@@ -246,9 +243,9 @@ mod tests {
                                 .named("command unexpectedly exits 32")
                                 .is_equal_to(&32);
                         }
-                        _ => assert!(false, "expected a CommandError::UnexpectedExitCode "),
+                        _ => panic!("expected a CommandError::UnexpectedExitCode "),
                     },
-                    None => assert!(false, "expected an error, not a None"),
+                    None => panic!("expected an error, not a None"),
                 }
             }
         }

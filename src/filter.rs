@@ -551,7 +551,7 @@ mod tests {
     }
 
     fn mock_filter() -> Box<dyn FilterImplementation> {
-        Box::new(1 as Mock)
+        Box::new(1)
     }
 
     fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher> {
@@ -578,9 +578,9 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         assert_that(&filter.require_path_type("tidy", &helper.root())).is_ok();
 
-        let mut file = helper.root().clone();
+        let mut file = helper.root();
         file.push(helper.all_files()[0].clone());
-        let res = filter.require_path_type("tidy", &file.clone());
+        let res = filter.require_path_type("tidy", &file);
         assert_that(&res).is_err();
         assert_that(&std::mem::discriminant(
             res.unwrap_err().downcast_ref().unwrap(),
@@ -620,7 +620,7 @@ mod tests {
             },
         ));
 
-        let mut file = helper.root().clone();
+        let mut file = helper.root();
         file.push(helper.all_files()[0].clone());
         assert_that(&filter.require_path_type("tidy", &file)).is_ok();
 
