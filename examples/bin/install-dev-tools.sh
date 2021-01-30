@@ -33,9 +33,27 @@ if [ "$1" == "-v" ]; then
     set -x
 fi
 
+mkdir -p $HOME/bin
+
+set +e
+echo ":$PATH:" | grep --extended-regexp ":$HOME/bin:" >& /dev/null
+if [ "$?" -eq "0" ]; then
+    path_has_home_bin=1
+fi
+set -e
+
+if [ -z "$path_has_home_bin" ]; then
+    PATH=$HOME/bin:$PATH
+fi
+
 install_any_project_tools
 install_go_project_tools
 install_rust_project_tools
+
+echo "Tools were installed into $HOME/bin."
+if [ -z "$path_has_home_bin" ]; then
+     echo "You should add $HOME/bin to your PATH."
+fi
 
 # For Perl, you would generally expect to have a cpanfile in the project root
 # that included the relevant develop prereqs, so developers could just run
