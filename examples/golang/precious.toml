@@ -9,6 +9,7 @@ cmd = [
     "-c",
     "$PRECIOUS_ROOT/golangci-lint.yml",
 ]
+env = { "FAIL_ON_WARNINGS" = "1" }
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 
