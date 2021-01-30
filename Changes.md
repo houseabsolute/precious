@@ -1,4 +1,4 @@
-## 0.0.8
+## 0.0.8 - 2021-01-30
 
 * Added a summary when there are problems linting or tidying
   files. Previously, when there were any errors, the last thing precious
