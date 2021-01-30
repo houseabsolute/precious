@@ -19,14 +19,14 @@ fn main() {
     let res = precious::init_logger(&matches);
     if let Err(e) = res {
         eprintln!("Error creating logger: {}", e);
-        std::process::exit(126);
+        std::process::exit(1);
     }
     let p = precious::Precious::new(&matches);
     let status = match p {
         Ok(mut p) => p.run(),
         Err(e) => {
             error!("{}", e);
-            127
+            1
         }
     };
     std::process::exit(status as i32);

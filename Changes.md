@@ -5,7 +5,7 @@
   printed out would be something like "[precious::precious][ERROR] Error when
   linting files". Now it also includes a summary of what filter failed on each
   path. This is primarily useful for linting, as tidy failures are typically
-  failures to exit the tidy command.
+  failures to execute the tidy command.
 
 
 ## 0.0.7 - 2021-01-02

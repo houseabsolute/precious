@@ -264,7 +264,7 @@ impl<'a> Precious<'a> {
             }
             Err(e) => {
                 error!("Failed to run precious: {}", e);
-                127
+                1
             }
         }
     }
@@ -361,7 +361,6 @@ impl<'a> Precious<'a> {
         let mut all_errors: Vec<ActionError> = vec![];
         for l in linters {
             if let Some(mut errors) = self.run_one_linter(&l)? {
-                println!("E = {:?}", errors);
                 all_errors.append(&mut errors);
             }
         }
