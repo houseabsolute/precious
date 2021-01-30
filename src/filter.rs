@@ -421,20 +421,28 @@ impl Command {
     fn run_mode_is(&self, mode: RunMode) -> bool {
         run_mode_is(&self.run_mode, &mode)
     }
+
+    fn command_for_path(&self, path: &Path, flags: &[String]) -> Vec<String> {
+        let mut cmd = self.cmd.clone();
+        if !flags.is_empty() {
+            for f in flags {
+                cmd.push(f.clone());
+            }
+        }
+        if self.run_mode_is(RunMode::Files) || !self.chdir {
+            if !self.path_flag.is_empty() {
+                cmd.push(self.path_flag.clone());
+            }
+            cmd.push(path.to_string_lossy().to_string());
+        }
+
+        cmd
+    }
 }
 
 impl FilterImplementation for Command {
     fn tidy(&self, name: &str, path: &Path) -> Result<()> {
-        let mut cmd = self.cmd.clone();
-        if !self.tidy_flags.is_empty() {
-            cmd.append(&mut self.tidy_flags.clone());
-        }
-        if !self.path_flag.is_empty() {
-            cmd.push(self.path_flag.clone());
-        }
-        if self.run_mode_is(RunMode::Files) || !self.chdir {
-            cmd.push(path.to_string_lossy().to_string());
-        }
+        let mut cmd = self.command_for_path(path, &self.tidy_flags);
 
         info!(
             "Tidying {} with {} command: {}",
@@ -457,16 +465,7 @@ impl FilterImplementation for Command {
     }
 
     fn lint(&self, name: &str, path: &Path) -> Result<LintResult> {
-        let mut cmd = self.cmd.clone();
-        if !self.lint_flags.is_empty() {
-            cmd.append(&mut self.lint_flags.clone());
-        }
-        if !self.path_flag.is_empty() {
-            cmd.push(self.path_flag.clone());
-        }
-        if self.run_mode_is(RunMode::Files) || !self.chdir {
-            cmd.push(path.to_string_lossy().to_string());
-        }
+        let mut cmd = self.command_for_path(path, &self.lint_flags);
 
         info!(
             "Linting {} with {} command: {}",
@@ -739,6 +738,149 @@ mod tests {
             assert_that(&filter.should_process_path(&dir, &files))
                 .named(&name.to_string_lossy())
                 .is_false();
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn command_for_path() -> Result<()> {
+        {
+            let command = Command {
+                cmd: vec!["test".to_string()],
+                env: HashMap::new(),
+                chdir: false,
+                lint_flags: vec![],
+                tidy_flags: vec![],
+                path_flag: String::new(),
+                ok_exit_codes: HashSet::new(),
+                lint_failure_exit_codes: HashSet::new(),
+                run_mode: RunMode::Root,
+                expect_stderr: false,
+            };
+            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+                .named("root mode, no chdir")
+                .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
+        }
+
+        {
+            let command = Command {
+                cmd: vec!["test".to_string()],
+                env: HashMap::new(),
+                chdir: false,
+                lint_flags: vec![],
+                tidy_flags: vec![],
+                path_flag: String::new(),
+                ok_exit_codes: HashSet::new(),
+                lint_failure_exit_codes: HashSet::new(),
+                run_mode: RunMode::Root,
+                expect_stderr: false,
+            };
+            assert_that(&command.command_for_path(Path::new("foo.go"), &["--flag".to_string()]))
+                .named("root mode, no chdir with flags")
+                .is_equal_to(vec![
+                    "test".to_string(),
+                    "--flag".to_string(),
+                    "foo.go".to_string(),
+                ]);
+        }
+
+        {
+            let command = Command {
+                cmd: vec!["test".to_string()],
+                env: HashMap::new(),
+                chdir: true,
+                lint_flags: vec![],
+                tidy_flags: vec![],
+                path_flag: String::new(),
+                ok_exit_codes: HashSet::new(),
+                lint_failure_exit_codes: HashSet::new(),
+                run_mode: RunMode::Root,
+                expect_stderr: false,
+            };
+            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+                .named("root mode, with chdir")
+                .is_equal_to(vec!["test".to_string()]);
+        }
+
+        {
+            let command = Command {
+                cmd: vec!["test".to_string()],
+                env: HashMap::new(),
+                chdir: true,
+                lint_flags: vec![],
+                tidy_flags: vec![],
+                path_flag: String::new(),
+                ok_exit_codes: HashSet::new(),
+                lint_failure_exit_codes: HashSet::new(),
+                run_mode: RunMode::Files,
+                expect_stderr: false,
+            };
+            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+                .named("files mode, with chdir")
+                .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
+        }
+
+        {
+            let command = Command {
+                cmd: vec!["test".to_string()],
+                env: HashMap::new(),
+                chdir: false,
+                lint_flags: vec![],
+                tidy_flags: vec![],
+                path_flag: String::new(),
+                ok_exit_codes: HashSet::new(),
+                lint_failure_exit_codes: HashSet::new(),
+                run_mode: RunMode::Files,
+                expect_stderr: false,
+            };
+            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+                .named("files mode, no chdir")
+                .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
+        }
+
+        {
+            let command = Command {
+                cmd: vec!["test".to_string()],
+                env: HashMap::new(),
+                chdir: false,
+                lint_flags: vec![],
+                tidy_flags: vec![],
+                path_flag: "--file".to_string(),
+                ok_exit_codes: HashSet::new(),
+                lint_failure_exit_codes: HashSet::new(),
+                run_mode: RunMode::Files,
+                expect_stderr: false,
+            };
+            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+                .named("files mode, no chdir, with path flag")
+                .is_equal_to(vec![
+                    "test".to_string(),
+                    "--file".to_string(),
+                    "foo.go".to_string(),
+                ]);
+        }
+
+        {
+            let command = Command {
+                cmd: vec!["test".to_string()],
+                env: HashMap::new(),
+                chdir: true,
+                lint_flags: vec![],
+                tidy_flags: vec![],
+                path_flag: "--file".to_string(),
+                ok_exit_codes: HashSet::new(),
+                lint_failure_exit_codes: HashSet::new(),
+                run_mode: RunMode::Files,
+                expect_stderr: false,
+            };
+            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+                .named("files mode, with chdir, with path flag")
+                .is_equal_to(vec![
+                    "test".to_string(),
+                    "--file".to_string(),
+                    "foo.go".to_string(),
+                ]);
         }
 
         Ok(())
