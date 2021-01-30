@@ -92,7 +92,7 @@ The keys that are allowed for each command are as follows:
 | `path_flag` | string | no | all | | By default, `precious` will pass each path being operated on to the command it executes as a final, positional, argument. However, if the command takes paths via a flag you need to specify that flag with this key. |
 | `lint_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in linting mode. This is how you set that flag. |
 | `tidy_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in tidying mode. This is how you set that flag. |
-| `run_mode` | "files", "dirs", "root" | no | all | "files" | This determines how the command is run. The default, "files", means that the command is given a list of files that matched its include/exclude settings to run against. If this is set to "dirs", then the command is given a list of directories containing files that matched its include/exclude settings. If it's set to "root", then it is run exactly once from the root of the project if it matches any files. |
+| `run_mode` | "files", "dirs", "root" | no | all | "files" | This determines how the command is run. The default, "files", means that the command is run once per file that matches its include/exclude settings. If this is set to "dirs", then the command is run once per directory *containing* files that matches its include/exclude settings. If it's set to "root", then it is run exactly once from the root of the project if it matches any files. |
 | `chdir` |  boolean | no | all | false | If this is true, then the command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if `run_mode` is `dirs` and `chdir` is true then `precious` will not pass the path to the executable as an argument. |
 | `ok_exit_codes` | array of integers | **yes** | all | | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit. |
 | `lint_failure_exit_codes` | array of integers | no | linters |  | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue. |
@@ -255,12 +255,21 @@ file or directory.
 In order to make that happen you should use the following config:
 
 ```toml
-include = "."
+include = "**/*.rs"
 run_mode = "root"
 ```
 
 This combination of flags will cause `precious` to run the command exactly
 once in the project root. 
+
+The above config will pass a path to the command, `.`. If the command does not
+need a path, set `chdir` to `true`:
+
+```toml
+include = "**/*.rs"
+run_mode = "root"
+chdir = true
+```
 
 ### Linter runs in the same directory as the files it lints and does not accept path as arguments
 
