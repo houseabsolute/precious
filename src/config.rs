@@ -415,7 +415,7 @@ impl Config {
 
         let val = table.get(key).unwrap();
         if val.is_integer() {
-            return Ok(Self::toml_int_to_u16(val.as_integer().unwrap())?);
+            return Self::toml_int_to_u16(val.as_integer().unwrap());
         }
 
         Err(ConfigError::InvalidTOMLValue {
