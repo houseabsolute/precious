@@ -13,19 +13,19 @@ env = { "FAIL_ON_WARNINGS" = "1" }
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 
-# See http://github.com/houseabsolute/omegasort/dev/bin/check-go-mod.sh
-[commands.check-go-mod]
-type = "lint"
-include = "**/*.go"
-run_mode = "dir"
-chdir = true
-cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
-expect_stderr = true
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-
 [commands.goimports]
 type = "tidy"
 include = "**/*.go"
 cmd = ["goimports", "-w"]
 ok_exit_codes = [0]
+
+# See check-go-mod.sh in helpers dir
+[commands.check-go-mod]
+type = "lint"
+include = "**/*.go"
+run_mode = "dirs"
+chdir = true
+cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
+expect_stderr = true
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
