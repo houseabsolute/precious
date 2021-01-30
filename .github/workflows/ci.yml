@@ -72,11 +72,16 @@ jobs:
           command: install
           args: --target=${{ matrix.platform.target }} --path .
         if: matrix.platform.os_name == 'Linux'
-      - name: Install omegasort
+      - name: Run install-dev-tools.sh
         run: |
           set -e
           mkdir $HOME/bin
           ./dev/bin/install-dev-tools.sh
+        if: matrix.platform.os_name == 'Linux'
+      # Runny clippy is effectively a no-op if all the code is already
+      # compiled. Subsequent runs don't actually check anything.
+      - name: Remove target directory
+        run: git clean -dxf target
         if: matrix.platform.os_name == 'Linux'
       - name: Self-check
         run: PATH=$PATH:$HOME/bin $HOME/.cargo/bin/precious --debug lint --all
