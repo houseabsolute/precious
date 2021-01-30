@@ -323,9 +323,9 @@ pub struct Command {
     cmd: Vec<String>,
     env: HashMap<String, String>,
     chdir: bool,
-    lint_flags: Vec<String>,
-    tidy_flags: Vec<String>,
-    path_flag: String,
+    lint_flags: Option<Vec<String>>,
+    tidy_flags: Option<Vec<String>>,
+    path_flag: Option<String>,
     ok_exit_codes: HashSet<i32>,
     lint_failure_exit_codes: HashSet<i32>,
     run_mode: RunMode,
@@ -369,9 +369,21 @@ impl Command {
                 cmd: replace_root(params.cmd, &params.root),
                 env: params.env,
                 chdir: params.chdir,
-                lint_flags: params.lint_flags,
-                tidy_flags: params.tidy_flags,
-                path_flag: params.path_flag,
+                lint_flags: if params.lint_flags.is_empty() {
+                    None
+                } else {
+                    Some(params.lint_flags)
+                },
+                tidy_flags: if params.tidy_flags.is_empty() {
+                    None
+                } else {
+                    Some(params.tidy_flags)
+                },
+                path_flag: if params.path_flag.is_empty() {
+                    None
+                } else {
+                    Some(params.path_flag)
+                },
                 ok_exit_codes: Self::exit_codes_hashset(
                     &params.ok_exit_codes,
                     Some(&params.lint_failure_exit_codes),
@@ -422,16 +434,16 @@ impl Command {
         run_mode_is(&self.run_mode, &mode)
     }
 
-    fn command_for_path(&self, path: &Path, flags: &[String]) -> Vec<String> {
+    fn command_for_path(&self, path: &Path, flags: &Option<Vec<String>>) -> Vec<String> {
         let mut cmd = self.cmd.clone();
-        if !flags.is_empty() {
+        if let Some(flags) = flags {
             for f in flags {
                 cmd.push(f.clone());
             }
         }
         if self.run_mode_is(RunMode::Files) || !self.chdir {
-            if !self.path_flag.is_empty() {
-                cmd.push(self.path_flag.clone());
+            if let Some(pf) = &self.path_flag {
+                cmd.push(pf.clone());
             }
             cmd.push(path.to_string_lossy().to_string());
         }
@@ -750,15 +762,15 @@ mod tests {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
-                lint_flags: vec![],
-                tidy_flags: vec![],
-                path_flag: String::new(),
+                lint_flags: None,
+                tidy_flags: None,
+                path_flag: None,
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Root,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
                 .named("root mode, no chdir")
                 .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
         }
@@ -768,21 +780,23 @@ mod tests {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
-                lint_flags: vec![],
-                tidy_flags: vec![],
-                path_flag: String::new(),
+                lint_flags: None,
+                tidy_flags: None,
+                path_flag: None,
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Root,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &["--flag".to_string()]))
-                .named("root mode, no chdir with flags")
-                .is_equal_to(vec![
-                    "test".to_string(),
-                    "--flag".to_string(),
-                    "foo.go".to_string(),
-                ]);
+            assert_that(
+                &command.command_for_path(Path::new("foo.go"), &Some(vec!["--flag".to_string()])),
+            )
+            .named("root mode, no chdir with flags")
+            .is_equal_to(vec![
+                "test".to_string(),
+                "--flag".to_string(),
+                "foo.go".to_string(),
+            ]);
         }
 
         {
@@ -790,15 +804,15 @@ mod tests {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: true,
-                lint_flags: vec![],
-                tidy_flags: vec![],
-                path_flag: String::new(),
+                lint_flags: None,
+                tidy_flags: None,
+                path_flag: None,
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Root,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
                 .named("root mode, with chdir")
                 .is_equal_to(vec!["test".to_string()]);
         }
@@ -808,15 +822,15 @@ mod tests {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: true,
-                lint_flags: vec![],
-                tidy_flags: vec![],
-                path_flag: String::new(),
+                lint_flags: None,
+                tidy_flags: None,
+                path_flag: None,
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
                 .named("files mode, with chdir")
                 .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
         }
@@ -826,15 +840,15 @@ mod tests {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
-                lint_flags: vec![],
-                tidy_flags: vec![],
-                path_flag: String::new(),
+                lint_flags: None,
+                tidy_flags: None,
+                path_flag: None,
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
                 .named("files mode, no chdir")
                 .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
         }
@@ -844,15 +858,15 @@ mod tests {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
-                lint_flags: vec![],
-                tidy_flags: vec![],
-                path_flag: "--file".to_string(),
+                lint_flags: None,
+                tidy_flags: None,
+                path_flag: Some("--file".to_string()),
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
                 .named("files mode, no chdir, with path flag")
                 .is_equal_to(vec![
                     "test".to_string(),
@@ -866,15 +880,15 @@ mod tests {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: true,
-                lint_flags: vec![],
-                tidy_flags: vec![],
-                path_flag: "--file".to_string(),
+                lint_flags: None,
+                tidy_flags: None,
+                path_flag: Some("--file".to_string()),
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &[]))
+            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
                 .named("files mode, with chdir, with path flag")
                 .is_equal_to(vec![
                     "test".to_string(),
