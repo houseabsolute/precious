@@ -1,3 +1,13 @@
+## 0.0.8
+
+* Added a summary when there are problems linting or tidying
+  files. Previously, when there were any errors, the last thing precious
+  printed out would be something like "[precious::precious][ERROR] Error when
+  linting files". Now it also includes a summary of what filter failed on each
+  path. This is primarily useful for linting, as tidy failures are typically
+  failures to exit the tidy command.
+
+
 ## 0.0.7 - 2021-01-02
 
 * Look for a `precious.toml` file in the current directory before trying to

@@ -28,7 +28,7 @@ enum PreciousError {
 
 #[derive(Debug)]
 struct Exit {
-    status: i32,
+    status: i8,
     message: Option<String>,
     error: Option<String>,
 }
@@ -41,6 +41,12 @@ impl From<Error> for Exit {
             error: Some(err.to_string()),
         }
     }
+}
+
+#[derive(Debug)]
+struct ActionError {
+    filter: String,
+    path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -245,7 +251,7 @@ impl<'a> Precious<'a> {
         .into())
     }
 
-    pub fn run(&mut self) -> i32 {
+    pub fn run(&mut self) -> i8 {
         match self.run_subcommand() {
             Ok(e) => {
                 if let Some(err) = e.error {
@@ -291,16 +297,18 @@ impl<'a> Precious<'a> {
             return Ok(self.no_files_exit());
         }
 
-        let mut status = 0;
+        let mut all_errors: Vec<ActionError> = vec![];
         for t in tidiers {
-            status += self.run_one_tidier(&t)?;
+            if let Some(mut errors) = self.run_one_tidier(&t)? {
+                all_errors.append(&mut errors);
+            }
         }
 
-        Ok(Self::exit_from_status(status, "tidying"))
+        Ok(self.make_exit(all_errors, "tidying"))
     }
 
-    fn run_one_tidier(&mut self, t: &filter::Filter) -> Result<i32> {
-        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> i32 {
+    fn run_one_tidier(&mut self, t: &filter::Filter) -> Result<Option<Vec<ActionError>>> {
+        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<ActionError> {
             match t.tidy(p, &paths.files) {
                 Ok(Some(true)) => {
                     if !s.quiet {
@@ -311,7 +319,7 @@ impl<'a> Precious<'a> {
                             p.to_string_lossy()
                         );
                     }
-                    0
+                    None
                 }
                 Ok(Some(false)) => {
                     if !s.quiet {
@@ -322,15 +330,19 @@ impl<'a> Precious<'a> {
                             p.to_string_lossy()
                         );
                     }
-                    0
+                    None
                 }
-                Ok(None) => 0,
+                Ok(None) => None,
                 Err(e) => {
                     error!("{:#}", e);
-                    1
+                    Some(ActionError {
+                        filter: t.name.clone(),
+                        path: p.to_owned(),
+                    })
                 }
             }
         };
+
         self.run_parallel(t, runner)
     }
 
@@ -346,15 +358,19 @@ impl<'a> Precious<'a> {
             return Ok(self.no_files_exit());
         }
 
-        let mut status = 0;
+        let mut all_errors: Vec<ActionError> = vec![];
         for l in linters {
-            status += self.run_one_linter(&l)?;
+            if let Some(mut errors) = self.run_one_linter(&l)? {
+                println!("E = {:?}", errors);
+                all_errors.append(&mut errors);
+            }
         }
-        Ok(Self::exit_from_status(status, "linting"))
+
+        Ok(self.make_exit(all_errors, "linting"))
     }
 
-    fn run_one_linter(&mut self, l: &filter::Filter) -> Result<i32> {
-        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> i32 {
+    fn run_one_linter(&mut self, l: &filter::Filter) -> Result<Option<Vec<ActionError>>> {
+        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<ActionError> {
             match l.lint(p, &paths.files) {
                 Ok(Some(r)) => {
                     if r.ok {
@@ -366,7 +382,7 @@ impl<'a> Precious<'a> {
                                 p.to_string_lossy()
                             );
                         }
-                        0
+                        None
                     } else {
                         println!(
                             "{} Failed {}: {}",
@@ -380,13 +396,19 @@ impl<'a> Precious<'a> {
                         if let Some(s) = r.stderr {
                             println!("{}", s);
                         }
-                        1
+                        Some(ActionError {
+                            filter: l.name.clone(),
+                            path: p.to_owned(),
+                        })
                     }
                 }
-                Ok(None) => 0,
+                Ok(None) => None,
                 Err(e) => {
                     error!("{:#}", e);
-                    1
+                    Some(ActionError {
+                        filter: l.name.clone(),
+                        path: p.to_owned(),
+                    })
                 }
             }
         };
@@ -394,17 +416,21 @@ impl<'a> Precious<'a> {
         self.run_parallel(l, runner)
     }
 
-    fn run_parallel<R>(&mut self, f: &filter::Filter, runner: R) -> Result<i32>
+    fn run_parallel<R>(&mut self, f: &filter::Filter, runner: R) -> Result<Option<Vec<ActionError>>>
     where
-        R: Fn(&Self, &Path, &basepaths::Paths) -> i32 + Sync,
+        R: Fn(&Self, &Path, &basepaths::Paths) -> Option<ActionError> + Sync,
     {
-        let statuses: Vec<i32> = self
+        let e = self
             .path_map(f)?
             .par_iter()
-            .map(|(p, paths)| runner(self, p, paths))
-            .collect();
+            .filter_map(|(p, paths)| runner(self, p, paths))
+            .collect::<Vec<ActionError>>();
 
-        Ok(statuses.iter().sum())
+        if e.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(e))
+        }
     }
 
     fn no_files_exit(&self) -> Exit {
@@ -415,11 +441,25 @@ impl<'a> Precious<'a> {
         }
     }
 
-    fn exit_from_status(status: i32, action: &str) -> Exit {
-        let error = if status == 0 {
-            None
+    fn make_exit(&self, errors: Vec<ActionError>, action: &str) -> Exit {
+        let (status, error) = if errors.is_empty() {
+            (0, None)
         } else {
-            Some(format!("Error when {} files", action))
+            let error = format!(
+                "Error when {} files:\n{}",
+                action,
+                errors
+                    .iter()
+                    .map(|ae| format!(
+                        "  {} {} {}\n",
+                        self.chars.bullet,
+                        ae.filter,
+                        ae.path.to_string_lossy()
+                    ))
+                    .collect::<Vec<String>>()
+                    .join("")
+            );
+            (1, Some(error))
         };
         Exit {
             status,

@@ -29,5 +29,5 @@ fn main() {
             127
         }
     };
-    std::process::exit(status);
+    std::process::exit(status as i32);
 }
