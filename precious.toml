@@ -5,10 +5,10 @@ exclude = [
 [commands.rustfmt]
 type    = "both"
 include = "**/*.rs"
-cmd     = ["rustfmt"]
+cmd     = "rustfmt"
 lint_flags = "--check"
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
 
 [commands.clippy]
 type     = "lint"
