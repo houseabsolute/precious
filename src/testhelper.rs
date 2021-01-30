@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::prelude::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Once;
 use tempfile::{tempdir, TempDir};
 
@@ -260,7 +260,7 @@ generated.*
         Ok(paths)
     }
 
-    pub fn write_file(&self, rel: &PathBuf, content: &str) -> Result<()> {
+    pub fn write_file(&self, rel: &Path, content: &str) -> Result<()> {
         let mut full = self.root.clone();
         full.push(rel);
         fs::create_dir_all(full.parent().unwrap()).with_context(|| {

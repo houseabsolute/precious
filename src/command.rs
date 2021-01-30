@@ -254,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn executable_does_not_exist() -> Result<()> {
+    fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
         let args = vec![String::from("--arg"), String::from("42")];
         let args_str = args.join(" ");
@@ -271,7 +271,5 @@ mod tests {
             assert_that(&e.to_string())
                 .contains(format!(r#"Failed to execute command "{} {}""#, exe, args_str).as_str());
         }
-
-        Ok(())
     }
 }

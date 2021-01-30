@@ -756,7 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn command_for_path() -> Result<()> {
+    fn command_for_path() {
         {
             let command = Command {
                 cmd: vec!["test".to_string()],
@@ -896,7 +896,5 @@ mod tests {
                     "foo.go".to_string(),
                 ]);
         }
-
-        Ok(())
     }
 }
