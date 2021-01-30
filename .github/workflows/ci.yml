@@ -72,6 +72,12 @@ jobs:
           command: install
           args: --target=${{ matrix.platform.target }} --path .
         if: matrix.platform.os_name == 'Linux'
+      - name: Install omegasort
+        run: |
+          set -e
+          mkdir $HOME/bin
+          ./dev/bin/install-dev-tools.sh
+        if: matrix.platform.os_name == 'Linux'
       - name: Self-check
         run: PATH=$PATH:$HOME/bin $HOME/.cargo/bin/precious --debug lint --all
         if: matrix.platform.os_name == 'Linux'
