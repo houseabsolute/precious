@@ -49,6 +49,17 @@ You can also install this via `cargo` by running `cargo install precious`. See
 documentation](https://doc.rust-lang.org/cargo/commands/cargo-install.html)
 for the rules on where the binary is installed.
 
+## Examples
+
+Check out this repo's [examples directory](./tree/master/examples) for example
+`precious.toml` config files for several languages. Contributions for other
+languages are welcome!
+
+Also check out [the example
+`install-dev-tools.sh`](./tree/master/examples/bin/install-dev-tools.sh)
+script. You can customize this as needed to install only the tools you need
+for your project.
+
 ## Configuration
 
 Precious is configured via a single `precious.toml` file that lives in your
