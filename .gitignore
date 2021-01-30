@@ -1,6 +1,6 @@
-\#*\#
-.\#*
-/target/**/*
-/**/*.rs.bk
 /bin
 /fatlib
+/**/*.rs.bk
+/target/**/*
+.\#*
+\#*\#
