@@ -51,14 +51,13 @@ for the rules on where the binary is installed.
 
 ## Examples
 
-Check out this repo's [examples directory](./tree/master/examples) for example
+Check out this repo's [examples directory](examples) for example
 `precious.toml` config files for several languages. Contributions for other
 languages are welcome!
 
 Also check out [the example
-`install-dev-tools.sh`](./tree/master/examples/bin/install-dev-tools.sh)
-script. You can customize this as needed to install only the tools you need
-for your project.
+`install-dev-tools.sh`](examples/bin/install-dev-tools.sh) script. You can
+customize this as needed to install only the tools you need for your project.
 
 ## Configuration
 
