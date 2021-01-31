@@ -457,7 +457,7 @@ impl Config {
             return String::from("an empty string");
         }
 
-        return format!(r#""{}""#, val);
+        format!(r#""{}""#, val)
     }
 
     pub fn tidy_filters(&self, root: &Path) -> Result<Vec<filter::Filter>> {
