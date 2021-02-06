@@ -1,6 +1,6 @@
-# See bin/install-dev-tools.sh for an example script to install all of the
-# tools needed by this config. You can copy it into your project and modify it
-# as needed to only install the tools you need.
+# See examples/bin/install-dev-tools.sh for an example script to install all
+# of the tools needed by this config. You can copy it into your project and
+# modify it as needed to only install the tools you need.
 
 # This list is appropriate for a Perl distribution that you upload to
 # CPAN. For Perl applications you develop locally, you can probably remove

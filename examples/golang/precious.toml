@@ -1,6 +1,6 @@
-# See bin/install-dev-tools.sh for an example script to install all of the
-# tools needed by this config. You can copy it into your project and modify it
-# as needed to only install the tools you need.
+# See examples/bin/install-dev-tools.sh for an example script to install all
+# of the tools needed by this config. You can copy it into your project and
+# modify it as needed to only install the tools you need.
 [commands.golangci-lint]
 type = "lint"
 include = "**/*.go"
