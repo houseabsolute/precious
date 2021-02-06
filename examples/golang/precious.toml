@@ -4,8 +4,7 @@
 [commands.golangci-lint]
 type = "lint"
 include = "**/*.go"
-run_mode = "root"
-chdir = true
+run_mode = "dirs"
 cmd = [
     "golangci-lint",
     "run",
