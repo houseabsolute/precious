@@ -10,6 +10,14 @@ cmd = [
     "run",
     "-c",
     "$PRECIOUS_ROOT/golangci-lint.yml",
+    # Allowing golangci-lint to run in parallel reduces the effectiveness of
+    # its cache when it has to parse the same code repeatedly. Depending on
+    # the structure of your repo, you may get a better result by using the
+    # `--allow-serial-runners` flag instead. However, you must use one of
+    # these, as by default golangci-lint can simply timeout and fail when
+    # multiple instances of the executable as invoked at the same time for the
+    # same project.
+    "--allow-parallel-runners",
 ]
 env = { "FAIL_ON_WARNINGS" = "1" }
 ok_exit_codes = [0]
