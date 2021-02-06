@@ -25,7 +25,7 @@ ok_exit_codes = [0]
 [commands.check-go-mod]
 type = "lint"
 include = "**/*.go"
-run_mode = "dirs"
+run_mode = "root"
 chdir = true
 cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
 expect_stderr = true
