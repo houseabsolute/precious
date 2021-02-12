@@ -55,6 +55,12 @@ pub enum ConfigError {
     #[error("File at {file:} cannot be read: {error:}")]
     FileCannotBeRead { file: String, error: std::io::Error },
 
+    #[error("File at {file:} cannot be parsed as TOML: {error:}")]
+    FileCannotBeParsed {
+        file: String,
+        error: toml::de::Error,
+    },
+
     #[error("File at {file:} does not contain a TOML table")]
     FileIsNotToml { file: String },
 
@@ -100,7 +106,11 @@ impl Config {
 
         let bytes = res.unwrap();
         let raw = String::from_utf8_lossy(&bytes);
-        let root: toml::Value = toml::from_str(&raw)?;
+        let root: toml::Value =
+            toml::from_str(&raw).map_err(|e| ConfigError::FileCannotBeParsed {
+                file: file.to_string_lossy().to_string(),
+                error: e,
+            })?;
         if !root.is_table() {
             return Err(ConfigError::FileIsNotToml {
                 file: file.to_string_lossy().to_string(),
