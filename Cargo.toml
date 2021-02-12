@@ -14,7 +14,7 @@ clap = "~2"
 fern = { version = "~0.6", features = ["colored"] }
 globset = "~0.4"
 ignore = "~0.4"
-itertools = "~0.9"
+itertools = "~0.10"
 log = "~0.4"
 md5 = "~0.7"
 path-clean = "~0.1"
