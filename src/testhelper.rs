@@ -111,6 +111,22 @@ impl TestHelper {
             false,
             Some(&self.root),
         )?;
+
+        // With this on I get line ending warnings from git on Windows if I
+        // don't write out files with CRLF. Disabling this simplifies things
+        // greatly.
+        command::run_command(
+            "git".to_string(),
+            ["config", "core.autocrlf", "false"]
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
+            &HashMap::new(),
+            [0].to_vec(),
+            false,
+            Some(&self.root),
+        )?;
+
         self.stage_all()?;
         command::run_command(
             "git".to_string(),
@@ -249,12 +265,6 @@ generated.*
     }
 
     pub fn write_file(&self, rel: &Path, content: &str) -> Result<()> {
-        let c = if cfg!(windows) {
-            content.replace("\n", "\r\n")
-        } else {
-            content.to_string()
-        };
-
         let mut full = self.root.clone();
         full.push(rel);
         fs::create_dir_all(full.parent().unwrap()).with_context(|| {
@@ -265,7 +275,7 @@ generated.*
         })?;
         let mut file = fs::File::create(full.clone())
             .context(format!("Creating file at {}", full.to_string_lossy()))?;
-        file.write_all(c.as_bytes())
+        file.write_all(content.as_bytes())
             .context(format!("Writing to file at {}", full.to_string_lossy()))?;
 
         Ok(())
