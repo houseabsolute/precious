@@ -1,3 +1,10 @@
+## 0.0.9
+
+* Added a --jobs (-j) option for all subcommands. This lets you limit how many
+  parallel threads are run. The default is to run one thread per available
+  core. Requested by Shane Warden. GH #7.
+
+
 ## 0.0.8 - 2021-01-30
 
 * Added a summary when there are problems linting or tidying

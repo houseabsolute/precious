@@ -8,7 +8,7 @@ use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
 use log::{debug, error};
-use rayon::prelude::*;
+use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -16,6 +16,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum PreciousError {
+    #[error(r#"Could not parse {arg:} argument, "{val:}", as an integer"#)]
+    InvalidIntegerArgument { arg: String, val: String },
+
     #[error("Could not find a VCS checkout root starting from {cwd:}")]
     CannotFindRoot { cwd: String },
 
@@ -59,6 +62,7 @@ pub struct Precious<'a> {
     chars: chars::Chars,
     quiet: bool,
     basepaths: Option<basepaths::BasePaths>,
+    thread_pool: ThreadPool,
 }
 
 pub fn app<'a>() -> App<'a, 'a> {
@@ -72,6 +76,13 @@ pub fn app<'a>() -> App<'a, 'a> {
                 .long("config")
                 .takes_value(true)
                 .help("Path to config file"),
+        )
+        .arg(
+            Arg::with_name("jobs")
+                .short("j")
+                .long("jobs")
+                .takes_value(true)
+                .help("Number of parallel jobs (threads) to run (defaults to one per core)"),
         )
         .arg(
             Arg::with_name("ascii")
@@ -202,10 +213,27 @@ impl<'a> Precious<'a> {
             chars: c,
             quiet: matches.is_present("quiet"),
             basepaths: None,
+            thread_pool: ThreadPoolBuilder::new()
+                .num_threads(Self::jobs(matches)?)
+                .build()?,
         };
         s.set_config()?;
 
         Ok(s)
+    }
+
+    fn jobs(matches: &'a ArgMatches) -> Result<usize> {
+        match matches.value_of("jobs") {
+            Some(j) => match j.parse::<usize>() {
+                Ok(u) => Ok(u),
+                Err(_) => Err(PreciousError::InvalidIntegerArgument {
+                    arg: "--jobs".to_string(),
+                    val: j.to_string(),
+                }
+                .into()),
+            },
+            None => Ok(0),
+        }
     }
 
     fn set_config(&mut self) -> Result<()> {
@@ -419,11 +447,17 @@ impl<'a> Precious<'a> {
     where
         R: Fn(&Self, &Path, &basepaths::Paths) -> Option<ActionError> + Sync,
     {
-        let e = self
-            .path_map(f)?
-            .par_iter()
-            .filter_map(|(p, paths)| runner(self, p, paths))
-            .collect::<Vec<ActionError>>();
+        let map = self.path_map(f)?;
+
+        let mut e: Vec<ActionError> = vec![];
+        self.thread_pool.install(|| {
+            e.append(
+                &mut map
+                    .par_iter()
+                    .filter_map(|(p, paths)| runner(self, p, paths))
+                    .collect::<Vec<ActionError>>(),
+            );
+        });
 
         if e.is_empty() {
             Ok(None)

@@ -128,6 +128,7 @@ The root command takes the following options:
 | `-t`, `--trace` | Enable tracing output (maximum logging) |
 | `--ascii` | Replace super-fun Unicode symbols with terribly boring ASCII |
 | `-c`, `--config` `<config>` | Path to config file |
+| `-j`, `--jobs` `<jobs>`     | Number of parallel jobs (threads) to run (defaults to one per core) |
 
 ### Subcommands
 
