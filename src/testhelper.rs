@@ -54,7 +54,7 @@ impl TestHelper {
                         None,
                     ) {
                         Ok(_) => (),
-                        Err(e) => panic!(e),
+                        Err(e) => panic!("{}", e),
                     }
                 }
             };
