@@ -57,6 +57,9 @@ pub enum BasePathsError {
 
     #[error("Found a path on the Cli which does not exist: {path:}")]
     NonExistentPathOnCli { path: String },
+
+    #[error("Could not determine the repo root by running \"git rev-parse --show-toplevel\"")]
+    CouldNotDetermineRepoRoot,
 }
 
 impl BasePaths {
@@ -102,9 +105,9 @@ impl BasePaths {
         }
 
         if self.mode == Mode::GitStaged {
-            command::run_command(
+            let res = command::run_command(
                 String::from("git"),
-                ["stash", "--keep-index"]
+                ["rev-parse", "--show-toplevel"]
                     .iter()
                     .map(|a| (*a).to_string())
                     .collect(),
@@ -113,8 +116,30 @@ impl BasePaths {
                 false,
                 Some(&self.root),
             )?;
-            self.stashed = true;
-        }
+
+            let stdout = res
+                .stdout
+                .ok_or(BasePathsError::CouldNotDetermineRepoRoot)?;
+            let repo_root = stdout.trim();
+            let mut mm = PathBuf::from(repo_root);
+            mm.push(".git");
+            mm.push("MERGE_MODE");
+
+            if !mm.exists() {
+                command::run_command(
+                    String::from("git"),
+                    ["stash", "--keep-index"]
+                        .iter()
+                        .map(|a| (*a).to_string())
+                        .collect(),
+                    &HashMap::new(),
+                    [0].to_vec(),
+                    false,
+                    Some(&self.root),
+                )?;
+                self.stashed = true;
+            }
+        };
 
         self.paths = Some(self.files_to_paths(files.unwrap())?);
 
@@ -342,7 +367,7 @@ mod tests {
             .is_equal_to(3);
         assert_that(&paths[0]).is_equal_to(Paths {
             dir: PathBuf::from("."),
-            files: ["README.md", "can_ignore.x"]
+            files: ["README.md", "can_ignore.x", "merge-conflict-file"]
                 .iter()
                 .map(PathBuf::from)
                 .collect(),
@@ -531,24 +556,41 @@ mod tests {
         Ok(())
     }
 
-    // I originally wrote this test because I thought precious might have the
-    // same merge stash bug as tidyall
-    // (https://github.com/houseabsolute/perl-code-tidyall/issues/100). However,
-    // since precious only calls `git stash` if there are modified files being
-    // committed, this isn't an issue. That's because, at least from my
-    // testing, `git status` doesn't show any files at all when committing a
-    // merge commit.
+    // This tests the issue reported in
+    // https://github.com/houseabsolute/precious/issues/9. I had tried to test
+    // for this earlier, but I thought it was a non-issue because I couldn't
+    // replicate the issue. Later, I realized that this only happens if a
+    // merge commit leads to a conflict. Otherwise, `git diff --cached` won't
+    // report any files at all for the commit. But if you've had a conflict
+    // and resolved it, any files that had a conflict will be reported as
+    // having a diff.
     #[test]
     fn git_staged_mode_merge_stash() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.modify_files()?;
-        helper.commit_all()?;
-        helper.switch_to_branch()?;
-        helper.reset_backwards(1)?;
-        helper.merge_master()?;
 
-        let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
-        assert_that(&bp.paths()?).is_equal_to(None);
+        let file = Path::new("merge-conflict-here");
+        helper.write_file(file, "line 1\nline 2\n")?;
+        helper.stage_all()?;
+        helper.commit_all()?;
+
+        helper.switch_to_branch("new-branch", false)?;
+        helper.write_file(file, "line 1\nline 1.5\nline 2\n")?;
+        helper.commit_all()?;
+
+        helper.switch_to_branch("master", true)?;
+        helper.write_file(file, "line 1\nline 1.6\nline 2\n")?;
+        helper.commit_all()?;
+
+        helper.switch_to_branch("new-branch", true)?;
+        helper.merge_master(true)?;
+        helper.write_file(file, "line 1\nline 1.7\nline 2\n")?;
+        helper.stage_all()?;
+
+        let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
+        let expect = bp.files_to_paths(vec![PathBuf::from("merge-conflict-here")])?;
+
+        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.stashed).is_equal_to(false);
         Ok(())
     }
 

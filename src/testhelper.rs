@@ -29,6 +29,7 @@ impl TestHelper {
         "src/bar.rs",
         "src/main.rs",
         "src/module.rs",
+        "merge-conflict-file",
         "tests/data/foo.txt",
         "tests/data/bar.txt",
         "tests/data/generated.txt",
@@ -189,13 +190,15 @@ generated.*
             .collect()
     }
 
-    pub fn switch_to_branch(&self) -> Result<()> {
+    pub fn switch_to_branch(&self, branch: &str, exists: bool) -> Result<()> {
+        let mut args: Vec<&str> = vec!["checkout", "--quiet"];
+        if !exists {
+            args.push("-b");
+        }
+        args.push(branch);
         command::run_command(
             "git".to_string(),
-            ["checkout", "--quiet", "-b", "new-branch"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
+            args.iter().map(|a| a.to_string()).collect(),
             &HashMap::new(),
             [0].to_vec(),
             false,
@@ -204,27 +207,12 @@ generated.*
         Ok(())
     }
 
-    pub fn reset_backwards(&self, back: i8) -> Result<()> {
-        command::run_command(
-            "git".to_string(),
-            [
-                "reset",
-                "--quiet",
-                "--hard",
-                format!("HEAD~{}", back).as_str(),
-            ]
-            .iter()
-            .map(|a| a.to_string())
-            .collect(),
-            &HashMap::new(),
-            [0].to_vec(),
-            false,
-            Some(&self.root()),
-        )?;
-        Ok(())
-    }
+    pub fn merge_master(&self, expect_fail: bool) -> Result<()> {
+        let mut expect_codes = [0].to_vec();
+        if expect_fail {
+            expect_codes.push(1);
+        }
 
-    pub fn merge_master(&self) -> Result<()> {
         command::run_command(
             "git".to_string(),
             ["merge", "--quiet", "--no-ff", "--no-commit", "master"]
@@ -232,7 +220,7 @@ generated.*
                 .map(|a| a.to_string())
                 .collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            expect_codes,
             true,
             Some(&self.root()),
         )?;
@@ -261,6 +249,12 @@ generated.*
     }
 
     pub fn write_file(&self, rel: &Path, content: &str) -> Result<()> {
+        let c = if cfg!(windows) {
+            content.replace("\n", "\r\n")
+        } else {
+            content.to_string()
+        };
+
         let mut full = self.root.clone();
         full.push(rel);
         fs::create_dir_all(full.parent().unwrap()).with_context(|| {
@@ -271,7 +265,7 @@ generated.*
         })?;
         let mut file = fs::File::create(full.clone())
             .context(format!("Creating file at {}", full.to_string_lossy()))?;
-        file.write_all(content.as_bytes())
+        file.write_all(c.as_bytes())
             .context(format!("Writing to file at {}", full.to_string_lossy()))?;
 
         Ok(())

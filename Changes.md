@@ -4,6 +4,17 @@
   parallel threads are run. The default is to run one thread per available
   core. Requested by Shane Warden. GH #7.
 
+* Fix a bug where running precious in "git staged mode" (`precious lint
+  --staged`) would cause breakage with merge commits that were the result of
+  resolving a merge conflict. Basically, you'd get the commit but git would no
+  longer know it was merging a commit, because precious was running `git
+  stash` under the hood to only check the staged files, then `git stash pop`
+  to restore things back to their original state. But runnin`git stash`
+  command. There's some discussion of this on [Stack
+  Overflow](https://stackoverflow.com/questions/24637571/merge-status-lost-when-stashing)
+  but apparently it's still an issue with git today. Reported by Carey
+  Hoffman. GH #9.
+
 
 ## 0.0.8 - 2021-01-30
 
