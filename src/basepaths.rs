@@ -13,7 +13,7 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
-    FromCLI,
+    FromCli,
     All,
     GitModified,
     GitStaged,
@@ -22,7 +22,7 @@ pub enum Mode {
 impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Mode::FromCLI => write!(f, "paths passed on the CLI (recursively)"),
+            Mode::FromCli => write!(f, "paths passed on the Cli (recursively)"),
             Mode::All => write!(f, "all files in the project"),
             Mode::GitModified => write!(f, "modified files according to git"),
             Mode::GitStaged => write!(f, "files staged for a git commit"),
@@ -50,13 +50,13 @@ pub struct Paths {
 #[derive(Debug, Error, PartialEq)]
 pub enum BasePathsError {
     #[error("You cannot pass an explicit list of files when looking for {mode:}")]
-    GotPathsFromCLIWithWrongMode { mode: Mode },
+    GotPathsFromCliWithWrongMode { mode: Mode },
 
     #[error("Found some paths when looking for {mode:} but they were all excluded")]
     AllPathsWereExcluded { mode: Mode },
 
-    #[error("Found a path on the CLI which does not exist: {path:}")]
-    NonExistentPathOnCLI { path: String },
+    #[error("Found a path on the Cli which does not exist: {path:}")]
+    NonExistentPathOnCli { path: String },
 }
 
 impl BasePaths {
@@ -67,10 +67,10 @@ impl BasePaths {
         exclude_globs: Vec<String>,
     ) -> Result<BasePaths> {
         match mode {
-            Mode::FromCLI => (),
+            Mode::FromCli => (),
             _ => {
                 if !cli_paths.is_empty() {
-                    return Err(BasePathsError::GotPathsFromCLIWithWrongMode { mode }.into());
+                    return Err(BasePathsError::GotPathsFromCliWithWrongMode { mode }.into());
                 }
             }
         };
@@ -91,7 +91,7 @@ impl BasePaths {
 
         let files = match self.mode {
             Mode::All => self.all_files()?,
-            Mode::FromCLI => self.files_from_cli()?,
+            Mode::FromCli => self.files_from_cli()?,
             Mode::GitModified => self.git_modified_files()?,
             Mode::GitStaged => self.git_staged_files()?,
         };
@@ -137,7 +137,7 @@ impl BasePaths {
         for rel in self.relative_files(self.cli_paths.clone())? {
             let full = self.root.clone().join(rel.clone());
             if !full.exists() {
-                return Err(BasePathsError::NonExistentPathOnCLI {
+                return Err(BasePathsError::NonExistentPathOnCli {
                     path: rel.to_string_lossy().to_string(),
                 }
                 .into());
@@ -555,7 +555,7 @@ mod tests {
     #[test]
     fn cli_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::FromCLI, vec![PathBuf::from("tests")], helper.root())?;
+        let mut bp = new_basepaths(Mode::FromCli, vec![PathBuf::from("tests")], helper.root())?;
         let expect = bp.files_to_paths(
             helper
                 .all_files()
@@ -574,7 +574,7 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
-            Mode::FromCLI,
+            Mode::FromCli,
             vec![PathBuf::from(".")],
             helper.root(),
             vec!["vendor/**/*".to_string()],
@@ -596,7 +596,7 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
-            Mode::FromCLI,
+            Mode::FromCli,
             vec![
                 helper.all_files()[0].clone(),
                 PathBuf::from("vendor/foo/bar.txt"),
@@ -613,7 +613,7 @@ mod tests {
     fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(
-            Mode::FromCLI,
+            Mode::FromCli,
             vec![
                 helper.all_files()[0].clone(),
                 PathBuf::from("does/not/exist"),
@@ -626,7 +626,7 @@ mod tests {
             res.unwrap_err().downcast_ref().unwrap(),
         ))
         .is_equal_to(std::mem::discriminant(
-            &BasePathsError::NonExistentPathOnCLI {
+            &BasePathsError::NonExistentPathOnCli {
                 path: String::from("does/not/exist"),
             },
         ));

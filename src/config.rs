@@ -56,26 +56,26 @@ pub enum ConfigError {
     FileCannotBeRead { file: String, error: std::io::Error },
 
     #[error("File at {file:} does not contain a TOML table")]
-    FileIsNotTOML { file: String },
+    FileIsNotToml { file: String },
 
     #[error(
         "Found an invalid value for an array value of the {key:} key. Expected an array of {want:} but this is a {got:}."
     )]
-    InvalidTOMLArrayValue {
+    InvalidTomlArrayValue {
         key: &'static str,
         want: &'static str,
         got: String,
     },
 
     #[error("Found an invalid value for the {key:} key. Expected {want:} but got {got:}.")]
-    InvalidTOMLValue {
+    InvalidTomlValue {
         key: &'static str,
         want: &'static str,
         got: String,
     },
 
     #[error("You must define a {key:} for the {name:} entry.")]
-    MissingTOMLKey { key: &'static str, name: String },
+    MissingTomlKey { key: &'static str, name: String },
 
     #[error("Expected a value from {min:} to {max:} but got {val:}.")]
     IntegerConversionError { min: i64, max: i64, val: i64 },
@@ -102,7 +102,7 @@ impl Config {
         let raw = String::from_utf8_lossy(&bytes);
         let root: toml::Value = toml::from_str(&raw)?;
         if !root.is_table() {
-            return Err(ConfigError::FileIsNotTOML {
+            return Err(ConfigError::FileIsNotToml {
                 file: file.to_string_lossy().to_string(),
             }
             .into());
@@ -143,7 +143,7 @@ impl Config {
                     if f.is_table() {
                         constructed.push(constructor(name.to_string(), f.as_table().unwrap())?)
                     } else {
-                        return Err(ConfigError::InvalidTOMLValue {
+                        return Err(ConfigError::InvalidTomlValue {
                             key,
                             want: "a table",
                             got: f.type_str().to_string(),
@@ -152,7 +152,7 @@ impl Config {
                     }
                 }
             } else {
-                return Err(ConfigError::InvalidTOMLValue {
+                return Err(ConfigError::InvalidTomlValue {
                     key,
                     want: "an array of tables",
                     got: filters.type_str().to_string(),
@@ -174,7 +174,7 @@ impl Config {
         let expect_stderr = Self::toml_bool(table, "expect_stderr")?;
 
         if ok_exit_codes.is_empty() {
-            return Err(ConfigError::MissingTOMLKey {
+            return Err(ConfigError::MissingTomlKey {
                 key: "ok_exit_codes",
                 name,
             }
@@ -183,7 +183,7 @@ impl Config {
 
         let toml_typ = Self::toml_string(table, "type")?;
         if toml_typ != "tidy" && lint_failure_exit_codes.is_empty() {
-            return Err(ConfigError::MissingTOMLKey {
+            return Err(ConfigError::MissingTomlKey {
                 key: "lint_failure_exit_codes",
                 name,
             }
@@ -220,7 +220,7 @@ impl Config {
             "tidy" => filter::FilterType::Tidy,
             "both" => filter::FilterType::Both,
             s => {
-                return Err(ConfigError::InvalidTOMLValue {
+                return Err(ConfigError::InvalidTomlValue {
                     key: "type",
                     want: r#"one of "lint", "tidy", or "both""#,
                     got: Self::string_or_empty(s),
@@ -235,7 +235,7 @@ impl Config {
         let env = Self::toml_string_string_hashmap(table, "env")?;
 
         if include.is_empty() {
-            return Err(ConfigError::MissingTOMLKey {
+            return Err(ConfigError::MissingTomlKey {
                 key: "include",
                 name,
             }
@@ -248,7 +248,7 @@ impl Config {
             "dirs" => filter::RunMode::Dirs,
             "root" => filter::RunMode::Root,
             _ => {
-                return Err(ConfigError::InvalidTOMLValue {
+                return Err(ConfigError::InvalidTomlValue {
                     key: "run_mode",
                     want: r#"one of "files", "dirs", or "root""#,
                     got: Self::string_or_empty(toml_run_mode.as_str()),
@@ -258,7 +258,7 @@ impl Config {
         };
 
         if cmd.is_empty() {
-            return Err(ConfigError::MissingTOMLKey { key: "cmd", name }.into());
+            return Err(ConfigError::MissingTomlKey { key: "cmd", name }.into());
         }
 
         Ok(FilterCore {
@@ -286,7 +286,7 @@ impl Config {
                 if v.is_str() {
                     i.push(v.as_str().unwrap().to_string());
                 } else {
-                    return Err(ConfigError::InvalidTOMLArrayValue {
+                    return Err(ConfigError::InvalidTomlArrayValue {
                         key,
                         want: "a string",
                         got: v.type_str().to_string(),
@@ -297,7 +297,7 @@ impl Config {
             return Ok(i);
         }
 
-        Err(ConfigError::InvalidTOMLValue {
+        Err(ConfigError::InvalidTomlValue {
             key,
             want: "a string or an array of strings",
             got: val.type_str().to_string(),
@@ -316,7 +316,7 @@ impl Config {
 
         let subtable = table.get(key).unwrap();
         if !subtable.is_table() {
-            return Err(ConfigError::InvalidTOMLValue {
+            return Err(ConfigError::InvalidTomlValue {
                 key,
                 want: "a table",
                 got: subtable.type_str().to_string(),
@@ -326,7 +326,7 @@ impl Config {
 
         for (name, v) in subtable.as_table().unwrap() {
             if !v.is_str() {
-                return Err(ConfigError::InvalidTOMLValue {
+                return Err(ConfigError::InvalidTomlValue {
                     key,
                     want: "a string",
                     got: v.type_str().to_string(),
@@ -349,7 +349,7 @@ impl Config {
             return Ok(val.as_str().unwrap().to_string());
         }
 
-        Err(ConfigError::InvalidTOMLValue {
+        Err(ConfigError::InvalidTomlValue {
             key,
             want: "a string",
             got: val.type_str().to_string(),
@@ -367,7 +367,7 @@ impl Config {
             return Ok(val.as_bool().unwrap());
         }
 
-        Err(ConfigError::InvalidTOMLValue {
+        Err(ConfigError::InvalidTomlValue {
             key,
             want: "a bool",
             got: val.type_str().to_string(),
@@ -389,7 +389,7 @@ impl Config {
                 if v.is_integer() {
                     i.push(Self::toml_int_to_u8(v.as_integer().unwrap())?);
                 } else {
-                    return Err(ConfigError::InvalidTOMLArrayValue {
+                    return Err(ConfigError::InvalidTomlArrayValue {
                         key,
                         want: "value from 0-255",
                         got: v.type_str().to_string(),
@@ -400,7 +400,7 @@ impl Config {
             return Ok(i);
         }
 
-        Err(ConfigError::InvalidTOMLValue {
+        Err(ConfigError::InvalidTomlValue {
             key,
             want: "an integer of array of integers",
             got: val.type_str().to_string(),
@@ -418,7 +418,7 @@ impl Config {
             return Self::toml_int_to_u16(val.as_integer().unwrap());
         }
 
-        Err(ConfigError::InvalidTOMLValue {
+        Err(ConfigError::InvalidTomlValue {
             key,
             want: "an integer from 0-65535",
             got: val.type_str().to_string(),

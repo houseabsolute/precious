@@ -587,7 +587,7 @@ impl<'a> Precious<'a> {
         subc_matches.values_of("paths").unwrap().for_each(|p| {
             paths.push(PathBuf::from(p));
         });
-        (basepaths::Mode::FromCLI, paths)
+        (basepaths::Mode::FromCli, paths)
     }
 
     fn matched_subcommand(&self) -> &ArgMatches<'a> {
