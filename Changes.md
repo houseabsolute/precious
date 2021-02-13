@@ -1,4 +1,4 @@
-## 0.0.9
+## 0.0.9 - 2021-02-12
 
 * Added a --jobs (-j) option for all subcommands. This lets you limit how many
   parallel threads are run. The default is to run one thread per available
