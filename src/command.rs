@@ -77,7 +77,7 @@ pub fn run_command(
 
     let output = output_from_command(c, ok_exit_codes, &cmd, &args).with_context(|| {
         format!(
-            r#"Failed to execute command "{}""#,
+            r#"Failed to execute command `{}`"#,
             command_string(&cmd, &args)
         )
     })?;
