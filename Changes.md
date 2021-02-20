@@ -1,3 +1,11 @@
+## 0.0.10
+
+* When running any commands, precious now explicitly checks to see if the
+  executable is in your `PATH`. If it's not it prints a new error for this
+  case, as opposed to when running the executable produces an error. This
+  partially addresses #10.
+
+
 ## 0.0.9 - 2021-02-12
 
 * Added a --jobs (-j) option for all subcommands. This lets you limit how many

@@ -21,6 +21,7 @@ path-clean = "~0.1"
 rayon = "~1"
 thiserror = "~1"
 toml = "~0.5"
+which = "~4"
 
 [dev-dependencies]
 serial_test = "~0.4"

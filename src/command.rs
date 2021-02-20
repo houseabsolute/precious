@@ -2,16 +2,20 @@ use anyhow::{Context, Result};
 use log::Level::Debug;
 use log::{debug, error, log_enabled};
 use std::collections::HashMap;
-use std::env::current_dir;
+use std::env;
 use std::path::Path;
 use std::process;
 use thiserror::Error;
+use which::which;
 
 #[cfg(target_family = "unix")]
 use std::os::unix::prelude::*;
 
 #[derive(Debug, Error)]
 pub enum CommandError {
+    #[error(r#"Could not find "{exe:}" in your path ({path:}"#)]
+    ExecutableNotInPath { exe: String, path: String },
+
     #[error("Got unexpected exit code {code:} from `{cmd:}`")]
     UnexpectedExitCode { cmd: String, code: i32 },
 
@@ -44,6 +48,14 @@ pub fn run_command(
     expect_stderr: bool,
     in_dir: Option<&Path>,
 ) -> Result<CommandResult> {
+    if which(&cmd).is_err() {
+        let path = match env::var("PATH") {
+            Ok(p) => p,
+            Err(e) => format!("<could not get PATH environment variable: {}>", e),
+        };
+        return Err(CommandError::ExecutableNotInPath { exe: cmd, path }.into());
+    }
+
     let mut c = process::Command::new(cmd.clone());
     for a in args.iter() {
         c.arg(a);
@@ -59,7 +71,7 @@ pub fn run_command(
         debug!(
             "Running command [{}] with cwd = {}",
             cstr,
-            current_dir()?.to_string_lossy()
+            env::current_dir()?.to_string_lossy()
         );
     }
 
@@ -257,7 +269,6 @@ mod tests {
     fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
         let args = vec![String::from("--arg"), String::from("42")];
-        let args_str = args.join(" ");
         let res = super::run_command(
             String::from(exe),
             args,
@@ -268,8 +279,9 @@ mod tests {
         );
         assert_that!(res.is_err());
         if let Err(e) = res {
-            assert_that(&e.to_string())
-                .contains(format!(r#"Failed to execute command "{} {}""#, exe, args_str).as_str());
+            assert_that(&e.to_string()).contains(
+                r#"Could not find "I hope this binary does not exist on any system!" in your path"#,
+            );
         }
     }
 }
