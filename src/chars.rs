@@ -7,6 +7,7 @@ pub struct Chars {
     pub lint_dirty: &'static str,
     pub empty: &'static str,
     pub bullet: &'static str,
+    pub execution_error: &'static str,
 }
 
 pub const FUN_CHARS: Chars = Chars {
@@ -17,6 +18,7 @@ pub const FUN_CHARS: Chars = Chars {
     lint_dirty: "💩",
     empty: "⚫",
     bullet: "▶",
+    execution_error: "💥",
 };
 
 pub const BORING_CHARS: Chars = Chars {
@@ -27,4 +29,5 @@ pub const BORING_CHARS: Chars = Chars {
     lint_dirty: "*",
     empty: "_",
     bullet: "*",
+    execution_error: "!",
 };

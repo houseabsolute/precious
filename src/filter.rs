@@ -99,6 +99,7 @@ pub struct LintResult {
 pub trait FilterImplementation {
     fn tidy(&self, name: &str, path: &Path) -> Result<()>;
     fn lint(&self, name: &str, path: &Path) -> Result<LintResult>;
+    fn filter_key(&self) -> &str;
 }
 
 #[derive(Debug)]
@@ -316,6 +317,21 @@ impl Filter {
         );
         Ok(info)
     }
+
+    pub fn config_key(&self) -> String {
+        format!(
+            "{}.{}",
+            self.implementation.filter_key(),
+            Self::maybe_toml_quote(&self.name),
+        )
+    }
+
+    fn maybe_toml_quote(name: &str) -> String {
+        if name.contains(' ') {
+            return format!(r#""{}""#, name);
+        }
+        name.to_string()
+    }
 }
 
 #[derive(Debug)]
@@ -502,6 +518,10 @@ impl FilterImplementation for Command {
             Err(e) => Err(e),
         }
     }
+
+    fn filter_key(&self) -> &str {
+        "commands"
+    }
 }
 
 // #[derive(Debug)]
@@ -547,6 +567,10 @@ mod tests {
                 stdout: None,
                 stderr: None,
             })
+        }
+
+        fn filter_key(&self) -> &str {
+            "commands"
         }
     }
 

@@ -45,7 +45,8 @@ impl From<Error> for Exit {
 
 #[derive(Debug)]
 struct ActionError {
-    filter: String,
+    error: String,
+    config_key: String,
     path: PathBuf,
 }
 
@@ -280,7 +281,7 @@ impl<'a> Precious<'a> {
         match self.run_subcommand() {
             Ok(e) => {
                 if let Some(err) = e.error {
-                    error!("{}", err);
+                    print!("{}", err);
                 }
                 if let Some(msg) = e.message {
                     println!("{} {}", self.chars.empty, msg);
@@ -381,9 +382,15 @@ impl<'a> Precious<'a> {
                 }
                 Ok(None) => None,
                 Err(e) => {
-                    error!("{:#}", e);
+                    println!(
+                        "{} error {}: {}",
+                        s.chars.execution_error,
+                        t.name,
+                        p.to_string_lossy()
+                    );
                     Some(ActionError {
-                        filter: t.name.clone(),
+                        error: format!("{:#}", e),
+                        config_key: t.config_key(),
                         path: p.to_owned(),
                     })
                 }
@@ -420,17 +427,25 @@ impl<'a> Precious<'a> {
                         if let Some(s) = r.stderr {
                             println!("{}", s);
                         }
+
                         Some(ActionError {
-                            filter: l.name.clone(),
+                            error: "linting failed".into(),
+                            config_key: l.config_key(),
                             path: p.to_owned(),
                         })
                     }
                 }
                 Ok(None) => None,
                 Err(e) => {
-                    error!("{:#}", e);
+                    println!(
+                        "{} error {}: {}",
+                        s.chars.execution_error,
+                        l.name,
+                        p.to_string_lossy()
+                    );
                     Some(ActionError {
-                        filter: l.name.clone(),
+                        error: format!("{:#}", e),
+                        config_key: l.config_key(),
                         path: p.to_owned(),
                     })
                 }
@@ -475,16 +490,24 @@ impl<'a> Precious<'a> {
         let (status, error) = if errors.is_empty() {
             (0, None)
         } else {
+            let red = format!("\x1B[{}m", Color::Red.to_fg_str());
+            let ansi_off = "\x1B[0m";
+            let plural = if errors.len() > 1 { 's' } else { '\0' };
+
             let error = format!(
-                "Error when {} files:\n{}",
+                "{}Error{} when {} files:{}\n{}",
+                red,
+                plural,
                 action,
+                ansi_off,
                 errors
                     .iter()
                     .map(|ae| format!(
-                        "  {} {} {}\n",
+                        "  {} {} [{}]\n    {}\n",
                         self.chars.bullet,
-                        ae.filter,
-                        ae.path.to_string_lossy()
+                        ae.path.to_string_lossy(),
+                        ae.config_key,
+                        ae.error,
                     ))
                     .collect::<Vec<String>>()
                     .join("")

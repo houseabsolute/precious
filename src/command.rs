@@ -29,7 +29,7 @@ pub enum CommandError {
     #[error("Ran `{cmd:}` and it was killed by signal {signal:}")]
     ProcessKilledBySignal { cmd: String, signal: i32 },
 
-    #[error("Got unexpected stderr output from `{cmd:}`: {stderr:}")]
+    #[error("Got unexpected stderr output from `{cmd:}`:\n{stderr:}")]
     UnexpectedStderr { cmd: String, stderr: String },
 }
 

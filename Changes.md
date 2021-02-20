@@ -1,5 +1,9 @@
 ## 0.0.10
 
+* Errors are now printed out a bit differently, and in particular errors when
+  trying to execute a command (not in the path, command fails unexpectedly,
+  etc.) should be more readable now.
+
 * When running any commands, precious now explicitly checks to see if the
   executable is in your `PATH`. If it's not it prints a new error for this
   case, as opposed to when running the executable produces an error. This
