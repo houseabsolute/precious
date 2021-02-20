@@ -82,13 +82,21 @@ pub fn run_command(
         )
     })?;
 
-    if !output.stderr.is_empty() && !expect_stderr {
-        debug!("Got unexpected stderr when running command");
-        return Err(CommandError::UnexpectedStderr {
-            cmd: command_string(&cmd, &args),
-            stderr: String::from_utf8(output.stderr)?,
+    if log_enabled!(Debug) && !output.stdout.is_empty() {
+        debug!("Stdout was:\n{}", String::from_utf8(output.stdout.clone())?);
+    }
+
+    if !output.stderr.is_empty() {
+        if log_enabled!(Debug) && expect_stderr {
+            debug!("Stderr was:\n{}", String::from_utf8(output.stderr.clone())?);
+        } else {
+            debug!("Got unexpected stderr when running command");
+            return Err(CommandError::UnexpectedStderr {
+                cmd: command_string(&cmd, &args),
+                stderr: String::from_utf8(output.stderr)?,
+            }
+            .into());
         }
-        .into());
     }
 
     let code = output.status.code().unwrap_or(-1);
