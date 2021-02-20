@@ -5,7 +5,7 @@ exclude = [
 [commands.rustfmt]
 type    = "both"
 include = "**/*.rs"
-cmd     = "rustfmt"
+cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
 lint_flags = "--check"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
