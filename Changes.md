@@ -1,4 +1,4 @@
-## 0.0.11
+## 0.0.11 - 2021-02-20
 
 * Fix a bug in 0.0.10 where when *not* running with `--debug`, precious would
   not honor the `expect_stderr = true` configuration, and would instead
