@@ -87,10 +87,11 @@ pub fn run_command(
     }
 
     if !output.stderr.is_empty() {
-        if log_enabled!(Debug) && expect_stderr {
+        if log_enabled!(Debug) {
             debug!("Stderr was:\n{}", String::from_utf8(output.stderr.clone())?);
-        } else {
-            debug!("Got unexpected stderr when running command");
+        }
+
+        if !expect_stderr {
             return Err(CommandError::UnexpectedStderr {
                 cmd: command_string(&cmd, &args),
                 stderr: String::from_utf8(output.stderr)?,

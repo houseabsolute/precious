@@ -1,3 +1,10 @@
+## 0.0.11
+
+* Fix a bug in 0.0.10 where when *not* running with `--debug`, precious would
+  not honor the `expect_stderr = true` configuration, and would instead
+  unconditionally treat stderr output as an error.
+
+
 ## 0.0.10 - 2021-02-20
 
 * Errors are now printed out a bit differently, and in particular errors when
