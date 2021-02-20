@@ -22,11 +22,8 @@ enum PreciousError {
     #[error("Could not find a VCS checkout root starting from {cwd:}")]
     CannotFindRoot { cwd: String },
 
-    #[error("No tidiers defined in your config")]
-    NoTidiers,
-
-    #[error("No linters defined in your config")]
-    NoLinters,
+    #[error("No {what:} filters defined in your config")]
+    NoFilters { what: String },
 }
 
 #[derive(Debug)]
@@ -317,8 +314,30 @@ impl<'a> Precious<'a> {
         println!("{} Tidying {}", self.chars.ring, self.mode());
 
         let tidiers = self.config().tidy_filters(self.root_dir().as_path())?;
-        if tidiers.is_empty() {
-            return Err(PreciousError::NoTidiers.into());
+        self.run_all_filters("tidying", tidiers, |s, t| s.run_one_tidier(t))
+    }
+
+    fn lint(&mut self) -> Result<Exit> {
+        println!("{} Linting {}", self.chars.ring, self.mode());
+
+        let linters = self.config().lint_filters(self.root_dir().as_path())?;
+        self.run_all_filters("linting", linters, |s, l| s.run_one_linter(l))
+    }
+
+    fn run_all_filters<R>(
+        &mut self,
+        action: &str,
+        filters: Vec<filter::Filter>,
+        run_filter: R,
+    ) -> Result<Exit>
+    where
+        R: Fn(&mut Self, &filter::Filter) -> Result<Option<Vec<ActionError>>>,
+    {
+        if filters.is_empty() {
+            return Err(PreciousError::NoFilters {
+                what: action.into(),
+            }
+            .into());
         }
 
         if self.basepaths()?.paths()?.is_none() {
@@ -326,13 +345,13 @@ impl<'a> Precious<'a> {
         }
 
         let mut all_errors: Vec<ActionError> = vec![];
-        for t in tidiers {
-            if let Some(mut errors) = self.run_one_tidier(&t)? {
+        for f in filters {
+            if let Some(mut errors) = run_filter(self, &f)? {
                 all_errors.append(&mut errors);
             }
         }
 
-        Ok(self.make_exit(all_errors, "tidying"))
+        Ok(self.make_exit(all_errors, action))
     }
 
     fn run_one_tidier(&mut self, t: &filter::Filter) -> Result<Option<Vec<ActionError>>> {
@@ -372,28 +391,6 @@ impl<'a> Precious<'a> {
         };
 
         self.run_parallel(t, runner)
-    }
-
-    fn lint(&mut self) -> Result<Exit> {
-        println!("{} Linting {}", self.chars.ring, self.mode());
-
-        let linters = self.config().lint_filters(self.root_dir().as_path())?;
-        if linters.is_empty() {
-            return Err(PreciousError::NoLinters.into());
-        }
-
-        if self.basepaths()?.paths()?.is_none() {
-            return Ok(self.no_files_exit());
-        }
-
-        let mut all_errors: Vec<ActionError> = vec![];
-        for l in linters {
-            if let Some(mut errors) = self.run_one_linter(&l)? {
-                all_errors.append(&mut errors);
-            }
-        }
-
-        Ok(self.make_exit(all_errors, "linting"))
     }
 
     fn run_one_linter(&mut self, l: &filter::Filter) -> Result<Option<Vec<ActionError>>> {
