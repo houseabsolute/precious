@@ -5,6 +5,16 @@ exclude = [
   "target",
 ]
 
+# If you install a nightly rustfmt from the project's GitHub releases
+# (https://github.com/rust-lang/rustfmt/releases) you can change the cmd to:
+#
+# cmd = [ "rustfmt", "--skip-children", "--unstable-features" ]
+#
+# This stops "rustfmt --check" from showing errors in main.rs or lib.rs
+# because of errors in files containing modules imported by main.rs/lib.rs.
+#
+# Try ubi (https://github.com/houseabsolute/ubi) for installing rustfmt and
+# other single-file executables.
 [commands.rustfmt]
 type    = "both"
 include = "**/*.rs"
