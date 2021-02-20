@@ -1,4 +1,4 @@
-## 0.0.10
+## 0.0.10 - 2021-02-20
 
 * Errors are now printed out a bit differently, and in particular errors when
   trying to execute a command (not in the path, command fails unexpectedly,
