@@ -184,64 +184,6 @@ which paths.
     against its include and exclude rules. If *any* of the files match the
     filter is run. If *none* of the files match the filter is not run.
 
-## Examples
-
-Here are some example command configurations:
-
-### [rustfmt](https://github.com/rust-lang/rustfmt)
-
-```toml
-[commands.rustfmt]
-type    = "both"
-include = "**/*.rs"
-cmd     = ["rustfmt"]
-lint_flags = "--check"
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-```
-
-### [rust-clippy](https://github.com/rust-lang/rust-clippy)
-
-```toml
-[commands.clippy]
-type     = "lint"
-include  = "**/*.rs"
-run_mode = "root"
-chdir    = true
-cmd      = ["cargo", "clippy", "-q", "--", "-D", "clippy::all"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-```
-
-### [goimports](https://godoc.org/golang.org/x/tools/cmd/goimports)
-
-```toml
-[commands.goimports]
-type    = "tidy"
-include = "**/*.go"
-cmd     = ["goimports", "-w"]
-ok_exit_codes = 0
-```
-
-### [golangci-lint](https://github.com/golangci/golangci-lint)
-
-```toml
-[commands.golangci-lint]
-type = "lint"
-include = "**/*.go"
-run_mode = "root"
-cmd = [
-    "golangci-lint",
-    "run",
-    "-c",
-    "$PRECIOUS_ROOT/golangci-lint.yml",
-]
-# This is an undocumented env var that golangci-lint looks for.
-env = { "FAIL_ON_WARNINGS": "1" }
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-```
-
 ## Common Scenarios
 
 There are some configuration scenarios that you may need to handle. Here are
