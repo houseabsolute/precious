@@ -184,6 +184,42 @@ which paths.
     against its include and exclude rules. If *any* of the files match the
     filter is run. If *none* of the files match the filter is not run.
 
+## Configuration Recommendations
+
+Here are some recommendations for how to get the best experience with precious.
+
+### Choosing a Run Mode
+
+Some tools might work equally well with "root" or "dirs" as a the run
+mode. The right run mode to choose depends on how you are using precious.
+
+In general, if you either have a very small set of directories, *or* you are
+running precious on most or all of the directories at once, then the "root"
+mode will be faster.
+
+However, if you have a larger set of directories and you only need to lint or
+tidy a small subset of these at once, then "dirs" mode will be faster.
+
+### Quiet Flags
+
+Many tools will accept a "quiet" flag of some sort. In general, you probably
+*do not* want to run tools in a quiet mode with precious.
+
+In the case of a successful tidy or lint command execution, precious already
+traps all stdout from the command that it runs. If the command fails somehow,
+precious will print out stdout (and stderr) output.
+
+By default, precious treats *any* output to stderr as an error in the command
+(as opposed to a linting failure). If you set `expect_stderr = true`, then
+precious treats stderr just like stdout.
+
+In addition, you can see all stdout and stderr output when running precious in
+`--debug` mode.
+
+All of which is to say that in general there's no value to running a command
+in quiet mode with precious. All that does it potentially make it harder to
+debug issues with that command.
+
 ## Common Scenarios
 
 There are some configuration scenarios that you may need to handle. Here are
