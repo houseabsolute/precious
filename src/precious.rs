@@ -562,10 +562,8 @@ impl<'a> Precious<'a> {
         let paths = self.basepaths()?.paths()?;
 
         for p in paths.unwrap() {
-            // This is gross
-            let p_clone = p.clone();
-            for f in p.files {
-                map.insert(f.clone(), p_clone.clone());
+            for f in p.files.iter() {
+                map.insert(f.clone(), p.clone());
             }
         }
         Ok(map)
