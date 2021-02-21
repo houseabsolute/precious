@@ -37,6 +37,9 @@ pub struct BasePaths {
     root: PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
+    // The first option tells us whether we've tried to calculate the paths at
+    // all. If it's none, we have not. The second option contains the _result_
+    // of the calculation, which could be None.
     #[allow(clippy::option_option)]
     paths: Option<Option<Vec<Paths>>>,
 }
