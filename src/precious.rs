@@ -17,10 +17,10 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 enum PreciousError {
     #[error("No subcommand (lint or tidy) was given in the command line args")]
-    NoSubcommandInCLIArgs,
+    NoSubcommandInCliArgs,
 
     #[error("No mode or paths were provided in the command line args")]
-    NoModeOrPathsInCLIArgs,
+    NoModeOrPathsInCliArgs,
 
     #[error(r#"Could not parse {arg:} argument, "{val:}", as an integer"#)]
     InvalidIntegerArgument { arg: String, val: String },
@@ -241,12 +241,12 @@ impl<'a> Precious<'a> {
                 }
 
                 if !subc_matches.is_present("paths") {
-                    return Err(PreciousError::NoModeOrPathsInCLIArgs.into());
+                    return Err(PreciousError::NoModeOrPathsInCliArgs.into());
                 }
 
                 Ok(basepaths::Mode::FromCli)
             }
-            _ => Err(PreciousError::NoSubcommandInCLIArgs.into()),
+            _ => Err(PreciousError::NoSubcommandInCliArgs.into()),
         }
     }
 
