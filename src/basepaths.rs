@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::str;
 use thiserror::Error;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Mode {
     FromCli,
     All,
@@ -33,7 +33,6 @@ impl fmt::Display for Mode {
 #[derive(Debug)]
 pub struct BasePaths {
     mode: Mode,
-    cli_paths: Vec<PathBuf>,
     root: PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
@@ -66,23 +65,9 @@ pub enum BasePathsError {
 }
 
 impl BasePaths {
-    pub fn new(
-        mode: Mode,
-        cli_paths: Vec<PathBuf>,
-        root: PathBuf,
-        exclude_globs: Vec<String>,
-    ) -> Result<BasePaths> {
-        match mode {
-            Mode::FromCli => (),
-            _ => {
-                if !cli_paths.is_empty() {
-                    return Err(BasePathsError::GotPathsFromCliWithWrongMode { mode }.into());
-                }
-            }
-        };
+    pub fn new(mode: Mode, root: PathBuf, exclude_globs: Vec<String>) -> Result<BasePaths> {
         Ok(BasePaths {
             mode,
-            cli_paths,
             root,
             exclude_globs,
             stashed: false,
@@ -90,14 +75,25 @@ impl BasePaths {
         })
     }
 
-    pub fn paths(&mut self) -> Result<Option<Vec<Paths>>> {
+    pub fn paths(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec<Paths>>> {
         if let Some(paths) = &self.paths {
             return Ok(paths.clone());
         }
 
+        match self.mode {
+            Mode::FromCli => (),
+            _ => {
+                if !cli_paths.is_empty() {
+                    return Err(
+                        BasePathsError::GotPathsFromCliWithWrongMode { mode: self.mode }.into(),
+                    );
+                }
+            }
+        };
+
         let files = match self.mode {
             Mode::All => self.all_files()?,
-            Mode::FromCli => self.files_from_cli()?,
+            Mode::FromCli => self.files_from_cli(cli_paths)?,
             Mode::GitModified => self.git_modified_files()?,
             Mode::GitStaged => self.git_staged_files()?,
         };
@@ -157,12 +153,12 @@ impl BasePaths {
         }
     }
 
-    fn files_from_cli(&self) -> Result<Option<Vec<PathBuf>>> {
+    fn files_from_cli(&self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec<PathBuf>>> {
         debug!("Using the list of files passed from the command line");
         let excluder = self.excluder()?;
 
         let mut files: Vec<PathBuf> = vec![];
-        for rel in self.relative_files(self.cli_paths.clone())? {
+        for rel in self.relative_files(cli_paths)? {
             let full = self.root.clone().join(rel.clone());
             if !full.exists() {
                 return Err(BasePathsError::NonExistentPathOnCli {
@@ -273,10 +269,7 @@ impl BasePaths {
         }
 
         if entries.is_empty() {
-            return Err(BasePathsError::AllPathsWereExcluded {
-                mode: self.mode.clone(),
-            }
-            .into());
+            return Err(BasePathsError::AllPathsWereExcluded { mode: self.mode }.into());
         }
 
         Ok(Some(
@@ -346,24 +339,23 @@ mod tests {
     use spectral::prelude::*;
     use std::fs;
 
-    fn new_basepaths(mode: Mode, cli_paths: Vec<PathBuf>, root: PathBuf) -> Result<BasePaths> {
-        new_basepaths_with_excludes(mode, cli_paths, root, vec![])
+    fn new_basepaths(mode: Mode, root: PathBuf) -> Result<BasePaths> {
+        new_basepaths_with_excludes(mode, root, vec![])
     }
 
     fn new_basepaths_with_excludes(
         mode: Mode,
-        cli_paths: Vec<PathBuf>,
         root: PathBuf,
         exclude: Vec<String>,
     ) -> Result<BasePaths> {
-        BasePaths::new(mode, cli_paths, root, exclude)
+        BasePaths::new(mode, root, exclude)
     }
 
     #[test]
     fn files_to_paths() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
-        let bp = new_basepaths(Mode::All, vec![], helper.root())?;
+        let bp = new_basepaths(Mode::All, helper.root())?;
         let paths = bp.files_to_paths(helper.all_files())?.unwrap();
         assert_that(&paths.len())
             .named("got three paths entries")
@@ -404,8 +396,8 @@ mod tests {
     #[test]
     fn all_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::All, vec![], helper.root())?;
-        assert_that(&bp.paths()?).is_equal_to(bp.files_to_paths(helper.all_files())?);
+        let mut bp = new_basepaths(Mode::All, helper.root())?;
+        assert_that(&bp.paths(vec![])?).is_equal_to(bp.files_to_paths(helper.all_files())?);
         Ok(())
     }
 
@@ -416,16 +408,16 @@ mod tests {
         let mut expect = testhelper::TestHelper::non_ignored_files();
         expect.append(&mut gitignores);
 
-        let mut bp = new_basepaths(Mode::All, vec![], helper.root())?;
-        assert_that(&bp.paths()?).is_equal_to(bp.files_to_paths(expect)?);
+        let mut bp = new_basepaths(Mode::All, helper.root())?;
+        assert_that(&bp.paths(vec![])?).is_equal_to(bp.files_to_paths(expect)?);
         Ok(())
     }
 
     #[test]
     fn git_modified_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
-        let res = bp.paths();
+        let mut bp = new_basepaths(Mode::GitModified, helper.root())?;
+        let res = bp.paths(vec![]);
         assert_that(&res).is_ok();
         assert_that(&res.unwrap()).is_none();
         Ok(())
@@ -435,7 +427,7 @@ mod tests {
     fn git_modified_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
-        let mut bp = new_basepaths(Mode::GitModified, vec![], helper.root())?;
+        let mut bp = new_basepaths(Mode::GitModified, helper.root())?;
         let expect = bp.files_to_paths(
             modified
                 .iter()
@@ -443,7 +435,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
         Ok(())
     }
 
@@ -458,7 +450,6 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::GitModified,
-            vec![],
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -469,15 +460,15 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
         Ok(())
     }
 
     #[test]
     fn git_staged_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
-        let res = bp.paths();
+        let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
+        let res = bp.paths(vec![]);
         assert_that(&res).is_ok();
         assert_that(&res.unwrap()).is_none();
         Ok(())
@@ -489,14 +480,14 @@ mod tests {
         let modified = helper.modify_files()?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
-            let res = bp.paths();
+            let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
+            let res = bp.paths(vec![]);
             assert_that(&res).is_ok();
             assert_that(&res.unwrap()).is_none();
         }
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
+            let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
             helper.stage_all()?;
             let expect = bp.files_to_paths(
                 modified
@@ -505,7 +496,7 @@ mod tests {
                     .map(PathBuf::from)
                     .collect::<Vec<PathBuf>>(),
             )?;
-            assert_that(&bp.paths()?).is_equal_to(expect);
+            assert_that(&bp.paths(vec![])?).is_equal_to(expect);
         }
         Ok(())
     }
@@ -518,7 +509,6 @@ mod tests {
         helper.stage_all()?;
         let mut bp = new_basepaths_with_excludes(
             Mode::GitStaged,
-            vec![],
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -529,7 +519,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
         Ok(())
     }
 
@@ -542,7 +532,7 @@ mod tests {
         helper.write_file(&PathBuf::from(unstaged), "new content")?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
+            let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
             let expect = bp.files_to_paths(
                 modified
                     .iter()
@@ -550,7 +540,7 @@ mod tests {
                     .map(PathBuf::from)
                     .collect::<Vec<PathBuf>>(),
             )?;
-            assert_that(&bp.paths()?).is_equal_to(expect);
+            assert_that(&bp.paths(vec![])?).is_equal_to(expect);
             assert_that(&String::from_utf8(fs::read(helper.root().join(unstaged))?)?)
                 .is_equal_to(String::from("some content"));
         }
@@ -589,10 +579,10 @@ mod tests {
         helper.write_file(file, "line 1\nline 1.7\nline 2\n")?;
         helper.stage_all()?;
 
-        let mut bp = new_basepaths(Mode::GitStaged, vec![], helper.root())?;
+        let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
         let expect = bp.files_to_paths(vec![PathBuf::from("merge-conflict-here")])?;
 
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
         assert_that(&bp.stashed).is_equal_to(false);
         Ok(())
     }
@@ -600,7 +590,7 @@ mod tests {
     #[test]
     fn cli_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::FromCli, vec![PathBuf::from("tests")], helper.root())?;
+        let mut bp = new_basepaths(Mode::FromCli, helper.root())?;
         let expect = bp.files_to_paths(
             helper
                 .all_files()
@@ -610,7 +600,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.paths(vec![PathBuf::from("tests")])?).is_equal_to(expect);
         Ok(())
     }
 
@@ -620,7 +610,6 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::FromCli,
-            vec![PathBuf::from(".")],
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -632,7 +621,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        assert_that(&bp.paths(vec![PathBuf::from(".")])?).is_equal_to(expect);
         Ok(())
     }
 
@@ -642,30 +631,27 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_basepaths_with_excludes(
             Mode::FromCli,
-            vec![
-                helper.all_files()[0].clone(),
-                PathBuf::from("vendor/foo/bar.txt"),
-            ],
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_paths(vec![helper.all_files()[0].clone()])?;
-        assert_that(&bp.paths()?).is_equal_to(expect);
+        let cli_paths = vec![
+            helper.all_files()[0].clone(),
+            PathBuf::from("vendor/foo/bar.txt"),
+        ];
+        assert_that(&bp.paths(cli_paths)?).is_equal_to(expect);
         Ok(())
     }
 
     #[test]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(
-            Mode::FromCli,
-            vec![
-                helper.all_files()[0].clone(),
-                PathBuf::from("does/not/exist"),
-            ],
-            helper.root(),
-        )?;
-        let res = bp.paths();
+        let mut bp = new_basepaths(Mode::FromCli, helper.root())?;
+        let cli_paths = vec![
+            helper.all_files()[0].clone(),
+            PathBuf::from("does/not/exist"),
+        ];
+        let res = bp.paths(cli_paths);
         assert_that(&res).is_err();
         assert_that(&std::mem::discriminant(
             res.unwrap_err().downcast_ref().unwrap(),

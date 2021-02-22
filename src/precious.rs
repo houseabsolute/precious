@@ -16,6 +16,12 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum PreciousError {
+    #[error("No subcommand (lint or tidy) was given in the command line args")]
+    NoSubcommandInCLIArgs,
+
+    #[error("No mode or paths were provided in the command line args")]
+    NoModeOrPathsInCLIArgs,
+
     #[error(r#"Could not parse {arg:} argument, "{val:}", as an integer"#)]
     InvalidIntegerArgument { arg: String, val: String },
 
@@ -53,10 +59,11 @@ struct ActionError {
 #[derive(Debug)]
 pub struct Precious<'a> {
     matches: &'a ArgMatches<'a>,
-    config: Option<config::Config>,
+    mode: basepaths::Mode,
+    root: PathBuf,
     cwd: PathBuf,
-    root: Option<PathBuf>,
-    config_file: Option<PathBuf>,
+    config: config::Config,
+    config_file: PathBuf,
     chars: chars::Chars,
     quiet: bool,
     basepaths: Option<basepaths::BasePaths>,
@@ -202,22 +209,45 @@ impl<'a> Precious<'a> {
             chars::FUN_CHARS
         };
 
-        let mut s = Precious {
+        let cwd = env::current_dir()?;
+        let root = Self::root(&cwd)?;
+        let (config, config_file) = Self::config(matches, &root)?;
+
+        Ok(Precious {
             matches,
-            config: None,
-            cwd: env::current_dir()?,
-            root: None,
-            config_file: None,
+            mode: Self::mode(matches)?,
+            config,
+            config_file,
+            root,
+            cwd,
             chars: c,
             quiet: matches.is_present("quiet"),
             basepaths: None,
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(Self::jobs(matches)?)
                 .build()?,
-        };
-        s.set_config()?;
+        })
+    }
 
-        Ok(s)
+    fn mode(matches: &'a ArgMatches) -> Result<basepaths::Mode> {
+        match matches.subcommand() {
+            (_, Some(subc_matches)) => {
+                if subc_matches.is_present("all") {
+                    return Ok(basepaths::Mode::All);
+                } else if subc_matches.is_present("git") {
+                    return Ok(basepaths::Mode::GitModified);
+                } else if subc_matches.is_present("staged") {
+                    return Ok(basepaths::Mode::GitStaged);
+                }
+
+                if !subc_matches.is_present("paths") {
+                    return Err(PreciousError::NoModeOrPathsInCLIArgs.into());
+                }
+
+                Ok(basepaths::Mode::FromCli)
+            }
+            _ => Err(PreciousError::NoSubcommandInCLIArgs.into()),
+        }
     }
 
     fn jobs(matches: &'a ArgMatches) -> Result<usize> {
@@ -234,14 +264,32 @@ impl<'a> Precious<'a> {
         }
     }
 
-    fn set_config(&mut self) -> Result<()> {
-        self.set_root()?;
-        let file = if self.matches.is_present("config") {
-            let conf_file = self.matches.value_of("config").unwrap();
+    fn root(cwd: &Path) -> Result<PathBuf> {
+        if Self::has_config_file(cwd) {
+            return Ok(cwd.into());
+        }
+
+        let mut root = PathBuf::new();
+        for anc in cwd.ancestors() {
+            if Self::is_checkout_root(&anc) {
+                root.push(anc);
+                return Ok(root);
+            }
+        }
+
+        Err(PreciousError::CannotFindRoot {
+            cwd: cwd.to_string_lossy().to_string(),
+        }
+        .into())
+    }
+
+    fn config(matches: &'a ArgMatches, root: &Path) -> Result<(config::Config, PathBuf)> {
+        let file = if matches.is_present("config") {
+            let conf_file = matches.value_of("config").unwrap();
             debug!("Loading config from {} (set via flag)", conf_file);
             PathBuf::from(conf_file)
         } else {
-            let default = self.default_config_file();
+            let default = Self::default_config_file(root);
             debug!(
                 "Loading config from {} (default location)",
                 default.to_string_lossy()
@@ -249,32 +297,14 @@ impl<'a> Precious<'a> {
             default
         };
 
-        self.config_file = Some(file.clone());
-        self.config = Some(config::Config::new(file)?);
-
-        Ok(())
+        let config_file = file.clone();
+        Ok((config::Config::new(file)?, config_file))
     }
 
-    fn set_root(&mut self) -> Result<()> {
-        let mut root = PathBuf::new();
-
-        if Self::has_config_file(&self.cwd) {
-            self.root = Some(self.cwd.clone());
-            return Ok(());
-        }
-
-        for anc in self.cwd.ancestors() {
-            if Self::is_checkout_root(&anc) {
-                root.push(anc);
-                self.root = Some(root);
-                return Ok(());
-            }
-        }
-
-        Err(PreciousError::CannotFindRoot {
-            cwd: self.cwd.to_string_lossy().to_string(),
-        }
-        .into())
+    fn default_config_file(root: &Path) -> PathBuf {
+        let mut file = root.to_path_buf();
+        file.push("precious.toml");
+        file
     }
 
     pub fn run(&mut self) -> i8 {
@@ -312,17 +342,17 @@ impl<'a> Precious<'a> {
     }
 
     fn tidy(&mut self) -> Result<Exit> {
-        println!("{} Tidying {}", self.chars.ring, self.mode());
+        println!("{} Tidying {}", self.chars.ring, self.mode);
 
-        let tidiers = self.config().tidy_filters(self.root_dir().as_path())?;
-        self.run_all_filters("tidying", tidiers, |s, t| s.run_one_tidier(t))
+        let tidiers = self.config.tidy_filters(&self.root)?;
+        self.run_all_filters("tidying", tidiers, |s, p, t| s.run_one_tidier(p, t))
     }
 
     fn lint(&mut self) -> Result<Exit> {
-        println!("{} Linting {}", self.chars.ring, self.mode());
+        println!("{} Linting {}", self.chars.ring, self.mode);
 
-        let linters = self.config().lint_filters(self.root_dir().as_path())?;
-        self.run_all_filters("linting", linters, |s, l| s.run_one_linter(l))
+        let linters = self.config.lint_filters(&self.root)?;
+        self.run_all_filters("linting", linters, |s, p, l| s.run_one_linter(p, l))
     }
 
     fn run_all_filters<R>(
@@ -332,7 +362,7 @@ impl<'a> Precious<'a> {
         run_filter: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, &filter::Filter) -> Result<Option<Vec<ActionError>>>,
+        R: Fn(&mut Self, Vec<basepaths::Paths>, &filter::Filter) -> Option<Vec<ActionError>>,
     {
         if filters.is_empty() {
             return Err(PreciousError::NoFilters {
@@ -341,21 +371,65 @@ impl<'a> Precious<'a> {
             .into());
         }
 
-        if self.basepaths()?.paths()?.is_none() {
-            return Ok(self.no_files_exit());
-        }
+        let cli_paths = match self.mode {
+            basepaths::Mode::FromCli => self.paths_from_args(),
+            _ => vec![],
+        };
+        match self.basepaths()?.paths(cli_paths)? {
+            None => Ok(self.no_files_exit()),
+            Some(paths) => {
+                let mut all_errors: Vec<ActionError> = vec![];
+                for f in filters {
+                    if let Some(mut errors) = run_filter(self, paths.clone(), &f) {
+                        all_errors.append(&mut errors);
+                    }
+                }
 
-        let mut all_errors: Vec<ActionError> = vec![];
-        for f in filters {
-            if let Some(mut errors) = run_filter(self, &f)? {
-                all_errors.append(&mut errors);
+                Ok(self.make_exit(all_errors, action))
             }
         }
-
-        Ok(self.make_exit(all_errors, action))
     }
 
-    fn run_one_tidier(&mut self, t: &filter::Filter) -> Result<Option<Vec<ActionError>>> {
+    fn make_exit(&self, errors: Vec<ActionError>, action: &str) -> Exit {
+        let (status, error) = if errors.is_empty() {
+            (0, None)
+        } else {
+            let red = format!("\x1B[{}m", Color::Red.to_fg_str());
+            let ansi_off = "\x1B[0m";
+            let plural = if errors.len() > 1 { 's' } else { '\0' };
+
+            let error = format!(
+                "{}Error{} when {} files:{}\n{}",
+                red,
+                plural,
+                action,
+                ansi_off,
+                errors
+                    .iter()
+                    .map(|ae| format!(
+                        "  {} {} [{}]\n    {}\n",
+                        self.chars.bullet,
+                        ae.path.to_string_lossy(),
+                        ae.config_key,
+                        ae.error,
+                    ))
+                    .collect::<Vec<String>>()
+                    .join("")
+            );
+            (1, Some(error))
+        };
+        Exit {
+            status,
+            message: None,
+            error,
+        }
+    }
+
+    fn run_one_tidier(
+        &mut self,
+        all_paths: Vec<basepaths::Paths>,
+        t: &filter::Filter,
+    ) -> Option<Vec<ActionError>> {
         let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<ActionError> {
             match t.tidy(p, &paths.files) {
                 Ok(Some(true)) => {
@@ -397,10 +471,14 @@ impl<'a> Precious<'a> {
             }
         };
 
-        self.run_parallel(t, runner)
+        self.run_parallel(all_paths, t, runner)
     }
 
-    fn run_one_linter(&mut self, l: &filter::Filter) -> Result<Option<Vec<ActionError>>> {
+    fn run_one_linter(
+        &mut self,
+        all_paths: Vec<basepaths::Paths>,
+        l: &filter::Filter,
+    ) -> Option<Vec<ActionError>> {
         let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<ActionError> {
             match l.lint(p, &paths.files) {
                 Ok(Some(r)) => {
@@ -452,14 +530,19 @@ impl<'a> Precious<'a> {
             }
         };
 
-        self.run_parallel(l, runner)
+        self.run_parallel(all_paths, l, runner)
     }
 
-    fn run_parallel<R>(&mut self, f: &filter::Filter, runner: R) -> Result<Option<Vec<ActionError>>>
+    fn run_parallel<R>(
+        &mut self,
+        all_paths: Vec<basepaths::Paths>,
+        f: &filter::Filter,
+        runner: R,
+    ) -> Option<Vec<ActionError>>
     where
         R: Fn(&Self, &Path, &basepaths::Paths) -> Option<ActionError> + Sync,
     {
-        let map = self.path_map(f)?;
+        let map = self.path_map(all_paths, f);
 
         let mut e: Vec<ActionError> = vec![];
         self.thread_pool.install(|| {
@@ -472,9 +555,9 @@ impl<'a> Precious<'a> {
         });
 
         if e.is_empty() {
-            Ok(None)
+            None
         } else {
-            Ok(Some(e))
+            Some(e)
         }
     }
 
@@ -486,56 +569,27 @@ impl<'a> Precious<'a> {
         }
     }
 
-    fn make_exit(&self, errors: Vec<ActionError>, action: &str) -> Exit {
-        let (status, error) = if errors.is_empty() {
-            (0, None)
-        } else {
-            let red = format!("\x1B[{}m", Color::Red.to_fg_str());
-            let ansi_off = "\x1B[0m";
-            let plural = if errors.len() > 1 { 's' } else { '\0' };
-
-            let error = format!(
-                "{}Error{} when {} files:{}\n{}",
-                red,
-                plural,
-                action,
-                ansi_off,
-                errors
-                    .iter()
-                    .map(|ae| format!(
-                        "  {} {} [{}]\n    {}\n",
-                        self.chars.bullet,
-                        ae.path.to_string_lossy(),
-                        ae.config_key,
-                        ae.error,
-                    ))
-                    .collect::<Vec<String>>()
-                    .join("")
-            );
-            (1, Some(error))
-        };
-        Exit {
-            status,
-            message: None,
-            error,
-        }
-    }
-
-    fn path_map(&mut self, f: &filter::Filter) -> Result<HashMap<PathBuf, basepaths::Paths>> {
+    fn path_map(
+        &mut self,
+        all_paths: Vec<basepaths::Paths>,
+        f: &filter::Filter,
+    ) -> HashMap<PathBuf, basepaths::Paths> {
         if f.run_mode_is(filter::RunMode::Root) {
-            return self.root_as_paths();
+            return self.root_as_paths(all_paths);
         } else if f.run_mode_is(filter::RunMode::Dirs) {
-            return self.dirs();
+            return self.dirs(all_paths);
         }
-        self.files()
+        self.files(all_paths)
     }
 
-    fn root_as_paths(&mut self) -> Result<HashMap<PathBuf, basepaths::Paths>> {
+    fn root_as_paths(
+        &mut self,
+        mut all_paths: Vec<basepaths::Paths>,
+    ) -> HashMap<PathBuf, basepaths::Paths> {
         let mut root_map = HashMap::new();
-        let paths = self.basepaths()?.paths()?;
 
         let mut all: Vec<PathBuf> = vec![];
-        for p in paths.unwrap().iter_mut() {
+        for p in all_paths.iter_mut() {
             all.append(&mut p.files);
         }
 
@@ -544,68 +598,40 @@ impl<'a> Precious<'a> {
             files: all,
         };
         root_map.insert(PathBuf::from("."), root_paths);
-        Ok(root_map)
+        root_map
     }
 
-    fn dirs(&mut self) -> Result<HashMap<PathBuf, basepaths::Paths>> {
+    fn dirs(&mut self, all_paths: Vec<basepaths::Paths>) -> HashMap<PathBuf, basepaths::Paths> {
         let mut map = HashMap::new();
-        let paths = self.basepaths()?.paths()?;
 
-        for p in paths.unwrap() {
+        for p in all_paths {
             map.insert(p.dir.clone(), p);
         }
-        Ok(map)
+        map
     }
 
-    fn files(&mut self) -> Result<HashMap<PathBuf, basepaths::Paths>> {
+    fn files(&mut self, all_paths: Vec<basepaths::Paths>) -> HashMap<PathBuf, basepaths::Paths> {
         let mut map = HashMap::new();
-        let paths = self.basepaths()?.paths()?;
 
-        for p in paths.unwrap() {
+        for p in all_paths {
             for f in p.files.iter() {
                 map.insert(f.clone(), p.clone());
             }
         }
-        Ok(map)
+        map
     }
 
-    fn basepaths(&mut self) -> Result<&mut basepaths::BasePaths> {
-        if self.basepaths.is_none() {
-            let (mode, paths) = self.mode_and_paths_from_args();
-            self.basepaths = Some(basepaths::BasePaths::new(
-                mode,
-                paths,
-                self.cwd.clone(),
-                self.config().exclude.clone(),
-            )?);
-        }
-        Ok(self.basepaths.as_mut().unwrap())
+    fn basepaths(&mut self) -> Result<basepaths::BasePaths> {
+        basepaths::BasePaths::new(self.mode, self.cwd.clone(), self.config.exclude.clone())
     }
 
-    fn mode(&self) -> basepaths::Mode {
-        let (mode, _) = self.mode_and_paths_from_args();
-        mode
-    }
-
-    fn mode_and_paths_from_args(&self) -> (basepaths::Mode, Vec<PathBuf>) {
+    fn paths_from_args(&self) -> Vec<PathBuf> {
         let subc_matches = self.matched_subcommand();
-
-        let mut paths: Vec<PathBuf> = vec![];
-        if subc_matches.is_present("all") {
-            return (basepaths::Mode::All, paths);
-        } else if subc_matches.is_present("git") {
-            return (basepaths::Mode::GitModified, paths);
-        } else if subc_matches.is_present("staged") {
-            return (basepaths::Mode::GitStaged, paths);
-        }
-
-        if !subc_matches.is_present("paths") {
-            panic!("No mode or paths were provided but clap did not return an error");
-        }
-        subc_matches.values_of("paths").unwrap().for_each(|p| {
-            paths.push(PathBuf::from(p));
-        });
-        (basepaths::Mode::FromCli, paths)
+        subc_matches
+            .values_of("paths")
+            .unwrap()
+            .map(PathBuf::from)
+            .collect::<Vec<PathBuf>>()
     }
 
     fn matched_subcommand(&self) -> &ArgMatches<'a> {
@@ -631,20 +657,6 @@ impl<'a> Precious<'a> {
         let mut file = path.to_path_buf();
         file.push("precious.toml");
         file.exists()
-    }
-
-    fn default_config_file(&self) -> PathBuf {
-        let mut file = self.root_dir();
-        file.push("precious.toml");
-        file
-    }
-
-    fn root_dir(&self) -> PathBuf {
-        self.root.as_ref().unwrap().clone()
-    }
-
-    fn config(&self) -> &config::Config {
-        self.config.as_ref().unwrap()
     }
 }
 
@@ -677,9 +689,9 @@ lint_failure_exit_codes = [1]
 
         let p = Precious::new(&matches)?;
         assert_that(&p.chars).is_equal_to(chars::FUN_CHARS);
-        let mut expect_config_file = p.root_dir();
+        let mut expect_config_file = p.root;
         expect_config_file.push("precious.toml");
-        assert_that(&p.config_file.unwrap()).is_equal_to(expect_config_file);
+        assert_that(&p.config_file).is_equal_to(expect_config_file);
         assert_that(&p.quiet).is_equal_to(false);
 
         Ok(())
@@ -716,7 +728,7 @@ lint_failure_exit_codes = [1]
         ])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.config_file.unwrap()).is_equal_to(helper.config_file());
+        assert_that(&p.config_file).is_equal_to(helper.config_file());
 
         Ok(())
     }
@@ -737,7 +749,7 @@ lint_failure_exit_codes = [1]
         let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.root_dir()).is_equal_to(src_dir);
+        assert_that(&p.root).is_equal_to(src_dir);
 
         Ok(())
     }
@@ -757,7 +769,7 @@ lint_failure_exit_codes = [1]
         let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
-        let paths = p.basepaths()?;
+        let mut paths = p.basepaths()?;
 
         let expect = vec![basepaths::Paths {
             dir: PathBuf::from("."),
@@ -766,7 +778,7 @@ lint_failure_exit_codes = [1]
                 .map(PathBuf::from)
                 .collect(),
         }];
-        assert_that(&paths.paths()?).is_equal_to(Some(expect));
+        assert_that(&paths.paths(vec![])?).is_equal_to(Some(expect));
 
         Ok(())
     }
