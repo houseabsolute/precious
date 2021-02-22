@@ -36,11 +36,6 @@ pub struct BasePaths {
     root: PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
-    // The first option tells us whether we've tried to calculate the paths at
-    // all. If it's none, we have not. The second option contains the _result_
-    // of the calculation, which could be None.
-    #[allow(clippy::option_option)]
-    paths: Option<Option<Vec<Paths>>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -71,15 +66,10 @@ impl BasePaths {
             root,
             exclude_globs,
             stashed: false,
-            paths: None,
         })
     }
 
     pub fn paths(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec<Paths>>> {
-        if let Some(paths) = &self.paths {
-            return Ok(paths.clone());
-        }
-
         match self.mode {
             Mode::FromCli => (),
             _ => {
@@ -99,14 +89,42 @@ impl BasePaths {
         };
 
         if files.is_none() {
-            self.paths = Some(None);
             return Ok(None);
         }
 
-        if self.mode == Mode::GitStaged {
-            let res = command::run_command(
+        self.maybe_git_stash()?;
+        Ok(self.files_to_paths(files.unwrap())?)
+    }
+
+    fn maybe_git_stash(&mut self) -> Result<()> {
+        if self.mode != Mode::GitStaged {
+            return Ok(());
+        }
+
+        let res = command::run_command(
+            String::from("git"),
+            ["rev-parse", "--show-toplevel"]
+                .iter()
+                .map(|a| (*a).to_string())
+                .collect(),
+            &HashMap::new(),
+            [0].to_vec(),
+            false,
+            Some(&self.root),
+        )?;
+
+        let stdout = res
+            .stdout
+            .ok_or(BasePathsError::CouldNotDetermineRepoRoot)?;
+        let repo_root = stdout.trim();
+        let mut mm = PathBuf::from(repo_root);
+        mm.push(".git");
+        mm.push("MERGE_MODE");
+
+        if !mm.exists() {
+            command::run_command(
                 String::from("git"),
-                ["rev-parse", "--show-toplevel"]
+                ["stash", "--keep-index"]
                     .iter()
                     .map(|a| (*a).to_string())
                     .collect(),
@@ -115,34 +133,10 @@ impl BasePaths {
                 false,
                 Some(&self.root),
             )?;
+            self.stashed = true;
+        }
 
-            let stdout = res
-                .stdout
-                .ok_or(BasePathsError::CouldNotDetermineRepoRoot)?;
-            let repo_root = stdout.trim();
-            let mut mm = PathBuf::from(repo_root);
-            mm.push(".git");
-            mm.push("MERGE_MODE");
-
-            if !mm.exists() {
-                command::run_command(
-                    String::from("git"),
-                    ["stash", "--keep-index"]
-                        .iter()
-                        .map(|a| (*a).to_string())
-                        .collect(),
-                    &HashMap::new(),
-                    [0].to_vec(),
-                    false,
-                    Some(&self.root),
-                )?;
-                self.stashed = true;
-            }
-        };
-
-        self.paths = Some(self.files_to_paths(files.unwrap())?);
-
-        Ok(self.paths.as_ref().unwrap().clone())
+        Ok(())
     }
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>> {
