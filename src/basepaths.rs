@@ -186,7 +186,7 @@ impl BasePaths {
 
     fn walkdir_files(&self, root: &Path) -> Result<Option<Vec<PathBuf>>> {
         let mut excludes = ignore::overrides::OverrideBuilder::new(root);
-        for e in self.exclude_globs.clone() {
+        for e in &self.exclude_globs {
             excludes.add(&format!("!{}", e))?;
         }
         for d in vcs::dirs() {

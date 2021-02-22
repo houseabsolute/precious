@@ -56,7 +56,7 @@ pub fn run_command(
         return Err(CommandError::ExecutableNotInPath { exe: cmd, path }.into());
     }
 
-    let mut c = process::Command::new(cmd.clone());
+    let mut c = process::Command::new(&cmd);
     for a in args.iter() {
         c.arg(a);
     }
