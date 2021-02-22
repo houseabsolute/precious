@@ -2,7 +2,7 @@ use crate::filter;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -94,8 +94,8 @@ pub enum ConfigError {
 }
 
 impl Config {
-    pub fn new(file: PathBuf) -> Result<Config> {
-        let res = fs::read(&file);
+    pub fn new(file: &Path) -> Result<Config> {
+        let res = fs::read(file);
         if let Err(e) = res {
             return Err(ConfigError::FileCannotBeRead {
                 file: file.to_string_lossy().to_string(),

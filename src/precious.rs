@@ -297,8 +297,7 @@ impl<'a> Precious<'a> {
             default
         };
 
-        let config_file = file.clone();
-        Ok((config::Config::new(file)?, config_file))
+        Ok((config::Config::new(file.as_path())?, file))
     }
 
     fn default_config_file(root: &Path) -> PathBuf {
