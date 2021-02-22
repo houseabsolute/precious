@@ -93,7 +93,7 @@ impl BasePaths {
         }
 
         self.maybe_git_stash()?;
-        Ok(self.files_to_paths(files.unwrap())?)
+        self.files_to_paths(files.unwrap())
     }
 
     fn maybe_git_stash(&mut self) -> Result<()> {
