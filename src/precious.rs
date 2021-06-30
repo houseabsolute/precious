@@ -181,7 +181,7 @@ pub fn init_logger(matches: &ArgMatches) -> Result<(), log::SetLoggerError> {
         log::LevelFilter::Warn
     };
 
-    let level_colors = line_colors.clone().info(Color::Green).debug(Color::Black);
+    let level_colors = line_colors.info(Color::Green).debug(Color::Black);
 
     Dispatch::new()
         .format(move |out, message, record| {
