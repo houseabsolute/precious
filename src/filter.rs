@@ -143,7 +143,7 @@ impl Filter {
             return Ok(None);
         }
 
-        let r = self.implementation.lint(&self.name, &path)?;
+        let r = self.implementation.lint(&self.name, path)?;
         Ok(Some(r))
     }
 
@@ -273,7 +273,7 @@ impl Filter {
                 continue;
             }
 
-            if prev.contains_key(&e.path()) && Self::path_was_changed(&e.path(), &prev)? {
+            if prev.contains_key(&e.path()) && Self::path_was_changed(&e.path(), prev)? {
                 return Ok(true);
             }
 

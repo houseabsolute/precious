@@ -477,7 +477,7 @@ impl Config {
                 continue;
             }
 
-            tidiers.push(self.make_filter(root, &f)?);
+            tidiers.push(self.make_filter(root, f)?);
         }
 
         Ok(tidiers)
@@ -490,7 +490,7 @@ impl Config {
                 continue;
             }
 
-            linters.push(self.make_filter(root, &f)?);
+            linters.push(self.make_filter(root, f)?);
         }
 
         Ok(linters)

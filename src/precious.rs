@@ -271,7 +271,7 @@ impl<'a> Precious<'a> {
 
         let mut root = PathBuf::new();
         for anc in cwd.ancestors() {
-            if Self::is_checkout_root(&anc) {
+            if Self::is_checkout_root(anc) {
                 root.push(anc);
                 return Ok(root);
             }

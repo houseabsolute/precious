@@ -100,7 +100,7 @@ impl TestHelper {
 
     fn create_git_repo(&self) -> Result<()> {
         for p in self.paths.iter() {
-            self.write_file(&p, "some content")?;
+            self.write_file(p, "some content")?;
         }
 
         command::run_command(
