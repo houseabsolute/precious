@@ -1,3 +1,12 @@
+## 0.0.12
+
+* Fix a bug in the debug output. It was not showing the correct cwd for
+  commands where `chdir = true` was set. It always showed the project root
+  directory instead of the directory where the command was run. It _was_
+  running these commands in the right directory. This was solely a bug in the
+  debug output.
+
+
 ## 0.0.11 - 2021-02-20
 
 * Fix a bug in 0.0.10 where when *not* running with `--debug`, precious would

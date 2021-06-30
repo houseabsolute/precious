@@ -62,14 +62,7 @@ impl TestHelper {
         });
 
         let temp = tempdir()?;
-        let root = if cfg!(windows) {
-            temp.path().to_owned()
-        } else {
-            // The temp directory on macOS in GitHub Actions appears to be a
-            // symlink, but canonicalizing on Windows breaks tests for some
-            // reason.
-            fs::canonicalize(temp.path().to_owned())?
-        };
+        let root = maybe_canonicalize(temp.path())?;
         let helper = TestHelper {
             _tempdir: temp,
             root,
@@ -308,4 +301,14 @@ impl Drop for Pushd {
             );
         }
     }
+}
+
+// The temp directory on macOS in GitHub Actions appears to be a symlink, but
+// canonicalizing on Windows breaks tests for some reason.
+pub fn maybe_canonicalize(path: &Path) -> Result<PathBuf> {
+    if cfg!(windows) {
+        return Ok(path.to_owned());
+    }
+
+    Ok(fs::canonicalize(path)?)
 }

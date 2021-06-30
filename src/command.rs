@@ -60,8 +60,11 @@ pub fn run_command(
     for a in args.iter() {
         c.arg(a);
     }
+
+    let mut cwd = env::current_dir()?;
     if let Some(id) = in_dir {
         c.current_dir(id);
+        cwd = id.to_path_buf();
     }
 
     c.envs(env);
@@ -71,7 +74,7 @@ pub fn run_command(
         debug!(
             "Running command [{}] with cwd = {}",
             cstr,
-            env::current_dir()?.to_string_lossy()
+            cwd.to_string_lossy(),
         );
     }
 
@@ -177,10 +180,12 @@ fn signal_from_status(_: process::ExitStatus) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use crate::testhelper;
     use anyhow::Result;
     use spectral::prelude::*;
     use std::collections::HashMap;
     use std::env;
+    use tempfile::tempdir;
 
     #[test]
     fn command_string() {
@@ -270,6 +275,42 @@ mod tests {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn run_command_in_dir() -> Result<()> {
+        // On windows the path we get from `pwd` is a Windows path (C:\...)
+        // but `td.path()` contains a Unix path (/tmp/...). Very confusing.
+        if cfg!(windows) {
+            return Ok(());
+        }
+
+        let td = tempdir()?;
+        let td_path = testhelper::maybe_canonicalize(td.path())?;
+
+        let res = super::run_command(
+            String::from("pwd"),
+            vec![],
+            &HashMap::new(),
+            vec![0],
+            false,
+            Some(td_path.as_ref()),
+        )?;
+        assert_that(&res.exit_code)
+            .named("command exits 0")
+            .is_equal_to(&0);
+
+        assert_that(&res.stdout.is_some())
+            .named("command produced stdout output")
+            .is_true();
+
+        let stdout = res.stdout.unwrap();
+        let stdout_trimmed = stdout.trim_end();
+        assert_that(&stdout_trimmed)
+            .named("command runs in another dir")
+            .is_equal_to(td_path.to_string_lossy().to_string().as_str());
 
         Ok(())
     }
