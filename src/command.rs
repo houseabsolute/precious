@@ -3,6 +3,7 @@ use log::Level::Debug;
 use log::{debug, error, log_enabled};
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::process;
 use thiserror::Error;
@@ -61,11 +62,15 @@ pub fn run_command(
         c.arg(a);
     }
 
-    let mut cwd = env::current_dir()?;
-    if let Some(id) = in_dir {
-        c.current_dir(id);
-        cwd = id.to_path_buf();
-    }
+    // We are canonicalizing this primarily for the benefit of our debugging
+    // output, because otherwise we might see the current dir as just `.`,
+    // which is not helpful.
+    let cwd = if let Some(id) = in_dir {
+        fs::canonicalize(id)?
+    } else {
+        fs::canonicalize(env::current_dir()?)?
+    };
+    c.current_dir(cwd.clone());
 
     c.envs(env);
 
