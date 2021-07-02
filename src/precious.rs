@@ -7,11 +7,12 @@ use anyhow::{Error, Result};
 use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
-use log::{debug, error};
+use log::{debug, error, info};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -429,48 +430,49 @@ impl<'a> Precious<'a> {
         all_paths: Vec<basepaths::Paths>,
         t: &filter::Filter,
     ) -> Option<Vec<ActionError>> {
-        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<ActionError> {
-            match t.tidy(p, &paths.files) {
-                Ok(Some(true)) => {
-                    if !s.quiet {
+        let runner =
+            |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<Result<(), ActionError>> {
+                match t.tidy(p, &paths.files) {
+                    Ok(Some(true)) => {
+                        if !s.quiet {
+                            println!(
+                                "{} Tidied by {}:    {}",
+                                s.chars.tidied,
+                                t.name,
+                                p.to_string_lossy()
+                            );
+                        }
+                        Some(Ok(()))
+                    }
+                    Ok(Some(false)) => {
+                        if !s.quiet {
+                            println!(
+                                "{} Unchanged by {}: {}",
+                                s.chars.unchanged,
+                                t.name,
+                                p.to_string_lossy()
+                            );
+                        }
+                        Some(Ok(()))
+                    }
+                    Ok(None) => None,
+                    Err(e) => {
                         println!(
-                            "{} Tidied by {}:    {}",
-                            s.chars.tidied,
+                            "{} error {}: {}",
+                            s.chars.execution_error,
                             t.name,
                             p.to_string_lossy()
                         );
+                        Some(Err(ActionError {
+                            error: format!("{:#}", e),
+                            config_key: t.config_key(),
+                            path: p.to_owned(),
+                        }))
                     }
-                    None
                 }
-                Ok(Some(false)) => {
-                    if !s.quiet {
-                        println!(
-                            "{} Unchanged by {}: {}",
-                            s.chars.unchanged,
-                            t.name,
-                            p.to_string_lossy()
-                        );
-                    }
-                    None
-                }
-                Ok(None) => None,
-                Err(e) => {
-                    println!(
-                        "{} error {}: {}",
-                        s.chars.execution_error,
-                        t.name,
-                        p.to_string_lossy()
-                    );
-                    Some(ActionError {
-                        error: format!("{:#}", e),
-                        config_key: t.config_key(),
-                        path: p.to_owned(),
-                    })
-                }
-            }
-        };
+            };
 
-        self.run_parallel(all_paths, t, runner)
+        self.run_parallel("Tidying", all_paths, t, runner)
     }
 
     fn run_one_linter(
@@ -478,85 +480,106 @@ impl<'a> Precious<'a> {
         all_paths: Vec<basepaths::Paths>,
         l: &filter::Filter,
     ) -> Option<Vec<ActionError>> {
-        let runner = |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<ActionError> {
-            match l.lint(p, &paths.files) {
-                Ok(Some(r)) => {
-                    if r.ok {
-                        if !s.quiet {
+        let runner =
+            |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<Result<(), ActionError>> {
+                match l.lint(p, &paths.files) {
+                    Ok(Some(r)) => {
+                        if r.ok {
+                            if !s.quiet {
+                                println!(
+                                    "{} Passed {}: {}",
+                                    s.chars.lint_free,
+                                    l.name,
+                                    p.to_string_lossy()
+                                );
+                            }
+                            Some(Ok(()))
+                        } else {
                             println!(
-                                "{} Passed {}: {}",
-                                s.chars.lint_free,
+                                "{} Failed {}: {}",
+                                s.chars.lint_dirty,
                                 l.name,
                                 p.to_string_lossy()
                             );
+                            if let Some(s) = r.stdout {
+                                println!("{}", s);
+                            }
+                            if let Some(s) = r.stderr {
+                                println!("{}", s);
+                            }
+
+                            Some(Err(ActionError {
+                                error: "linting failed".into(),
+                                config_key: l.config_key(),
+                                path: p.to_owned(),
+                            }))
                         }
-                        None
-                    } else {
+                    }
+                    Ok(None) => None,
+                    Err(e) => {
                         println!(
-                            "{} Failed {}: {}",
-                            s.chars.lint_dirty,
+                            "{} error {}: {}",
+                            s.chars.execution_error,
                             l.name,
                             p.to_string_lossy()
                         );
-                        if let Some(s) = r.stdout {
-                            println!("{}", s);
-                        }
-                        if let Some(s) = r.stderr {
-                            println!("{}", s);
-                        }
-
-                        Some(ActionError {
-                            error: "linting failed".into(),
+                        Some(Err(ActionError {
+                            error: format!("{:#}", e),
                             config_key: l.config_key(),
                             path: p.to_owned(),
-                        })
+                        }))
                     }
                 }
-                Ok(None) => None,
-                Err(e) => {
-                    println!(
-                        "{} error {}: {}",
-                        s.chars.execution_error,
-                        l.name,
-                        p.to_string_lossy()
-                    );
-                    Some(ActionError {
-                        error: format!("{:#}", e),
-                        config_key: l.config_key(),
-                        path: p.to_owned(),
-                    })
-                }
-            }
-        };
+            };
 
-        self.run_parallel(all_paths, l, runner)
+        self.run_parallel("Linting", all_paths, l, runner)
     }
 
     fn run_parallel<R>(
         &mut self,
+        what: &str,
         all_paths: Vec<basepaths::Paths>,
         f: &filter::Filter,
         runner: R,
     ) -> Option<Vec<ActionError>>
     where
-        R: Fn(&Self, &Path, &basepaths::Paths) -> Option<ActionError> + Sync,
+        R: Fn(&Self, &Path, &basepaths::Paths) -> Option<Result<(), ActionError>> + Sync,
     {
         let map = self.path_map(all_paths, f);
 
-        let mut e: Vec<ActionError> = vec![];
+        let start = Instant::now();
+        let mut results: Vec<Result<(), ActionError>> = vec![];
         self.thread_pool.install(|| {
-            e.append(
+            results.append(
                 &mut map
                     .par_iter()
                     .filter_map(|(p, paths)| runner(self, p, paths))
-                    .collect::<Vec<ActionError>>(),
+                    .collect::<Vec<Result<(), ActionError>>>(),
             );
         });
 
-        if e.is_empty() {
+        if !results.is_empty() {
+            info!(
+                "{} with {} on {} path{}, elapsed time = {}",
+                what,
+                f.name,
+                results.len(),
+                if results.len() > 1 { "s" } else { "" },
+                format_duration(&start.elapsed())
+            );
+        }
+
+        let errors = results
+            .into_iter()
+            .filter_map(|r| match r {
+                Ok(_) => None,
+                Err(e) => Some(e),
+            })
+            .collect::<Vec<ActionError>>();
+        if errors.is_empty() {
             None
         } else {
-            Some(e)
+            Some(errors)
         }
     }
 
@@ -659,10 +682,41 @@ impl<'a> Precious<'a> {
     }
 }
 
+// I tried the humantime crate but it doesn't do what I want. It formats each
+// element separately ("1s 243ms 179us 984ns"), which is _way_ more detail
+// than I want for this. This algorithm will format to the most appropriate of:
+//
+//    Xm Y.YYs
+//    X.XXs
+//    X.XXms
+//    X.XXus
+//    X.XXns
+fn format_duration(d: &Duration) -> String {
+    let s = (d.as_secs_f64() * 100.0).round() / 100.0;
+
+    if s >= 60.0 {
+        let minutes = (s / 60.0).floor() as u64;
+        let secs = s - (minutes as f64 * 60.0);
+        return format!("{}m {:.2}s", minutes, secs);
+    } else if s >= 0.01 {
+        return format!("{:.2}s", s);
+    }
+
+    let n = d.as_nanos();
+    if n > 1_000_000 {
+        return format!("{:.2}ms", n as f64 / 1_000_000.0);
+    } else if n > 1_000 {
+        return format!("{:.2}us", n as f64 / 1_000.0);
+    }
+
+    format!("{}ns", n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testhelper;
+    use itertools::Itertools;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
     use spectral::prelude::*;
@@ -878,5 +932,60 @@ lint_failure_exit_codes = [1]
         assert_that(&status).is_equal_to(1);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_format_duration() {
+        let mut tests: HashMap<Duration, &'static str> = HashMap::new();
+        tests.insert(Duration::new(0, 24), "24ns");
+        tests.insert(Duration::new(0, 124), "124ns");
+        tests.insert(Duration::new(0, 1_243), "1.24us");
+        tests.insert(Duration::new(0, 12_443), "12.44us");
+        tests.insert(Duration::new(0, 124_439), "124.44us");
+        tests.insert(Duration::new(0, 1_244_392), "1.24ms");
+        tests.insert(Duration::new(0, 12_443_924), "0.01s");
+        tests.insert(Duration::new(0, 124_439_246), "0.12s");
+        tests.insert(Duration::new(1, 1), "1.00s");
+        tests.insert(Duration::new(1, 12), "1.00s");
+        tests.insert(Duration::new(1, 124), "1.00s");
+        tests.insert(Duration::new(1, 1_243), "1.00s");
+        tests.insert(Duration::new(1, 12_443), "1.00s");
+        tests.insert(Duration::new(1, 124_439), "1.00s");
+        tests.insert(Duration::new(1, 1_244_392), "1.00s");
+        tests.insert(Duration::new(1, 12_443_926), "1.01s");
+        tests.insert(Duration::new(1, 124_439_267), "1.12s");
+        tests.insert(Duration::new(59, 1), "59.00s");
+        tests.insert(Duration::new(59, 1_000_000), "59.00s");
+        tests.insert(Duration::new(59, 10_000_000), "59.01s");
+        tests.insert(Duration::new(59, 90_000_000), "59.09s");
+        tests.insert(Duration::new(59, 99_999_999), "59.10s");
+        tests.insert(Duration::new(59, 100_000_000), "59.10s");
+        tests.insert(Duration::new(59, 900_000_000), "59.90s");
+        tests.insert(Duration::new(59, 990_000_000), "59.99s");
+        tests.insert(Duration::new(59, 999_000_000), "1m 0.00s");
+        tests.insert(Duration::new(59, 999_999_999), "1m 0.00s");
+        tests.insert(Duration::new(60, 0), "1m 0.00s");
+        tests.insert(Duration::new(60, 10_000_000), "1m 0.01s");
+        tests.insert(Duration::new(60, 100_000_000), "1m 0.10s");
+        tests.insert(Duration::new(60, 110_000_000), "1m 0.11s");
+        tests.insert(Duration::new(60, 990_000_000), "1m 0.99s");
+        tests.insert(Duration::new(60, 999_000_000), "1m 1.00s");
+        tests.insert(Duration::new(61, 10_000_000), "1m 1.01s");
+        tests.insert(Duration::new(61, 100_000_000), "1m 1.10s");
+        tests.insert(Duration::new(61, 120_000_000), "1m 1.12s");
+        tests.insert(Duration::new(61, 990_000_000), "1m 1.99s");
+        tests.insert(Duration::new(61, 999_000_000), "1m 2.00s");
+        tests.insert(Duration::new(120, 99_000_000), "2m 0.10s");
+        tests.insert(Duration::new(120, 530_000_000), "2m 0.53s");
+        tests.insert(Duration::new(120, 990_000_000), "2m 0.99s");
+        tests.insert(Duration::new(152, 240_123_456), "2m 32.24s");
+
+        for k in tests.keys().sorted() {
+            let f = format_duration(k);
+            let e = tests.get(k).unwrap().to_string();
+            assert_that(&f)
+                .named(&format!("{}s {}ns", k.as_secs(), k.as_nanos()))
+                .is_equal_to(&e);
+        }
     }
 }

@@ -1,5 +1,9 @@
 ## 0.0.12
 
+* The verbose and debugging level output now includes timing information on
+  each linter and tidier that is run. This is helpful if you want to figure
+  out why linting or tidying is slower than expected.
+
 * Fix a bug in the debug output. It was not showing the correct cwd for
   commands where `chdir = true` was set. It always showed the project root
   directory instead of the directory where the command was run. It _was_
