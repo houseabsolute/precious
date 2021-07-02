@@ -1,4 +1,4 @@
-## 0.0.12
+## 0.1.0 - 2021-07-02
 
 * The verbose and debugging level output now includes timing information on
   each linter and tidier that is run. This is helpful if you want to figure
