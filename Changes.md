@@ -4,7 +4,7 @@
   each linter and tidier that is run. This is helpful if you want to figure
   out why linting or tidying is slower than expected.
 
-* Fix a bug in the debug output. It was not showing the correct cwd for
+* Fixed a bug in the debug output. It was not showing the correct cwd for
   commands where `chdir = true` was set. It always showed the project root
   directory instead of the directory where the command was run. It _was_
   running these commands in the right directory. This was solely a bug in the
@@ -13,8 +13,8 @@
 
 ## 0.0.11 - 2021-02-20
 
-* Fix a bug in 0.0.10 where when *not* running with `--debug`, precious would
-  not honor the `expect_stderr = true` configuration, and would instead
+* Fixed a bug in 0.0.10 where when *not* running with `--debug`, precious
+  would not honor the `expect_stderr = true` configuration, and would instead
   unconditionally treat stderr output as an error.
 
 
@@ -36,7 +36,7 @@
   parallel threads are run. The default is to run one thread per available
   core. Requested by Shane Warden. GH #7.
 
-* Fix a bug where running precious in "git staged mode" (`precious lint
+* Fixed a bug where running precious in "git staged mode" (`precious lint
   --staged`) would cause breakage with merge commits that were the result of
   resolving a merge conflict. Basically, you'd get the commit but git would no
   longer know it was merging a commit, because precious was running `git
