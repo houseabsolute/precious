@@ -50,7 +50,7 @@ impl TestHelper {
                             .map(|a| a.to_string())
                             .collect(),
                         &HashMap::new(),
-                        [0].to_vec(),
+                        &[0],
                         false,
                         None,
                     ) {
@@ -100,7 +100,7 @@ impl TestHelper {
             "git".to_string(),
             ["init"].iter().map(|a| a.to_string()).collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root),
         )?;
@@ -115,7 +115,7 @@ impl TestHelper {
                 .map(|a| a.to_string())
                 .collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root),
         )?;
@@ -128,7 +128,7 @@ impl TestHelper {
                 .map(|a| a.to_string())
                 .collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root),
         )?;
@@ -155,7 +155,7 @@ impl TestHelper {
             "git".to_string(),
             ["add", "."].iter().map(|a| a.to_string()).collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root()),
         )?;
@@ -170,7 +170,7 @@ impl TestHelper {
                 .map(|a| a.to_string())
                 .collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root()),
         )?;
@@ -209,7 +209,7 @@ generated.*
             "git".to_string(),
             args.iter().map(|a| a.to_string()).collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root()),
         )?;
@@ -229,7 +229,7 @@ generated.*
                 .map(|a| a.to_string())
                 .collect(),
             &HashMap::new(),
-            expect_codes,
+            &expect_codes,
             true,
             Some(&self.root()),
         )?;

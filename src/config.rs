@@ -281,10 +281,10 @@ impl Config {
         let n = filter::Command::build(filter::CommandParams {
             root: root.to_owned(),
             name: name.to_owned(),
-            typ: command.core.typ.clone(),
+            typ: command.core.typ,
             include: command.core.include.clone(),
             exclude: command.core.exclude.clone(),
-            run_mode: command.core.run_mode.clone(),
+            run_mode: command.core.run_mode,
             chdir: command.chdir,
             cmd: command.core.cmd.clone(),
             env: command.core.env.clone(),

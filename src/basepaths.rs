@@ -108,7 +108,7 @@ impl BasePaths {
                 .map(|a| (*a).to_string())
                 .collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root),
         )?;
@@ -129,7 +129,7 @@ impl BasePaths {
                     .map(|a| (*a).to_string())
                     .collect(),
                 &HashMap::new(),
-                [0].to_vec(),
+                &[0],
                 false,
                 Some(&self.root),
             )?;
@@ -218,7 +218,7 @@ impl BasePaths {
             String::from("git"),
             args.iter().map(|a| String::from(*a)).collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root),
         )?;
@@ -312,7 +312,7 @@ impl Drop for BasePaths {
             String::from("git"),
             ["stash", "pop"].iter().map(|a| (*a).to_string()).collect(),
             &HashMap::new(),
-            [0].to_vec(),
+            &[0],
             false,
             Some(&self.root),
         );

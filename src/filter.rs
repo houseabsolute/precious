@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use thiserror::Error;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum FilterType {
     #[serde(rename = "lint")]
     Lint,
@@ -30,7 +30,7 @@ impl FilterType {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum RunMode {
     #[serde(rename = "files")]
     Files,
@@ -381,15 +381,16 @@ impl Command {
             }
         }
 
+        let cmd = replace_root(params.cmd, &params.root);
         Ok(Filter {
-            root: params.root.clone(),
+            root: params.root,
             name: params.name,
             typ: params.typ,
             includer: path_matcher::Matcher::new(&params.include)?,
             excluder: path_matcher::Matcher::new(&params.exclude)?,
-            run_mode: params.run_mode.clone(),
+            run_mode: params.run_mode,
             implementation: Box::new(Command {
-                cmd: replace_root(params.cmd, &params.root),
+                cmd,
                 env: params.env,
                 chdir: params.chdir,
                 lint_flags: if params.lint_flags.is_empty() {
@@ -486,11 +487,12 @@ impl FilterImplementation for Command {
             cmd.join(" "),
         );
 
+        let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
         match command::run_command(
             cmd.remove(0),
             cmd,
             &self.env,
-            self.ok_exit_codes.iter().cloned().collect(),
+            &ok_exit_codes,
             self.expect_stderr,
             self.in_dir(path),
         ) {
@@ -509,11 +511,12 @@ impl FilterImplementation for Command {
             cmd.join(" "),
         );
 
+        let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
         match command::run_command(
             cmd.remove(0),
             cmd,
             &self.env,
-            self.ok_exit_codes.iter().cloned().collect(),
+            &ok_exit_codes,
             self.expect_stderr,
             self.in_dir(path),
         ) {

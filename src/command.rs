@@ -45,7 +45,7 @@ pub fn run_command(
     cmd: String,
     args: Vec<String>,
     env: &HashMap<String, String>,
-    ok_exit_codes: Vec<i32>,
+    ok_exit_codes: &[i32],
     expect_stderr: bool,
     in_dir: Option<&Path>,
 ) -> Result<CommandResult> {
@@ -119,7 +119,7 @@ pub fn run_command(
 
 fn output_from_command(
     mut c: process::Command,
-    ok_exit_codes: Vec<i32>,
+    ok_exit_codes: &[i32],
     cmd: &str,
     args: &[String],
 ) -> Result<process::Output> {
@@ -219,7 +219,7 @@ mod tests {
             String::from("echo"),
             vec![String::from("foo")],
             &HashMap::new(),
-            vec![0],
+            &[0],
             false,
             None,
         )?;
@@ -234,7 +234,7 @@ mod tests {
             String::from("sh"),
             vec![String::from("-c"), format!("echo ${}", env_key)],
             &env,
-            vec![0],
+            &[0],
             false,
             None,
         )?;
@@ -257,7 +257,7 @@ mod tests {
             String::from("sh"),
             vec![String::from("-c"), String::from("exit 32")],
             &HashMap::new(),
-            vec![0],
+            &[0],
             false,
             None,
         );
@@ -299,7 +299,7 @@ mod tests {
             String::from("pwd"),
             vec![],
             &HashMap::new(),
-            vec![0],
+            &[0],
             false,
             Some(td_path.as_ref()),
         )?;
@@ -324,14 +324,7 @@ mod tests {
     fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
         let args = vec![String::from("--arg"), String::from("42")];
-        let res = super::run_command(
-            String::from(exe),
-            args,
-            &HashMap::new(),
-            vec![0],
-            false,
-            None,
-        );
+        let res = super::run_command(String::from(exe), args, &HashMap::new(), &[0], false, None);
         assert_that!(res.is_err());
         if let Err(e) = res {
             assert_that(&e.to_string()).contains(
