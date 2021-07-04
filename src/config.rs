@@ -1,483 +1,264 @@
 use crate::filter;
 use anyhow::Result;
+use serde::de;
+use serde::de::Deserializer;
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
+use std::marker::PhantomData;
 use std::path::Path;
 use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct Server {
     port: u16,
 }
 
-#[derive(Debug)]
-pub struct Command {
-    chdir: bool,
-    lint_flags: Vec<String>,
-    tidy_flags: Vec<String>,
-    path_flag: String,
-    ok_exit_codes: Vec<u8>,
-    lint_failure_exit_codes: Vec<u8>,
-    expect_stderr: bool,
-}
-
-#[derive(Debug)]
-enum FilterImplementation {
-    C(Command),
-    S(Server),
-}
-
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct FilterCore {
-    name: String,
+    #[serde(rename = "type")]
     typ: filter::FilterType,
+    #[serde(deserialize_with = "string_or_seq_string")]
     include: Vec<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
     exclude: Vec<String>,
+    #[serde(default = "default_run_mode")]
     run_mode: filter::RunMode,
+    #[serde(deserialize_with = "string_or_seq_string")]
     cmd: Vec<String>,
+    #[serde(default)]
     env: HashMap<String, String>,
 }
 
-#[derive(Debug)]
-pub struct Filter {
+#[derive(Debug, Deserialize)]
+pub struct Command {
+    #[serde(flatten)]
     core: FilterCore,
-    implementation: FilterImplementation,
+    #[serde(default)]
+    chdir: bool,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
+    lint_flags: Vec<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
+    tidy_flags: Vec<String>,
+    #[serde(default = "empty_string")]
+    path_flag: String,
+    #[serde(deserialize_with = "u8_or_seq_u8")]
+    ok_exit_codes: Vec<u8>,
+    #[serde(default)]
+    #[serde(deserialize_with = "u8_or_seq_u8")]
+    lint_failure_exit_codes: Vec<u8>,
+    #[serde(default)]
+    expect_stderr: bool,
 }
 
-#[derive(Debug)]
+fn default_run_mode() -> filter::RunMode {
+    filter::RunMode::Files
+}
+
+fn empty_string() -> String {
+    String::new()
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
+    #[serde(default)]
     pub exclude: Vec<String>,
-    filters: Vec<Filter>,
+    commands: HashMap<String, Command>,
 }
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("File at {file:} cannot be read: {error:}")]
     FileCannotBeRead { file: String, error: std::io::Error },
+}
 
-    #[error("File at {file:} cannot be parsed as TOML: {error:}")]
-    FileCannotBeParsed {
-        file: String,
-        error: toml::de::Error,
-    },
+// Copied from https://stackoverflow.com/a/43627388 - CC-BY-SA 3.0
+fn string_or_seq_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct StringOrVec(PhantomData<Vec<String>>);
 
-    #[error("File at {file:} does not contain a TOML table")]
-    FileIsNotToml { file: String },
+    impl<'de> de::Visitor<'de> for StringOrVec {
+        type Value = Vec<String>;
 
-    #[error(
-        "Found an invalid value for an array value of the {key:} key. Expected an array of {want:} but this is a {got:}."
-    )]
-    InvalidTomlArrayValue {
-        key: &'static str,
-        want: &'static str,
-        got: String,
-    },
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("string or list of strings")
+        }
 
-    #[error("Found an invalid value for the {key:} key. Expected {want:} but got {got:}.")]
-    InvalidTomlValue {
-        key: &'static str,
-        want: &'static str,
-        got: String,
-    },
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(vec![value.to_owned()])
+        }
 
-    #[error("You must define a {key:} for the {name:} entry.")]
-    MissingTomlKey { key: &'static str, name: String },
+        fn visit_seq<S>(self, visitor: S) -> Result<Self::Value, S::Error>
+        where
+            S: de::SeqAccess<'de>,
+        {
+            Deserialize::deserialize(de::value::SeqAccessDeserializer::new(visitor))
+        }
+    }
 
-    #[error("Expected a value from {min:} to {max:} but got {val:}.")]
-    IntegerConversionError { min: i64, max: i64, val: i64 },
+    deserializer.deserialize_any(StringOrVec(PhantomData))
+}
 
-    #[error("You must define at least one filter")]
-    NoFiltersDefined,
+fn u8_or_seq_u8<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct U8OrVec(PhantomData<Vec<u8>>);
 
-    #[error("Servers are not yet implemented")]
-    ServersAreNotYetImplemented,
+    impl<'de> de::Visitor<'de> for U8OrVec {
+        type Value = Vec<u8>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("integer or list of integers")
+        }
+
+        fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value < 0 {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Signed(value as i64),
+                    &"an integer from 0-255",
+                ));
+            }
+
+            Ok(vec![value as u8])
+        }
+
+        fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value < 0 || value > std::u8::MAX as i16 {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Signed(value as i64),
+                    &"an integer from 0-255",
+                ));
+            }
+
+            Ok(vec![value as u8])
+        }
+
+        fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value < 0 || value > std::u8::MAX as i32 {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Signed(value as i64),
+                    &"an integer from 0-255",
+                ));
+            }
+
+            Ok(vec![value as u8])
+        }
+
+        fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value < 0 || value > std::u8::MAX as i64 {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Signed(value as i64),
+                    &"an integer from 0-255",
+                ));
+            }
+
+            Ok(vec![value as u8])
+        }
+
+        fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(vec![value])
+        }
+
+        fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value > std::u8::MAX as u16 {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Unsigned(value as u64),
+                    &"an integer from 0-255",
+                ));
+            }
+
+            Ok(vec![value as u8])
+        }
+
+        fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value > std::u8::MAX as u32 {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Unsigned(value as u64),
+                    &"an integer from 0-255",
+                ));
+            }
+
+            Ok(vec![value as u8])
+        }
+
+        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if value > std::u8::MAX as u64 {
+                return Err(de::Error::invalid_type(
+                    de::Unexpected::Unsigned(value as u64),
+                    &"an integer from 0-255",
+                ));
+            }
+
+            Ok(vec![value as u8])
+        }
+
+        fn visit_seq<S>(self, visitor: S) -> Result<Self::Value, S::Error>
+        where
+            S: de::SeqAccess<'de>,
+        {
+            Deserialize::deserialize(de::value::SeqAccessDeserializer::new(visitor))
+        }
+    }
+
+    deserializer.deserialize_any(U8OrVec(PhantomData))
 }
 
 impl Config {
     pub fn new(file: &Path) -> Result<Config> {
-        let res = fs::read(file);
-        if let Err(e) = res {
-            return Err(ConfigError::FileCannotBeRead {
-                file: file.to_string_lossy().to_string(),
-                error: e,
-            }
-            .into());
-        }
-
-        let bytes = res.unwrap();
-        let raw = String::from_utf8_lossy(&bytes);
-        let root: toml::Value =
-            toml::from_str(&raw).map_err(|e| ConfigError::FileCannotBeParsed {
-                file: file.to_string_lossy().to_string(),
-                error: e,
-            })?;
-        if !root.is_table() {
-            return Err(ConfigError::FileIsNotToml {
-                file: file.to_string_lossy().to_string(),
-            }
-            .into());
-        }
-
-        let table = root.as_table().unwrap();
-        let filters = Self::toml_filters(table)?;
-        if filters.is_empty() {
-            return Err(ConfigError::NoFiltersDefined.into());
-        }
-
-        Ok(Config {
-            exclude: Self::toml_string_vec(table, "exclude")?,
-            filters,
-        })
-    }
-
-    fn toml_filters(table: &toml::value::Table) -> Result<Vec<Filter>> {
-        let mut filters: Vec<Filter> = vec![];
-        let mut c = Self::toml_filters_by_key("commands", table, Self::toml_to_command)?;
-        filters.append(&mut c);
-        let mut s = Self::toml_filters_by_key("servers", table, Self::toml_to_server)?;
-        filters.append(&mut s);
-
-        Ok(filters)
-    }
-
-    fn toml_filters_by_key(
-        key: &'static str,
-        table: &toml::value::Table,
-        constructor: fn(String, &toml::value::Table) -> Result<Filter>,
-    ) -> Result<Vec<Filter>> {
-        let mut constructed: Vec<Filter> = vec![];
-        if table.contains_key(key) {
-            let filters = table.get(key).unwrap();
-            if filters.is_table() {
-                for (name, f) in filters.as_table().unwrap() {
-                    if f.is_table() {
-                        constructed.push(constructor(name.to_string(), f.as_table().unwrap())?)
-                    } else {
-                        return Err(ConfigError::InvalidTomlValue {
-                            key,
-                            want: "a table",
-                            got: f.type_str().to_string(),
-                        }
-                        .into());
-                    }
-                }
-            } else {
-                return Err(ConfigError::InvalidTomlValue {
-                    key,
-                    want: "an array of tables",
-                    got: filters.type_str().to_string(),
+        match fs::read(file) {
+            Err(e) => {
+                return Err(ConfigError::FileCannotBeRead {
+                    file: file.to_string_lossy().to_string(),
+                    error: e,
                 }
                 .into());
             }
+            Ok(bytes) => Ok(toml::from_slice(&bytes)?),
         }
-
-        Ok(constructed)
-    }
-
-    fn toml_to_command(name: String, table: &toml::value::Table) -> Result<Filter> {
-        let chdir = Self::toml_bool(table, "chdir")?;
-        let lint_flags = Self::toml_string_vec(table, "lint_flags")?;
-        let tidy_flags = Self::toml_string_vec(table, "tidy_flags")?;
-        let path_flag = Self::toml_string(table, "path_flag")?;
-        let ok_exit_codes = Self::toml_u8_vec(table, "ok_exit_codes")?;
-        let lint_failure_exit_codes = Self::toml_u8_vec(table, "lint_failure_exit_codes")?;
-        let expect_stderr = Self::toml_bool(table, "expect_stderr")?;
-
-        if ok_exit_codes.is_empty() {
-            return Err(ConfigError::MissingTomlKey {
-                key: "ok_exit_codes",
-                name,
-            }
-            .into());
-        }
-
-        let toml_typ = Self::toml_string(table, "type")?;
-        if toml_typ != "tidy" && lint_failure_exit_codes.is_empty() {
-            return Err(ConfigError::MissingTomlKey {
-                key: "lint_failure_exit_codes",
-                name,
-            }
-            .into());
-        }
-
-        Ok(Filter {
-            core: Self::toml_to_filter_core(name, table)?,
-            implementation: FilterImplementation::C(Command {
-                chdir,
-                lint_flags,
-                tidy_flags,
-                path_flag,
-                ok_exit_codes,
-                lint_failure_exit_codes,
-                expect_stderr,
-            }),
-        })
-    }
-
-    fn toml_to_server(name: String, table: &toml::value::Table) -> Result<Filter> {
-        let port = Self::toml_u16(table, "port")?;
-
-        Ok(Filter {
-            core: Self::toml_to_filter_core(name, table)?,
-            implementation: FilterImplementation::S(Server { port }),
-        })
-    }
-
-    fn toml_to_filter_core(name: String, table: &toml::value::Table) -> Result<FilterCore> {
-        let toml_typ = Self::toml_string(table, "type")?;
-        let typ = match toml_typ.as_str() {
-            "lint" => filter::FilterType::Lint,
-            "tidy" => filter::FilterType::Tidy,
-            "both" => filter::FilterType::Both,
-            s => {
-                return Err(ConfigError::InvalidTomlValue {
-                    key: "type",
-                    want: r#"one of "lint", "tidy", or "both""#,
-                    got: Self::string_or_empty(s),
-                }
-                .into());
-            }
-        };
-        let include = Self::toml_string_vec(table, "include")?;
-        let exclude = Self::toml_string_vec(table, "exclude")?;
-        let toml_run_mode = Self::toml_string(table, "run_mode")?;
-        let cmd = Self::toml_string_vec(table, "cmd")?;
-        let env = Self::toml_string_string_hashmap(table, "env")?;
-
-        if include.is_empty() {
-            return Err(ConfigError::MissingTomlKey {
-                key: "include",
-                name,
-            }
-            .into());
-        }
-
-        let run_mode = match toml_run_mode.as_str() {
-            "" => filter::RunMode::Files,
-            "files" => filter::RunMode::Files,
-            "dirs" => filter::RunMode::Dirs,
-            "root" => filter::RunMode::Root,
-            _ => {
-                return Err(ConfigError::InvalidTomlValue {
-                    key: "run_mode",
-                    want: r#"one of "files", "dirs", or "root""#,
-                    got: Self::string_or_empty(toml_run_mode.as_str()),
-                }
-                .into());
-            }
-        };
-
-        if cmd.is_empty() {
-            return Err(ConfigError::MissingTomlKey { key: "cmd", name }.into());
-        }
-
-        Ok(FilterCore {
-            name,
-            typ,
-            include,
-            exclude,
-            run_mode,
-            cmd,
-            env,
-        })
-    }
-
-    fn toml_string_vec(table: &toml::value::Table, key: &'static str) -> Result<Vec<String>> {
-        if !table.contains_key(key) {
-            return Ok(Vec::new());
-        }
-
-        let val = table.get(key).unwrap();
-        if val.is_str() {
-            return Ok(vec![val.as_str().unwrap().to_string()]);
-        } else if val.is_array() {
-            let mut i: Vec<String> = vec![];
-            for v in val.as_array().unwrap() {
-                if v.is_str() {
-                    i.push(v.as_str().unwrap().to_string());
-                } else {
-                    return Err(ConfigError::InvalidTomlArrayValue {
-                        key,
-                        want: "a string",
-                        got: v.type_str().to_string(),
-                    }
-                    .into());
-                }
-            }
-            return Ok(i);
-        }
-
-        Err(ConfigError::InvalidTomlValue {
-            key,
-            want: "a string or an array of strings",
-            got: val.type_str().to_string(),
-        }
-        .into())
-    }
-
-    fn toml_string_string_hashmap(
-        table: &toml::value::Table,
-        key: &'static str,
-    ) -> Result<HashMap<String, String>> {
-        let mut hm = HashMap::new();
-        if !table.contains_key(key) {
-            return Ok(hm);
-        }
-
-        let subtable = table.get(key).unwrap();
-        if !subtable.is_table() {
-            return Err(ConfigError::InvalidTomlValue {
-                key,
-                want: "a table",
-                got: subtable.type_str().to_string(),
-            }
-            .into());
-        }
-
-        for (name, v) in subtable.as_table().unwrap() {
-            if !v.is_str() {
-                return Err(ConfigError::InvalidTomlValue {
-                    key,
-                    want: "a string",
-                    got: v.type_str().to_string(),
-                }
-                .into());
-            }
-            hm.insert(name.to_string(), v.as_str().unwrap().to_string());
-        }
-
-        Ok(hm)
-    }
-
-    fn toml_string(table: &toml::value::Table, key: &'static str) -> Result<String> {
-        if !table.contains_key(key) {
-            return Ok(String::from(""));
-        }
-
-        let val = table.get(key).unwrap();
-        if val.is_str() {
-            return Ok(val.as_str().unwrap().to_string());
-        }
-
-        Err(ConfigError::InvalidTomlValue {
-            key,
-            want: "a string",
-            got: val.type_str().to_string(),
-        }
-        .into())
-    }
-
-    fn toml_bool(table: &toml::value::Table, key: &'static str) -> Result<bool> {
-        if !table.contains_key(key) {
-            return Ok(false);
-        }
-
-        let val = table.get(key).unwrap();
-        if val.is_bool() {
-            return Ok(val.as_bool().unwrap());
-        }
-
-        Err(ConfigError::InvalidTomlValue {
-            key,
-            want: "a bool",
-            got: val.type_str().to_string(),
-        }
-        .into())
-    }
-
-    fn toml_u8_vec(table: &toml::value::Table, key: &'static str) -> Result<Vec<u8>> {
-        if !table.contains_key(key) {
-            return Ok(Vec::new());
-        }
-
-        let val = table.get(key).unwrap();
-        if val.is_integer() {
-            return Ok(vec![Self::toml_int_to_u8(val.as_integer().unwrap())?]);
-        } else if val.is_array() {
-            let mut i: Vec<u8> = vec![];
-            for v in val.as_array().unwrap() {
-                if v.is_integer() {
-                    i.push(Self::toml_int_to_u8(v.as_integer().unwrap())?);
-                } else {
-                    return Err(ConfigError::InvalidTomlArrayValue {
-                        key,
-                        want: "value from 0-255",
-                        got: v.type_str().to_string(),
-                    }
-                    .into());
-                }
-            }
-            return Ok(i);
-        }
-
-        Err(ConfigError::InvalidTomlValue {
-            key,
-            want: "an integer of array of integers",
-            got: val.type_str().to_string(),
-        }
-        .into())
-    }
-
-    fn toml_u16(table: &toml::value::Table, key: &'static str) -> Result<u16> {
-        if !table.contains_key(key) {
-            return Ok(0);
-        }
-
-        let val = table.get(key).unwrap();
-        if val.is_integer() {
-            return Self::toml_int_to_u16(val.as_integer().unwrap());
-        }
-
-        Err(ConfigError::InvalidTomlValue {
-            key,
-            want: "an integer from 0-65535",
-            got: val.type_str().to_string(),
-        }
-        .into())
-    }
-
-    fn toml_int_to_u8(i: i64) -> Result<u8> {
-        if i > i64::from(std::u8::MAX) {
-            return Err(ConfigError::IntegerConversionError {
-                min: 0,
-                max: i64::from(std::u8::MAX),
-                val: i,
-            }
-            .into());
-        }
-
-        Ok(i as u8)
-    }
-
-    fn toml_int_to_u16(i: i64) -> Result<u16> {
-        if i > i64::from(std::u16::MAX) {
-            return Err(ConfigError::IntegerConversionError {
-                min: 0,
-                max: i64::from(std::u16::MAX),
-                val: i,
-            }
-            .into());
-        }
-
-        Ok(i as u16)
-    }
-
-    fn string_or_empty(val: &str) -> String {
-        if val.is_empty() {
-            return String::from("an empty string");
-        }
-
-        format!(r#""{}""#, val)
     }
 
     pub fn tidy_filters(&self, root: &Path) -> Result<Vec<filter::Filter>> {
         let mut tidiers: Vec<filter::Filter> = vec![];
-        for f in self.filters.iter() {
-            if let filter::FilterType::Lint = f.core.typ {
+        for (name, c) in self.commands.iter() {
+            if let filter::FilterType::Lint = c.core.typ {
                 continue;
             }
 
-            tidiers.push(self.make_filter(root, f)?);
+            tidiers.push(self.make_command(root, name, c)?);
         }
 
         Ok(tidiers)
@@ -485,40 +266,35 @@ impl Config {
 
     pub fn lint_filters(&self, root: &Path) -> Result<Vec<filter::Filter>> {
         let mut linters: Vec<filter::Filter> = vec![];
-        for f in self.filters.iter() {
-            if let filter::FilterType::Tidy = f.core.typ {
+        for (name, c) in self.commands.iter() {
+            if let filter::FilterType::Tidy = c.core.typ {
                 continue;
             }
 
-            linters.push(self.make_filter(root, f)?);
+            linters.push(self.make_command(root, name, c)?);
         }
 
         Ok(linters)
     }
 
-    fn make_filter(&self, root: &Path, filter: &Filter) -> Result<filter::Filter> {
-        match &filter.implementation {
-            FilterImplementation::C(c) => {
-                let n = filter::Command::build(filter::CommandParams {
-                    root: root.to_owned(),
-                    name: filter.core.name.clone(),
-                    typ: filter.core.typ.clone(),
-                    include: filter.core.include.clone(),
-                    exclude: filter.core.exclude.clone(),
-                    run_mode: filter.core.run_mode.clone(),
-                    chdir: c.chdir,
-                    cmd: filter.core.cmd.clone(),
-                    env: filter.core.env.clone(),
-                    lint_flags: c.lint_flags.clone(),
-                    tidy_flags: c.tidy_flags.clone(),
-                    path_flag: c.path_flag.clone(),
-                    ok_exit_codes: c.ok_exit_codes.clone(),
-                    lint_failure_exit_codes: c.lint_failure_exit_codes.clone(),
-                    expect_stderr: c.expect_stderr,
-                })?;
-                Ok(n)
-            }
-            FilterImplementation::S(_) => Err(ConfigError::ServersAreNotYetImplemented.into()),
-        }
+    fn make_command(&self, root: &Path, name: &str, command: &Command) -> Result<filter::Filter> {
+        let n = filter::Command::build(filter::CommandParams {
+            root: root.to_owned(),
+            name: name.to_owned(),
+            typ: command.core.typ.clone(),
+            include: command.core.include.clone(),
+            exclude: command.core.exclude.clone(),
+            run_mode: command.core.run_mode.clone(),
+            chdir: command.chdir,
+            cmd: command.core.cmd.clone(),
+            env: command.core.env.clone(),
+            lint_flags: command.lint_flags.clone(),
+            tidy_flags: command.tidy_flags.clone(),
+            path_flag: command.path_flag.clone(),
+            ok_exit_codes: command.ok_exit_codes.clone(),
+            lint_failure_exit_codes: command.lint_failure_exit_codes.clone(),
+            expect_stderr: command.expect_stderr,
+        })?;
+        Ok(n)
     }
 }

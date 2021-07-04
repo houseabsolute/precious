@@ -2,6 +2,7 @@ use crate::command;
 use crate::path_matcher;
 use anyhow::Result;
 use log::{debug, info};
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
@@ -9,10 +10,13 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub enum FilterType {
+    #[serde(rename = "lint")]
     Lint,
+    #[serde(rename = "tidy")]
     Tidy,
+    #[serde(rename = "both")]
     Both,
 }
 
@@ -26,10 +30,13 @@ impl FilterType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub enum RunMode {
+    #[serde(rename = "files")]
     Files,
+    #[serde(rename = "dirs")]
     Dirs,
+    #[serde(rename = "root")]
     Root,
 }
 

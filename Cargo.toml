@@ -19,6 +19,7 @@ log = "~0.4"
 md5 = "~0.7"
 path-clean = "~0.1"
 rayon = "~1"
+serde = { version = "~1", features = ["derive"] }
 thiserror = "~1"
 toml = "~0.5"
 which = "~4"
