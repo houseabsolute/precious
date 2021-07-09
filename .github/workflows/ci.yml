@@ -80,7 +80,7 @@ jobs:
         if: matrix.platform.os_name == 'Linux'
       - name: Self-check
         run: PATH=$HOME/bin:$PATH $HOME/.cargo/bin/precious --debug lint --all
-        if: matrix.platform.os_name == 'Linux'
+        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
 
   # Copied from https://github.com/urbica/martin/blob/master/.github/workflows/ci.yml
   release:
