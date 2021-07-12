@@ -66,6 +66,7 @@ fn empty_string() -> String {
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
     pub exclude: Vec<String>,
     commands: HashMap<String, Command>,
 }

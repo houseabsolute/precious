@@ -1,3 +1,9 @@
+## 0.1.1 - 2021-07-12
+
+* Fixed config handling of a global `exclude` key. The previous release did
+  not handle a single string as that key's value, only an array.
+
+
 ## 0.1.0 - 2021-07-02
 
 * The verbose and debugging level output now includes timing information on
