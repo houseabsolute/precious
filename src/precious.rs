@@ -204,6 +204,12 @@ pub fn init_logger(matches: &ArgMatches) -> Result<(), log::SetLoggerError> {
 
 impl<'a> Precious<'a> {
     pub fn new(matches: &'a ArgMatches) -> Result<Precious<'a>> {
+        if log::log_enabled!(log::Level::Debug) {
+            if let Some(path) = env::var_os("PATH") {
+                debug!("PATH = {}", path.to_string_lossy());
+            }
+        }
+
         let c = if matches.is_present("ascii") {
             chars::BORING_CHARS
         } else {
