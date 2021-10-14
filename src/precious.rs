@@ -792,7 +792,7 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn test_set_root_prefers_config_file() -> Result<()> {
+    fn set_root_prefers_config_file() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
         let mut src_dir = helper.root();
@@ -813,7 +813,7 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn test_basepaths_uses_cwd() -> Result<()> {
+    fn basepaths_uses_cwd() -> Result<()> {
         let helper = testhelper::TestHelper::new()?
             .with_config_file(SIMPLE_CONFIG)?
             .with_git_repo()?;
@@ -842,7 +842,7 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn test_tidy_succeeds() -> Result<()> {
+    fn tidy_succeeds() -> Result<()> {
         let config = r#"
 [commands.true]
 type    = "tidy"
@@ -866,7 +866,7 @@ ok_exit_codes = [0]
 
     #[test]
     #[serial]
-    fn test_tidy_fails() -> Result<()> {
+    fn tidy_fails() -> Result<()> {
         let config = r#"
 [commands.false]
 type    = "tidy"
@@ -890,7 +890,7 @@ ok_exit_codes = [0]
 
     #[test]
     #[serial]
-    fn test_lint_succeeds() -> Result<()> {
+    fn lint_succeeds() -> Result<()> {
         let config = r#"
 [commands.true]
 type    = "lint"
@@ -915,7 +915,7 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn test_lint_fails() -> Result<()> {
+    fn lint_fails() -> Result<()> {
         let config = r#"
 [commands.false]
 type    = "lint"
@@ -939,7 +939,7 @@ lint_failure_exit_codes = [1]
     }
 
     #[test]
-    fn test_format_duration() {
+    fn format_duration_output() {
         let mut tests: HashMap<Duration, &'static str> = HashMap::new();
         tests.insert(Duration::new(0, 24), "24ns");
         tests.insert(Duration::new(0, 124), "124ns");
