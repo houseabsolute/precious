@@ -67,7 +67,6 @@ pub struct Precious<'a> {
     config_file: PathBuf,
     chars: chars::Chars,
     quiet: bool,
-    basepaths: Option<basepaths::BasePaths>,
     thread_pool: ThreadPool,
 }
 
@@ -229,7 +228,6 @@ impl<'a> Precious<'a> {
             cwd,
             chars: c,
             quiet: matches.is_present("quiet"),
-            basepaths: None,
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(Self::jobs(matches)?)
                 .build()?,
