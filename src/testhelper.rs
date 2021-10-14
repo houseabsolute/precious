@@ -273,6 +273,15 @@ generated.*
 
         Ok(())
     }
+
+    pub fn read_file(&self, rel: &Path) -> Result<String> {
+        let mut full = self.root.clone();
+        full.push(rel);
+        let content = fs::read_to_string(full.clone())
+            .context(format!("Reading file at {}", full.to_string_lossy()))?;
+
+        Ok(content)
+    }
 }
 
 pub struct Pushd(PathBuf);

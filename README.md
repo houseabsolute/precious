@@ -80,6 +80,8 @@ Each filter should be defined in a block named something like
 unique. Note that you **can** have multiple filters defined for the same
 executable as long as each one has a unique name.
 
+Filters are run in the same order as they appear in the config file.
+
 The keys that are allowed for each command are as follows:
 
 | Key | Type | Required? | Applies To | Default | Description |
@@ -291,6 +293,11 @@ lint_failure_exit_codes = [1]
 
 Simply run `precious lint -s` in your hook. It will exit with a non-zero
 status if any of the lint filters indicate a linting problem.
+
+### You want to run filters in a specific order
+
+As of version 0.1.2, filters are run in the same order as they appear in the
+config file.
 
 ## Build Status
 

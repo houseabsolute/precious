@@ -1,3 +1,10 @@
+## 0.1.2 - 2021-10-14
+
+* The order of commands in the config file is now preserved, and commands are
+  executed in the order in which they appear in the config file. This
+  addresses #12, requested by Olaf Alders.
+
+
 ## 0.1.1 - 2021-07-12
 
 * Fixed config handling of a global `exclude` key. The previous release did

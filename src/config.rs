@@ -1,5 +1,6 @@
 use crate::filter;
 use anyhow::Result;
+use indexmap::IndexMap;
 use serde::de;
 use serde::de::Deserializer;
 use serde::Deserialize;
@@ -63,7 +64,7 @@ pub struct Config {
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
     pub exclude: Vec<String>,
-    commands: HashMap<String, Command>,
+    commands: IndexMap<String, Command>,
 }
 
 #[derive(Debug, Error)]
@@ -292,5 +293,143 @@ impl Config {
             expect_stderr: command.expect_stderr,
         })?;
         Ok(n)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spectral::prelude::*;
+
+    #[test]
+    fn filter_order_is_preserved1() -> Result<()> {
+        let toml_text = r#"
+            [commands.rustfmt]
+            type    = "both"
+            include = "**/*.rs"
+            cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
+            lint_flags = "--check"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 1
+
+            [commands.clippy]
+            type     = "lint"
+            include  = "**/*.rs"
+            run_mode = "root"
+            chdir    = true
+            cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 101
+            expect_stderr = true
+
+            [commands.omegasort-gitignore]
+            type = "both"
+            include = "**/.gitignore"
+            cmd = [ "omegasort", "--sort=path" ]
+            lint_flags = "--check"
+            tidy_flags = "--in-place"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 1
+            expect_stderr = true
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let keys = config
+            .commands
+            .keys()
+            .map(|k| k.as_str())
+            .collect::<Vec<&str>>();
+        let expect: Vec<&str> = vec!["rustfmt", "clippy", "omegasort-gitignore"];
+        assert_that(&keys).is_equal_to(&expect);
+
+        Ok(())
+    }
+
+    #[test]
+    fn filter_order_is_preserved2() -> Result<()> {
+        let toml_text = r#"
+            [commands.clippy]
+            type     = "lint"
+            include  = "**/*.rs"
+            run_mode = "root"
+            chdir    = true
+            cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 101
+            expect_stderr = true
+
+            [commands.rustfmt]
+            type    = "both"
+            include = "**/*.rs"
+            cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
+            lint_flags = "--check"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 1
+
+            [commands.omegasort-gitignore]
+            type = "both"
+            include = "**/.gitignore"
+            cmd = [ "omegasort", "--sort=path" ]
+            lint_flags = "--check"
+            tidy_flags = "--in-place"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 1
+            expect_stderr = true
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let keys = config
+            .commands
+            .keys()
+            .map(|k| k.as_str())
+            .collect::<Vec<&str>>();
+        let expect: Vec<&str> = vec!["clippy", "rustfmt", "omegasort-gitignore"];
+        assert_that(&keys).is_equal_to(&expect);
+
+        Ok(())
+    }
+
+    #[test]
+    fn filter_order_is_preserved3() -> Result<()> {
+        let toml_text = r#"
+            [commands.omegasort-gitignore]
+            type = "both"
+            include = "**/.gitignore"
+            cmd = [ "omegasort", "--sort=path" ]
+            lint_flags = "--check"
+            tidy_flags = "--in-place"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 1
+            expect_stderr = true
+
+            [commands.clippy]
+            type     = "lint"
+            include  = "**/*.rs"
+            run_mode = "root"
+            chdir    = true
+            cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 101
+            expect_stderr = true
+
+            [commands.rustfmt]
+            type    = "both"
+            include = "**/*.rs"
+            cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
+            lint_flags = "--check"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let keys = config
+            .commands
+            .keys()
+            .map(|k| k.as_str())
+            .collect::<Vec<&str>>();
+        let expect: Vec<&str> = vec!["omegasort-gitignore", "clippy", "rustfmt"];
+        assert_that(&keys).is_equal_to(&expect);
+
+        Ok(())
     }
 }

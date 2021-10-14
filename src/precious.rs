@@ -314,6 +314,7 @@ impl<'a> Precious<'a> {
     pub fn run(&mut self) -> i8 {
         match self.run_subcommand() {
             Ok(e) => {
+                debug!("{:?}", e);
                 if let Some(err) = e.error {
                     print!("{}", err);
                 }
@@ -724,6 +725,8 @@ mod tests {
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
     use spectral::prelude::*;
+    use std::{path::PathBuf, str::FromStr};
+    use which::which;
 
     const SIMPLE_CONFIG: &str = r#"
 [commands.rustfmt]
@@ -934,6 +937,59 @@ lint_failure_exit_codes = [1]
         let status = p.run();
 
         assert_that(&status).is_equal_to(1);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    // This fails in CI on Windows with a confusing error - "Cannot complete
+    // in-place edit of test.replace: Work file is missing - did you change
+    // directory?" I don't know what this means, and it's not really important
+    // to run this test on every OS.
+    #[cfg(not(target_os = "windows"))]
+    fn command_order_is_preserved_when_running() -> Result<()> {
+        if which("perl").is_err() {
+            println!("Skipping test since perl is not in path");
+            return Ok(());
+        }
+
+        let config = r#"
+[commands.perl-replace-a-with-b]
+type    = "tidy"
+include = "test.replace"
+cmd     = ["perl", "-pi", "-e", "s/a/b/i"]
+ok_exit_codes = [0]
+
+[commands.perl-replace-a-with-c]
+type    = "tidy"
+include = "test.replace"
+cmd     = ["perl", "-pi", "-e", "s/a/c/i"]
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
+
+[commands.perl-replace-a-with-d]
+type    = "tidy"
+include = "test.replace"
+cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
+ok_exit_codes = [0]
+lint_failure_exit_codes = [1]
+"#;
+        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let test_replace = PathBuf::from_str("test.replace")?;
+        helper.write_file(test_replace.as_ref(), "The letter A")?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "-a"])?;
+
+        let mut p = Precious::new(&matches)?;
+        let status = p.run();
+
+        assert_that(&status).is_equal_to(0);
+
+        let content = helper.read_file(test_replace.as_ref())?;
+        assert_that(&content).is_equal_to("The letter b".to_string());
 
         Ok(())
     }
