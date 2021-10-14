@@ -11,11 +11,6 @@ use std::path::Path;
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]
-pub struct Server {
-    port: u16,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct FilterCore {
     #[serde(rename = "type")]
     typ: filter::FilterType,
