@@ -6,10 +6,7 @@ use std::env;
 use std::fs;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
 use tempfile::{tempdir, TempDir};
-
-static START: Once = Once::new();
 
 pub struct TestHelper {
     // While we never access this field we need to hold onto the tempdir or
@@ -36,31 +33,6 @@ impl TestHelper {
     ];
 
     pub fn new() -> Result<Self> {
-        // We only want to call git config once per `cargo test` invocation,
-        // or else git might give us an error saying it could not lock the
-        // config file.
-        START.call_once(|| {
-            match env::var("CI") {
-                Err(_) => (),
-                Ok(_) => {
-                    match command::run_command(
-                        "git".to_string(),
-                        ["config", "--global", "init.defaultBranch", "master"]
-                            .iter()
-                            .map(|a| a.to_string())
-                            .collect(),
-                        &HashMap::new(),
-                        &[0],
-                        false,
-                        None,
-                    ) {
-                        Ok(_) => (),
-                        Err(e) => panic!("{}", e),
-                    }
-                }
-            };
-        });
-
         let temp = tempdir()?;
         let root = maybe_canonicalize(temp.path())?;
         let helper = TestHelper {
@@ -98,7 +70,10 @@ impl TestHelper {
 
         command::run_command(
             "git".to_string(),
-            ["init"].iter().map(|a| a.to_string()).collect(),
+            ["init", "--initial-branch", "master"]
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
             &HashMap::new(),
             &[0],
             false,
