@@ -4,7 +4,7 @@
   executed in the order in which they appear in the config file. This
   addresses #12, requested by Olaf Alders.
 
-* Fix the tests so that they set the default branch name when running `git
+* Fixed the tests so that they set the default branch name when running `git
   init`, rather than setting this via `git config`. This lets anyone run the
   tests, whereas it was only safe to set this via `git config` in CI. This
   fixes #14, reported by Olaf Alders.
