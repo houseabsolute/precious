@@ -1,6 +1,0 @@
-/bin
-/fatlib
-/**/*.rs.bk
-/target/**/*
-.\#*
-\#*\#
