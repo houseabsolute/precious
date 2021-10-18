@@ -64,7 +64,6 @@ pub struct Precious<'a> {
     root: PathBuf,
     cwd: PathBuf,
     config: config::Config,
-    config_file: PathBuf,
     chars: chars::Chars,
     quiet: bool,
     thread_pool: ThreadPool,
@@ -217,13 +216,12 @@ impl<'a> Precious<'a> {
 
         let cwd = env::current_dir()?;
         let root = Self::root(&cwd)?;
-        let (config, config_file) = Self::config(matches, &root)?;
+        let (config, _) = Self::config(matches, &root)?;
 
         Ok(Precious {
             matches,
             mode: Self::mode(matches)?,
             config,
-            config_file,
             root,
             cwd,
             chars: c,
@@ -752,10 +750,12 @@ lint_failure_exit_codes = [1]
 
         let p = Precious::new(&matches)?;
         assert_that(&p.chars).is_equal_to(chars::FUN_CHARS);
+        assert_that(&p.quiet).is_equal_to(false);
+
+        let (_, config_file) = Precious::config(&matches, &p.root)?;
         let mut expect_config_file = p.root;
         expect_config_file.push("precious.toml");
-        assert_that(&p.config_file).is_equal_to(expect_config_file);
-        assert_that(&p.quiet).is_equal_to(false);
+        assert_that(&config_file).is_equal_to(expect_config_file);
 
         Ok(())
     }
@@ -791,7 +791,11 @@ lint_failure_exit_codes = [1]
         ])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.config_file).is_equal_to(helper.config_file());
+
+        let (_, config_file) = Precious::config(&matches, &p.root)?;
+        let mut expect_config_file = p.root;
+        expect_config_file.push("precious.toml");
+        assert_that(&config_file).is_equal_to(expect_config_file);
 
         Ok(())
     }
