@@ -1,0 +1,6 @@
+precious (0.1.2-1) UNRELEASED; urgency=low
+
+  * initial packaging;
+    closes: Bug#996762
+
+ -- Jonas Smedegaard <dr@jones.dk>  Mon, 18 Oct 2021 12:37:34 +0200

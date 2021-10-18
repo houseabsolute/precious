@@ -1,0 +1,62 @@
+Source: precious
+Section: devel
+Priority: optional
+Maintainer: Jonas Smedegaard <dr@jones.dk>
+Build-Depends:
+ ca-certificates,
+ debhelper-compat (= 13),
+ cargo,
+ git <!nocheck>,
+ help2man <!nodoc>,
+ librust-anyhow-dev (<< 2),
+ librust-clap-dev (<< 3),
+ librust-fern+colored-dev (<< 7),
+ librust-globset-dev (<< 5),
+ librust-ignore-dev (<< 5),
+ librust-indexmap+serde-dev (<< 2),
+ librust-itertools-dev (<< 11),
+ librust-log-dev (<< 5),
+ librust-md5-dev (<< 8),
+#path-clean = "~0.1"
+ librust-rayon-dev (<< 2),
+ librust-serde+derive-dev (<< 2),
+ librust-thiserror-dev (<< 2),
+ librust-toml-dev (<< 6),
+ librust-which-dev (<< 5),
+Standards-Version: 4.6.0
+Homepage: https://github.com/houseabsolute/precious
+Vcs-Git: https://salsa.debian.org/debian/precious.git
+Vcs-Browser: https://salsa.debian.org/debian/precious
+Rules-Requires-Root: no
+
+Package: precious
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Description: one code quality tool to rule them all
+ Precious is a command-line tool to unify
+ the execution of source code tidiers and validators.
+ .
+ With Precious you can configure
+ all of your code quality tool rules in one place
+ and easily run `precious` from your commit hooks and in CI.
+ .
+ Several tidier+validator unifiers/orchestraters exists,
+ including perl-based TidyAll (the predecessor of Precious),
+ Python-based pre-commit,
+ Go-based lefthook,
+ NodeJS-based husky and lint-staged,
+ and Ruby-based overcommit.
+ For comparison, Precious is Rust-based with these notable features:
+  * handles directory-wide and project-wide tasks
+    (unlike TidyAll)
+  * stores task settings locally
+    (unlike pre-commit)
+  * cannot cache tasks
+    (unlike TidyAll)
+  * supports incremental linting
+    (unlike lefthook, husky, lint-staged or overcommit)
+ .
+ For a more detailed comparison,
+ see <https://blog.urth.org/2020/05/08/comparing-code-quality-meta-tools/>.

@@ -1,0 +1,9 @@
+version=4
+# check: uscan --report
+# update: gbp import-orig --upstream-vcs-tag=vX.Y.Z --uscan
+
+opts=\
+filenamemangle=s/.*?(@ANY_VERSION@@ARCHIVE_EXT@)/@PACKAGE@-$1/,\
+dversionmangle=auto \
+https://github.com/houseabsolute/precious/tags \
+.*?@ANY_VERSION@@ARCHIVE_EXT@
