@@ -275,6 +275,7 @@ generated.*
         Ok(())
     }
 
+    #[cfg(not(target_os = "windows"))]
     pub fn read_file(&self, rel: &Path) -> Result<String> {
         let mut full = self.root.clone();
         full.push(rel);

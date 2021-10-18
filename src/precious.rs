@@ -725,7 +725,10 @@ mod tests {
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
     use spectral::prelude::*;
-    use std::{path::PathBuf, str::FromStr};
+    use std::path::PathBuf;
+    #[cfg(not(target_os = "windows"))]
+    use std::str::FromStr;
+    #[cfg(not(target_os = "windows"))]
     use which::which;
 
     const SIMPLE_CONFIG: &str = r#"
