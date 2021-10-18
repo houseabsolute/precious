@@ -80,6 +80,32 @@ impl TestHelper {
             Some(&self.root),
         )?;
 
+        // If the tests are run in a totally clean environment they will blow
+        // up if these aren't set. This fixes
+        // https://github.com/houseabsolute/precious/issues/15.
+        command::run_command(
+            "git".to_string(),
+            ["config", "user.email", "precious@example.com"]
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
+            &HashMap::new(),
+            &[0],
+            false,
+            Some(&self.root),
+        )?;
+        command::run_command(
+            "git".to_string(),
+            ["config", "user.name", "Precious Testhelper"]
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
+            &HashMap::new(),
+            &[0],
+            false,
+            Some(&self.root),
+        )?;
+
         // With this on I get line ending warnings from git on Windows if I
         // don't write out files with CRLF. Disabling this simplifies things
         // greatly.
