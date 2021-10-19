@@ -14,7 +14,7 @@ clap = "~2"
 fern = { version = "~0.6", features = ["colored"] }
 globset = "~0.4"
 ignore = "~0.4"
-indexmap = { version = "~1", features = ["serde"] }
+indexmap = { version = ">=1.6.1, <2", features = ["serde"] }
 itertools = "~0.10"
 log = "~0.4"
 md5 = "~0.7"
