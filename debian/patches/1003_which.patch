@@ -1,0 +1,16 @@
+Description: relax dependency on which
+Author: Jonas Smedegaard <dr@jones.dk>
+Last-Update: 2021-10-20
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -23,7 +23,7 @@
+ serde = { version = "~1", features = ["derive"] }
+ thiserror = "~1"
+ toml = "~0.5"
+-which = "~4"
++which = ">= 3, < 5"
+ 
+ [dev-dependencies]
+ serial_test = "~0.4"

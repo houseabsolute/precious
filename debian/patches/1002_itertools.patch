@@ -1,0 +1,16 @@
+Description: relax dependency on itertools
+Author: Jonas Smedegaard <dr@jones.dk>
+Last-Update: 2021-10-20
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -15,7 +15,7 @@
+ globset = "~0.4"
+ ignore = "~0.4"
+ indexmap = { version = "~1", features = ["serde"] }
+-itertools = "~0.10"
++itertools = ">= 0.9, < 0.11"
+ log = "~0.4"
+ md5 = "~0.7"
+ path-clean = "~0.1"

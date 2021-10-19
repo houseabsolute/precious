@@ -3,26 +3,31 @@ Section: devel
 Priority: optional
 Maintainer: Jonas Smedegaard <dr@jones.dk>
 Build-Depends:
- ca-certificates,
  debhelper-compat (= 13),
- cargo,
+ dh-cargo,
  git <!nocheck>,
  help2man <!nodoc>,
+ librust-ansi-term-dev,
  librust-anyhow-dev (<< 2),
+ librust-atty-dev,
  librust-clap-dev (<< 3),
  librust-fern+colored-dev (<< 7),
  librust-globset-dev (<< 5),
+ librust-hashbrown-dev,
  librust-ignore-dev (<< 5),
- librust-indexmap+serde-dev (<< 2),
  librust-itertools-dev (<< 11),
  librust-log-dev (<< 5),
  librust-md5-dev (<< 8),
 #path-clean = "~0.1"
  librust-rayon-dev (<< 2),
  librust-serde+derive-dev (<< 2),
+ librust-strsim-dev,
  librust-thiserror-dev (<< 2),
  librust-toml-dev (<< 6),
- librust-which-dev (<< 5),
+ librust-vec-map-dev,
+ librust-which+failure-dev (<< 5),
+Build-Conflicts:
+ librust-indexmap-1.3-dev,
 Standards-Version: 4.6.0
 Homepage: https://github.com/houseabsolute/precious
 Vcs-Git: https://salsa.debian.org/debian/precious.git

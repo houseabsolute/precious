@@ -1,0 +1,16 @@
+Description: relax dependency on fern
+Author: Jonas Smedegaard <dr@jones.dk>
+Last-Update: 2021-10-20
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -11,7 +11,7 @@
+ [dependencies]
+ anyhow = "~1"
+ clap = "~2"
+-fern = { version = "~0.6", features = ["colored"] }
++fern = { version = ">= 0.5, < 0.7", features = ["colored"] }
+ globset = "~0.4"
+ ignore = "~0.4"
+ indexmap = { version = "~1", features = ["serde"] }

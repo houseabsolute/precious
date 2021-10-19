@@ -1,16 +1,11 @@
 #!/usr/bin/make -f
 
-# resolve variables DEB_TARGET_GNU_CPU DEB_TARGET_GNU_SYSTEM
-include /usr/share/dpkg/architecture.mk
-
-export CARGO_NET_OFFLINE  = true
-export CARGO_HOME         = $(CURDIR)/debian/build/cargo-home
-export CARGO_INSTALL_ROOT = $(CURDIR)/debian/tmp
-
 # generate documentation unless nodoc requested
 ifeq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
 MANPAGES = debian/build/precious.1
 endif
+
+EXTRALIBS = indexmap-1.6.2 path-clean-0.1.0
 
 # generate manpage with help2man from --help option of executable
 _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
@@ -18,14 +13,10 @@ _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
 
 # TODO: simplify when librust-path-clean is in Debian
 %:
-#	dh $@ --buildsystem cargo
-	dh $@
+	dh $@ --buildsystem cargo
 
-execute_before_dh_auto_configure:
-	CARGO_NET_OFFLINE=false cargo fetch --locked --target "${DEB_TARGET_GNU_CPU}-unknown-${DEB_TARGET_GNU_SYSTEM}"
-
-override_dh_auto_build:
-	cargo build --release
+execute_after_dh_auto_configure:
+	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../extralibs/%,$(EXTRALIBS))
 
 # TODO: enable when <https://github.com/houseabsolute/precious/issues/15> is fixed
 override_dh_auto_test:
@@ -34,7 +25,19 @@ override_dh_auto_test:
 execute_after_dh_auto_install: $(MANPAGES)
 
 # build manpages
-debian/build/precious.1: debian/build/%.1: target/release/%
+debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 	mkdir --parents $(dir $@)
 	$(call _mkman, $<, $@, \
 		one code quality tool to rule them all)
+
+create-cargo-checksum:
+	echo '{"package":"$(shell sha256sum Cargo.toml | grep -Po '^\S+')","files":{}}' > debian/cargo-checksum.json
+
+fetch-extralibs:
+	CARGO_HOME=debian/build/cargo-home cargo update --package indexmap --precise 1.6.2
+	CARGO_HOME=debian/build/cargo-home cargo vendor --versioned-dirs debian/build/extralibs
+	rm -rf debian/extralibs
+	mkdir debian/extralibs
+	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
+	rm -rf debian/build
+	git restore Cargo.lock
