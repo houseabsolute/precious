@@ -1,3 +1,9 @@
+## 0.1.3
+
+* Relaxed some dependencies for the benefit of packaging precious for
+  Debian. Implemented by Jonas Smedegaard.
+
+
 ## 0.1.2 - 2021-10-14
 
 * The order of commands in the config file is now preserved, and commands are
