@@ -1,5 +1,6 @@
 Description: relax dependency on which
 Author: Jonas Smedegaard <dr@jones.dk>
+Bug: https://github.com/houseabsolute/precious/issues/19
 Last-Update: 2021-10-20
 ---
 This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
