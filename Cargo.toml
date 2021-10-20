@@ -11,11 +11,11 @@ edition = "2018"
 [dependencies]
 anyhow = "~1"
 clap = "~2"
-fern = { version = "~0.6", features = ["colored"] }
+fern = { version = ">= 0.5, < 0.7", features = ["colored"] }
 globset = "~0.4"
 ignore = "~0.4"
 indexmap = { version = "~1", features = ["serde"] }
-itertools = "~0.10"
+itertools = ">= 0.9, < 0.11"
 log = "~0.4"
 md5 = "~0.7"
 path-clean = "~0.1"
@@ -23,7 +23,7 @@ rayon = "~1"
 serde = { version = "~1", features = ["derive"] }
 thiserror = "~1"
 toml = "~0.5"
-which = "~4"
+which = ">= 3, < 5"
 
 [dev-dependencies]
 serial_test = "~0.4"
