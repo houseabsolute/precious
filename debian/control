@@ -39,6 +39,14 @@ Architecture: any
 Depends:
  ${misc:Depends},
  ${shlibs:Depends},
+Suggests:
+ git,
+ golang-golang-x-tools,
+ libperl-critic-perl,
+ perl,
+ perltidy,
+ rust-clippy,
+ rustfmt,
 Description: one code quality tool to rule them all
  Precious is a command-line tool to unify
  the execution of source code tidiers and validators.
