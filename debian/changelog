@@ -1,4 +1,4 @@
-precious (0.1.2-1) UNRELEASED; urgency=low
+precious (0.1.2-1) experimental; urgency=low
 
   * initial packaging;
     closes: Bug#996762
