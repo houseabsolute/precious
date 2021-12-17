@@ -28,8 +28,7 @@ type     = "lint"
 include  = "**/*.rs"
 run_mode = "root"
 chdir    = true
-# See the helpers dir for this script. You have to edit it for your project.
-cmd      = "$PRECIOUS_ROOT/helpers/force-clippy.sh"
+cmd      = [ "cargo", "clippy", "--locked", "--all-targets", "--all-features", "--", "-D", "clippy::all" ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 101
 expect_stderr = true
