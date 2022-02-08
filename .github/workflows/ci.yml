@@ -40,13 +40,13 @@ jobs:
       - name: Configure Git
         run: |
           git config --global user.email "jdoe@example.com"
-          git config --global user.name "J. Doe"  
+          git config --global user.name "J. Doe"
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
           command: check
           args: --target=${{ matrix.platform.target }}
-      - name: Run cargo test 
+      - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
@@ -60,6 +60,8 @@ jobs:
           command: install
           args: --target=${{ matrix.platform.target }} --path .
         if: matrix.platform.os_name == 'Linux'
+      - name: Add $HOME/bin to $PATH
+        run: echo "${HOME}/bin" >> $GITHUB_PATH
       - name: Run install-dev-tools.sh
         run: |
           set -e

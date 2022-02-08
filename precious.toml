@@ -20,6 +20,15 @@ ok_exit_codes = 0
 lint_failure_exit_codes = 101
 expect_stderr = true
 
+[commands.prettier]
+type    = "both"
+include = [ "**/*.md", "**/*.yml" ]
+cmd     = "prettier"
+lint_flags = "--check"
+tidy_flags = "--write"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
