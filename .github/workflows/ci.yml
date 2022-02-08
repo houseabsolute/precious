@@ -60,8 +60,8 @@ jobs:
           command: install
           args: --target=${{ matrix.platform.target }} --path .
         if: matrix.platform.os_name == 'Linux'
-      - name: Add $HOME/bin to $PATH
-        run: echo "${HOME}/bin" >> $GITHUB_PATH
+      - uses: actions/setup-node@v2
+        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
       - name: Run install-dev-tools.sh
         run: |
           set -e

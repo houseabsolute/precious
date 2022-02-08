@@ -14,7 +14,7 @@ function install_tools () {
     run "rustup component add clippy"
     run "ubi --project houseabsolute/precious --in ~/bin"
     run "ubi --project houseabsolute/omegasort --in ~/bin"
-    run "sudo npm update --global prettier"
+    run "sudo npm install --global prettier"
 }
 
 if [ "$1" == "-v" ]; then
