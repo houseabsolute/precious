@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.53"
-clap = "~2"
+clap = "3.0.14"
 fern = { version = "0.6.0", features = ["colored"] }
 globset = "0.4.8"
 ignore = "0.4.18"

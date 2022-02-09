@@ -4,7 +4,7 @@ use crate::config;
 use crate::filter;
 use crate::vcs;
 use anyhow::{Error, Result};
-use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{App, Arg, ArgGroup, ArgMatches};
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
 use log::{debug, error, info};
@@ -59,7 +59,7 @@ struct ActionError {
 
 #[derive(Debug)]
 pub struct Precious<'a> {
-    matches: &'a ArgMatches<'a>,
+    matches: &'a ArgMatches,
     mode: basepaths::Mode,
     root: PathBuf,
     cwd: PathBuf,
@@ -69,55 +69,55 @@ pub struct Precious<'a> {
     thread_pool: ThreadPool,
 }
 
-pub fn app<'a>() -> App<'a, 'a> {
+pub fn app<'a>() -> App<'a> {
     App::new("precious")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Dave Rolsky <autarch@urth.org>")
         .about("One code quality tool to rule them all")
         .arg(
-            Arg::with_name("config")
-                .short("c")
+            Arg::new("config")
+                .short('c')
                 .long("config")
                 .takes_value(true)
                 .help("Path to config file"),
         )
         .arg(
-            Arg::with_name("jobs")
-                .short("j")
+            Arg::new("jobs")
+                .short('j')
                 .long("jobs")
                 .takes_value(true)
                 .help("Number of parallel jobs (threads) to run (defaults to one per core)"),
         )
         .arg(
-            Arg::with_name("ascii")
+            Arg::new("ascii")
                 .long("ascii")
                 .help("Replace super-fun Unicode symbols with terribly boring ASCII"),
         )
         .arg(
-            Arg::with_name("verbose")
-                .short("v")
+            Arg::new("verbose")
+                .short('v')
                 .long("verbose")
                 .help("Enable verbose output"),
         )
         .arg(
-            Arg::with_name("debug")
-                .short("d")
+            Arg::new("debug")
+                .short('d')
                 .long("debug")
                 .help("Enable debugging output"),
         )
         .arg(
-            Arg::with_name("trace")
-                .short("t")
+            Arg::new("trace")
+                .short('t')
                 .long("trace")
                 .help("Enable tracing output (maximum logging)"),
         )
         .arg(
-            Arg::with_name("quiet")
-                .short("q")
+            Arg::new("quiet")
+                .short('q')
                 .long("quiet")
                 .help("Suppresses most output"),
         )
-        .group(ArgGroup::with_name("log-level").args(&["verbose", "debug", "trace", "quiet"]))
+        .group(ArgGroup::new("log-level").args(&["verbose", "debug", "trace", "quiet"]))
         .subcommand(common_subcommand(
             "tidy",
             "Tidies the specified files and/or directories",
@@ -128,35 +128,35 @@ pub fn app<'a>() -> App<'a, 'a> {
         ))
 }
 
-fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a, 'a> {
-    SubCommand::with_name(name)
+fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a> {
+    App::new(name)
         .about(about)
         .arg(
-            Arg::with_name("all")
-                .short("a")
+            Arg::new("all")
+                .short('a')
                 .long("all")
                 .help("Run against all files in the current directory and below"),
         )
         .arg(
-            Arg::with_name("git")
-                .short("g")
+            Arg::new("git")
+                .short('g')
                 .long("git")
                 .help("Run against files that have been modified according to git"),
         )
         .arg(
-            Arg::with_name("staged")
-                .short("s")
+            Arg::new("staged")
+                .short('s')
                 .long("staged")
                 .help("Run against file content that is staged for a git commit"),
         )
         .arg(
-            Arg::with_name("paths")
-                .multiple(true)
+            Arg::new("paths")
+                .multiple_occurrences(true)
                 .takes_value(true)
                 .help("A list of paths on which to operate"),
         )
         .group(
-            ArgGroup::with_name("operate-on")
+            ArgGroup::new("operate-on")
                 .args(&["all", "git", "staged", "paths"])
                 .required(true),
         )
@@ -234,7 +234,7 @@ impl<'a> Precious<'a> {
 
     fn mode(matches: &'a ArgMatches) -> Result<basepaths::Mode> {
         match matches.subcommand() {
-            (_, Some(subc_matches)) => {
+            Some((_, subc_matches)) => {
                 if subc_matches.is_present("all") {
                     return Ok(basepaths::Mode::All);
                 } else if subc_matches.is_present("git") {
@@ -249,7 +249,7 @@ impl<'a> Precious<'a> {
 
                 Ok(basepaths::Mode::FromCli)
             }
-            _ => Err(PreciousError::NoSubcommandInCliArgs.into()),
+            None => Err(PreciousError::NoSubcommandInCliArgs.into()),
         }
     }
 
@@ -659,10 +659,10 @@ impl<'a> Precious<'a> {
             .collect::<Vec<PathBuf>>()
     }
 
-    fn matched_subcommand(&self) -> &ArgMatches<'a> {
+    fn matched_subcommand(&self) -> &ArgMatches {
         match self.matches.subcommand() {
-            ("tidy", Some(m)) => m,
-            ("lint", Some(m)) => m,
+            Some(("tidy", m)) => m,
+            Some(("lint", m)) => m,
             _ => panic!("Somehow none of our subcommands matched and clap did not return an error"),
         }
     }
@@ -746,7 +746,7 @@ lint_failure_exit_codes = [1]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
         assert_eq!(p.chars, chars::FUN_CHARS);
@@ -767,7 +767,7 @@ lint_failure_exit_codes = [1]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--ascii", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--ascii", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
         assert_eq!(p.chars, chars::BORING_CHARS);
@@ -782,7 +782,7 @@ lint_failure_exit_codes = [1]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&[
+        let matches = app.try_get_matches_from(&[
             "precious",
             "--config",
             helper.config_file().to_str().unwrap(),
@@ -813,7 +813,7 @@ lint_failure_exit_codes = [1]
         let _pushd = testhelper::Pushd::new(src_dir.clone())?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
         assert_eq!(p.root, src_dir);
@@ -833,7 +833,7 @@ lint_failure_exit_codes = [1]
         let _pushd = testhelper::Pushd::new(src_dir)?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let mut paths = p.basepaths()?;
@@ -864,7 +864,7 @@ ok_exit_codes = [0]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
@@ -888,7 +888,7 @@ ok_exit_codes = [0]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
@@ -913,7 +913,7 @@ lint_failure_exit_codes = [1]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
@@ -938,7 +938,7 @@ lint_failure_exit_codes = [1]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
@@ -988,7 +988,7 @@ lint_failure_exit_codes = [1]
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "-a"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "-a"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
