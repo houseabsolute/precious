@@ -720,9 +720,9 @@ mod tests {
     use super::*;
     use crate::testhelper;
     use itertools::Itertools;
+    use pretty_assertions::assert_eq;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
-    use spectral::prelude::*;
     use std::path::PathBuf;
     #[cfg(not(target_os = "windows"))]
     use std::str::FromStr;
@@ -749,13 +749,13 @@ lint_failure_exit_codes = [1]
         let matches = app.get_matches_from_safe(&["precious", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.chars).is_equal_to(chars::FUN_CHARS);
-        assert_that(&p.quiet).is_equal_to(false);
+        assert_eq!(p.chars, chars::FUN_CHARS);
+        assert!(!p.quiet);
 
         let (_, config_file) = Precious::config(&matches, &p.root)?;
         let mut expect_config_file = p.root;
         expect_config_file.push("precious.toml");
-        assert_that(&config_file).is_equal_to(expect_config_file);
+        assert_eq!(config_file, expect_config_file);
 
         Ok(())
     }
@@ -770,7 +770,7 @@ lint_failure_exit_codes = [1]
         let matches = app.get_matches_from_safe(&["precious", "--ascii", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.chars).is_equal_to(chars::BORING_CHARS);
+        assert_eq!(p.chars, chars::BORING_CHARS);
 
         Ok(())
     }
@@ -795,7 +795,7 @@ lint_failure_exit_codes = [1]
         let (_, config_file) = Precious::config(&matches, &p.root)?;
         let mut expect_config_file = p.root;
         expect_config_file.push("precious.toml");
-        assert_that(&config_file).is_equal_to(expect_config_file);
+        assert_eq!(config_file, expect_config_file);
 
         Ok(())
     }
@@ -816,7 +816,7 @@ lint_failure_exit_codes = [1]
         let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.root).is_equal_to(src_dir);
+        assert_eq!(p.root, src_dir);
 
         Ok(())
     }
@@ -845,7 +845,7 @@ lint_failure_exit_codes = [1]
                 .map(PathBuf::from)
                 .collect(),
         }];
-        assert_that(&paths.paths(vec![])?).is_equal_to(Some(expect));
+        assert_eq!(paths.paths(vec![])?, Some(expect));
 
         Ok(())
     }
@@ -869,7 +869,7 @@ ok_exit_codes = [0]
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(0);
+        assert_eq!(status, 0);
 
         Ok(())
     }
@@ -893,7 +893,7 @@ ok_exit_codes = [0]
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(1);
+        assert_eq!(status, 1);
 
         Ok(())
     }
@@ -918,7 +918,7 @@ lint_failure_exit_codes = [1]
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(0);
+        assert_eq!(status, 0);
 
         Ok(())
     }
@@ -943,7 +943,7 @@ lint_failure_exit_codes = [1]
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(1);
+        assert_eq!(status, 1);
 
         Ok(())
     }
@@ -993,10 +993,10 @@ lint_failure_exit_codes = [1]
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(0);
+        assert_eq!(status, 0);
 
         let content = helper.read_file(test_replace.as_ref())?;
-        assert_that(&content).is_equal_to("The letter b".to_string());
+        assert_eq!(content, "The letter b".to_string());
 
         Ok(())
     }
@@ -1050,9 +1050,7 @@ lint_failure_exit_codes = [1]
         for k in tests.keys().sorted() {
             let f = format_duration(k);
             let e = tests.get(k).unwrap().to_string();
-            assert_that(&f)
-                .named(&format!("{}s {}ns", k.as_secs(), k.as_nanos()))
-                .is_equal_to(&e);
+            assert_eq!(f, e, "{}s {}ns", k.as_secs(), k.as_nanos());
         }
     }
 }
