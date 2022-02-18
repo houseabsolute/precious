@@ -61,8 +61,9 @@ customize this as needed to install only the tools you need for your project.
 
 ## Configuration
 
-Precious is configured via a single `precious.toml` file that lives in your
-project root. The file is in [TOML format](https://github.com/toml-lang/toml).
+Precious is configured via a single `precious.toml` or `.precious.toml` file
+that lives in your project root. The file is in [TOML
+format](https://github.com/toml-lang/toml).
 
 There is just one key that can be set in the top level table of the config file:
 

@@ -69,6 +69,8 @@ pub struct Precious<'a> {
     thread_pool: ThreadPool,
 }
 
+const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
+
 pub fn app<'a>() -> App<'a> {
     App::new("precious")
         .version(env!("CARGO_PKG_VERSION"))
@@ -304,9 +306,30 @@ impl<'a> Precious<'a> {
     }
 
     fn default_config_file(root: &Path) -> PathBuf {
-        let mut file = root.to_path_buf();
-        file.push("precious.toml");
-        file
+        let root_path = root.to_path_buf();
+        // It'd be nicer to use the version of this provided by itertools, but
+        // that requires itertools 0.10.1, and we want to keep the version at
+        // 0.9.0 for the benefit of Debian.
+        Self::find_or_first(
+            CONFIG_FILE_NAMES.iter().map(|n| {
+                let mut path = root_path.clone();
+                path.push(n);
+                path
+            }),
+            |p| p.exists(),
+        )
+    }
+
+    fn find_or_first<I, P>(mut iter: I, pred: P) -> PathBuf
+    where
+        I: Iterator<Item = PathBuf>,
+        P: Fn(&Path) -> bool,
+    {
+        let first = iter.next().unwrap();
+        if pred(&first) {
+            return first;
+        }
+        iter.find(|i| pred(i)).unwrap_or(first)
     }
 
     pub fn run(&mut self) -> i8 {
@@ -679,9 +702,7 @@ impl<'a> Precious<'a> {
     }
 
     fn has_config_file(path: &Path) -> bool {
-        let mut file = path.to_path_buf();
-        file.push("precious.toml");
-        file.exists()
+        Self::default_config_file(path).exists()
     }
 }
 
@@ -739,23 +760,27 @@ ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
 
+    const DEFAULT_CONFIG_FILE_NAME: &str = super::CONFIG_FILE_NAMES[0];
+
     #[test]
     #[serial]
     fn new() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
-        let _pushd = helper.pushd_to_root()?;
+        for name in super::CONFIG_FILE_NAMES {
+            let helper = testhelper::TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
+            let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "tidy", "--all"])?;
+            let app = app();
+            let matches = app.try_get_matches_from(&["precious", "tidy", "--all"])?;
 
-        let p = Precious::new(&matches)?;
-        assert_eq!(p.chars, chars::FUN_CHARS);
-        assert!(!p.quiet);
+            let p = Precious::new(&matches)?;
+            assert_eq!(p.chars, chars::FUN_CHARS);
+            assert!(!p.quiet);
 
-        let (_, config_file) = Precious::config(&matches, &p.root)?;
-        let mut expect_config_file = p.root;
-        expect_config_file.push("precious.toml");
-        assert_eq!(config_file, expect_config_file);
+            let (_, config_file) = Precious::config(&matches, &p.root)?;
+            let mut expect_config_file = p.root;
+            expect_config_file.push(name);
+            assert_eq!(config_file, expect_config_file);
+        }
 
         Ok(())
     }
@@ -763,7 +788,8 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_ascii_flag() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let helper = testhelper::TestHelper::new()?
+            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -778,14 +804,18 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_config_path() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let helper = testhelper::TestHelper::new()?
+            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
         let matches = app.try_get_matches_from(&[
             "precious",
             "--config",
-            helper.config_file().to_str().unwrap(),
+            helper
+                .config_file(DEFAULT_CONFIG_FILE_NAME)
+                .to_str()
+                .unwrap(),
             "tidy",
             "--all",
         ])?;
@@ -794,7 +824,7 @@ lint_failure_exit_codes = [1]
 
         let (_, config_file) = Precious::config(&matches, &p.root)?;
         let mut expect_config_file = p.root;
-        expect_config_file.push("precious.toml");
+        expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
         assert_eq!(config_file, expect_config_file);
 
         Ok(())
@@ -808,7 +838,7 @@ lint_failure_exit_codes = [1]
         let mut src_dir = helper.root();
         src_dir.push("src");
         let mut subdir_config = src_dir.clone();
-        subdir_config.push("precious.toml");
+        subdir_config.push(DEFAULT_CONFIG_FILE_NAME);
         helper.write_file(&subdir_config, SIMPLE_CONFIG)?;
         let _pushd = testhelper::Pushd::new(src_dir.clone())?;
 
@@ -825,7 +855,7 @@ lint_failure_exit_codes = [1]
     #[serial]
     fn basepaths_uses_cwd() -> Result<()> {
         let helper = testhelper::TestHelper::new()?
-            .with_config_file(SIMPLE_CONFIG)?
+            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
             .with_git_repo()?;
 
         let mut src_dir = helper.root();
@@ -860,7 +890,8 @@ include = "**/*"
 cmd     = ["true"]
 ok_exit_codes = [0]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -884,7 +915,8 @@ include = "**/*"
 cmd     = ["false"]
 ok_exit_codes = [0]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -909,7 +941,8 @@ cmd     = ["true"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -934,7 +967,8 @@ cmd     = ["false"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -982,7 +1016,8 @@ cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
         helper.write_file(test_replace.as_ref(), "The letter A")?;
         let _pushd = helper.pushd_to_root()?;
