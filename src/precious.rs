@@ -305,7 +305,11 @@ impl<'a> Precious<'a> {
 
     fn default_config_file(root: &Path) -> PathBuf {
         let mut file = root.to_path_buf();
-        file.push("precious.toml");
+        file.push(".precious.toml");
+        if !file.exists() {
+            file.pop();
+            file.push("precious.toml");
+        }
         file
     }
 
@@ -680,8 +684,13 @@ impl<'a> Precious<'a> {
 
     fn has_config_file(path: &Path) -> bool {
         let mut file = path.to_path_buf();
+        file.push(".precious.toml");
+        if file.exists() {
+            return true;
+        }
+        file.pop();
         file.push("precious.toml");
-        file.exists()
+        return file.exists();
     }
 }
 
@@ -742,7 +751,7 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let helper = testhelper::TestHelper::new()?.with_config_file("precious.toml", SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -755,6 +764,27 @@ lint_failure_exit_codes = [1]
         let (_, config_file) = Precious::config(&matches, &p.root)?;
         let mut expect_config_file = p.root;
         expect_config_file.push("precious.toml");
+        assert_eq!(config_file, expect_config_file);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn new_with_alternate_config_file_name() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_config_file(".precious.toml", SIMPLE_CONFIG)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = app();
+        let matches = app.try_get_matches_from(&["precious", "tidy", "--all"])?;
+
+        let p = Precious::new(&matches)?;
+        assert_eq!(p.chars, chars::FUN_CHARS);
+        assert!(!p.quiet);
+
+        let (_, config_file) = Precious::config(&matches, &p.root)?;
+        let mut expect_config_file = p.root;
+        expect_config_file.push(".precious.toml");
         assert_eq!(config_file, expect_config_file);
 
         Ok(())
@@ -825,7 +855,7 @@ lint_failure_exit_codes = [1]
     #[serial]
     fn basepaths_uses_cwd() -> Result<()> {
         let helper = testhelper::TestHelper::new()?
-            .with_config_file(SIMPLE_CONFIG)?
+            .with_config_file("precious.toml", SIMPLE_CONFIG)?
             .with_git_repo()?;
 
         let mut src_dir = helper.root();
@@ -860,7 +890,7 @@ include = "**/*"
 cmd     = ["true"]
 ok_exit_codes = [0]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper = testhelper::TestHelper::new()?.with_config_file("precious.toml", config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -884,7 +914,7 @@ include = "**/*"
 cmd     = ["false"]
 ok_exit_codes = [0]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper = testhelper::TestHelper::new()?.with_config_file("precious.toml", config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -909,7 +939,7 @@ cmd     = ["true"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper = testhelper::TestHelper::new()?.with_config_file("precious.toml", config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -934,7 +964,7 @@ cmd     = ["false"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper = testhelper::TestHelper::new()?.with_config_file("precious.toml", config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -982,7 +1012,7 @@ cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper = testhelper::TestHelper::new()?.with_config_file("precious.toml", config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
         helper.write_file(test_replace.as_ref(), "The letter A")?;
         let _pushd = helper.pushd_to_root()?;

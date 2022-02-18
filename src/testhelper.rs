@@ -50,11 +50,11 @@ impl TestHelper {
         Ok(self)
     }
 
-    pub fn with_config_file(self, content: &str) -> Result<Self> {
+    pub fn with_config_file(self, file_name: &str, content: &str) -> Result<Self> {
         if cfg!(windows) {
-            self.write_file(&self.config_file(), &content.replace("\n", "\r\n"))?;
+            self.write_file(&self.config_file(file_name), &content.replace("\n", "\r\n"))?;
         } else {
-            self.write_file(&self.config_file(), content)?;
+            self.write_file(&self.config_file(file_name), content)?;
         }
         Ok(self)
     }
@@ -141,9 +141,9 @@ impl TestHelper {
         self.root.clone()
     }
 
-    pub fn config_file(&self) -> PathBuf {
+    pub fn config_file(&self, file_name: &str) -> PathBuf {
         let mut path = self.root.clone();
-        path.push("precious.toml");
+        path.push(file_name);
         path
     }
 
