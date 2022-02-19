@@ -683,13 +683,7 @@ impl<'a> Precious<'a> {
     }
 
     fn has_config_file(path: &Path) -> bool {
-        let mut file = path.to_path_buf();
-        file.push(".precious.toml");
-        if file.exists() {
-            return true;
-        }
-        file.pop();
-        file.push("precious.toml");
+        let file = Self::default_config_file(path);
         return file.exists();
     }
 }
