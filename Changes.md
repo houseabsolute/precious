@@ -1,4 +1,4 @@
-## 0.1.3
+## 0.1.3 - 2022-02-19
 
 - Relaxed some dependencies for the benefit of packaging precious for
   Debian. Implemented by Jonas Smedegaard.
