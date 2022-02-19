@@ -68,71 +68,19 @@ impl TestHelper {
             self.write_file(p, "some content")?;
         }
 
-        command::run_command(
-            "git".to_string(),
-            ["init", "--initial-branch", "master"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        self.run_git(&["init", "--initial-branch", "master"])?;
 
         // If the tests are run in a totally clean environment they will blow
-        // up if these aren't set. This fixes
+        // up if this isnt't set. This fixes
         // https://github.com/houseabsolute/precious/issues/15.
-        command::run_command(
-            "git".to_string(),
-            ["config", "user.email", "precious@example.com"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
-        command::run_command(
-            "git".to_string(),
-            ["config", "user.name", "Precious Testhelper"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
-
+        self.run_git(&["config", "user.email", "precious@example.com"])?;
         // With this on I get line ending warnings from git on Windows if I
         // don't write out files with CRLF. Disabling this simplifies things
         // greatly.
-        command::run_command(
-            "git".to_string(),
-            ["config", "core.autocrlf", "false"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        self.run_git(&["config", "core.autocrlf", "false"])?;
 
         self.stage_all()?;
-        command::run_command(
-            "git".to_string(),
-            ["commit", "-m", "initial commit"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        self.run_git(&["commit", "-m", "initial commit"])?;
 
         Ok(())
     }
@@ -152,30 +100,11 @@ impl TestHelper {
     }
 
     pub fn stage_all(&self) -> Result<()> {
-        command::run_command(
-            "git".to_string(),
-            ["add", "."].iter().map(|a| a.to_string()).collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root()),
-        )?;
-        Ok(())
+        self.run_git(&["add", "."])
     }
 
     pub fn commit_all(&self) -> Result<()> {
-        command::run_command(
-            "git".to_string(),
-            ["commit", "-a", "-m", "committed"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root()),
-        )?;
-        Ok(())
+        self.run_git(&["commit", "-a", "-m", "committed"])
     }
 
     const ROOT_GITIGNORE: &'static str = "
@@ -245,6 +174,18 @@ generated.*
             self.root_gitignore_file.clone(),
             self.tests_data_gitignore_file.clone(),
         ])
+    }
+
+    fn run_git(&self, args: &[&str]) -> Result<()> {
+        command::run_command(
+            "git".to_string(),
+            args.iter().map(|a| a.to_string()).collect(),
+            &HashMap::new(),
+            &[0],
+            false,
+            Some(&self.root),
+        )?;
+        Ok(())
     }
 
     const TO_MODIFY: &'static [&'static str] = &["src/module.rs", "tests/data/foo.txt"];
