@@ -684,8 +684,7 @@ impl<'a> Precious<'a> {
     }
 
     fn has_config_file(path: &Path) -> bool {
-        let file = Self::default_config_file(path);
-        return file.exists();
+        Self::default_config_file(path).exists()
     }
 }
 
