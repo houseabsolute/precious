@@ -304,10 +304,11 @@ impl<'a> Precious<'a> {
     }
 
     fn default_config_file(root: &Path) -> PathBuf {
-        let mut file = root.to_path_buf();
+        let root_path = root.to_path_buf();
+        let mut file = root_path.clone();
         file.push(".precious.toml");
         if !file.exists() {
-            file.pop();
+            file = root_path.clone();
             file.push("precious.toml");
         }
         file
