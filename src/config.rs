@@ -299,7 +299,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spectral::prelude::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn filter_order_is_preserved1() -> Result<()> {
@@ -340,7 +340,7 @@ mod tests {
             .map(|k| k.as_str())
             .collect::<Vec<&str>>();
         let expect: Vec<&str> = vec!["rustfmt", "clippy", "omegasort-gitignore"];
-        assert_that(&keys).is_equal_to(&expect);
+        assert_eq!(keys, expect);
 
         Ok(())
     }
@@ -384,7 +384,7 @@ mod tests {
             .map(|k| k.as_str())
             .collect::<Vec<&str>>();
         let expect: Vec<&str> = vec!["clippy", "rustfmt", "omegasort-gitignore"];
-        assert_that(&keys).is_equal_to(&expect);
+        assert_eq!(keys, expect);
 
         Ok(())
     }
@@ -428,7 +428,7 @@ mod tests {
             .map(|k| k.as_str())
             .collect::<Vec<&str>>();
         let expect: Vec<&str> = vec!["omegasort-gitignore", "clippy", "rustfmt"];
-        assert_that(&keys).is_equal_to(&expect);
+        assert_eq!(keys, expect);
 
         Ok(())
     }

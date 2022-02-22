@@ -61,14 +61,15 @@ customize this as needed to install only the tools you need for your project.
 
 ## Configuration
 
-Precious is configured via a single `precious.toml` file that lives in your
-project root. The file is in [TOML format](https://github.com/toml-lang/toml).
+Precious is configured via a single `precious.toml` or `.precious.toml` file
+that lives in your project root. The file is in [TOML
+format](https://github.com/toml-lang/toml).
 
 There is just one key that can be set in the top level table of the config file:
 
-| Key | Type | Required? | Description |
-| --- | ---- | --------- | ----------- |
-| `exclude` | array of strings | no | Each array member is a pattern that will be matched against potential files when `precious` is run. These patterns are matched in the same way patterns in a [gitignore file](https://git-scm.com/docs/gitignore). However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
+| Key       | Type             | Required? | Description                                                                                                                                                                                                                                                                                               |
+| --------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exclude` | array of strings | no        | Each array member is a pattern that will be matched against potential files when `precious` is run. These patterns are matched in the same way patterns in a [gitignore file](https://git-scm.com/docs/gitignore). However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
 
 All other configuration is on a per-filter basis. A filter is something that
 either tidies (aka pretty prints or beautifies) or lints your code (or
@@ -84,21 +85,21 @@ Filters are run in the same order as they appear in the config file.
 
 The keys that are allowed for each command are as follows:
 
-| Key | Type | Required? | Applies To | Default | Description |
-| --- | ---- | --------- | ---------- | ------- | ----------- |
-| `type` | strings | **yes** | all | | This must be either `lint`, `tidy`, or `both`. This defines what type of filter this is. Note that a filter which is `both` **must** define `lint_flags` or `tidy_flags` as well. |
-| `include` | array of strings | **yes** | all | | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter applies to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
-| `exclude` | array of strings | no | all | | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter should not be applied to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
-| `cmd` | array of strings | **yes** | all | | This is the executable to be run followed by any arguments that should always be passed. |
-| `env` | table of strings->string | no | all | | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings. |
-| `path_flag` | string | no | all | | By default, `precious` will pass each path being operated on to the command it executes as a final, positional, argument. However, if the command takes paths via a flag you need to specify that flag with this key. |
-| `lint_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in linting mode. This is how you set that flag. |
-| `tidy_flags` | array of strings | no | combined linter & tidier | | If a command is both a linter and tidier than it may take extra flags to operate in tidying mode. This is how you set that flag. |
-| `run_mode` | "files", "dirs", "root" | no | all | "files" | This determines how the command is run. The default, "files", means that the command is run once per file that matches its include/exclude settings. If this is set to "dirs", then the command is run once per directory *containing* files that matches its include/exclude settings. If it's set to "root", then it is run exactly once from the root of the project if it matches any files. |
-| `chdir` |  boolean | no | all | false | If this is true, then the command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if `run_mode` is `dirs` and `chdir` is true then `precious` will not pass the path to the executable as an argument. |
-| `ok_exit_codes` | array of integers | **yes** | all | | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit. |
-| `lint_failure_exit_codes` | array of integers | no | linters |  | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue. |
-| `expect_stderr` | boolean | all | false | | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. If this is not the case, set this to true. |
+| Key                       | Type                     | Required? | Applies To               | Default | Description                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ------------------------ | --------- | ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `type`                    | strings                  | **yes**   | all                      |         | This must be either `lint`, `tidy`, or `both`. This defines what type of filter this is. Note that a filter which is `both` **must** define `lint_flags` or `tidy_flags` as well.                                                                                                                                                                                                                |
+| `include`                 | array of strings         | **yes**   | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter applies to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                                                                                                                        |
+| `exclude`                 | array of strings         | no        | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this filter should not be applied to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                                                                                                          |
+| `cmd`                     | array of strings         | **yes**   | all                      |         | This is the executable to be run followed by any arguments that should always be passed.                                                                                                                                                                                                                                                                                                         |
+| `env`                     | table of strings->string | no        | all                      |         | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings.                                                                                                                                                                                                                                   |
+| `path_flag`               | string                   | no        | all                      |         | By default, `precious` will pass each path being operated on to the command it executes as a final, positional, argument. However, if the command takes paths via a flag you need to specify that flag with this key.                                                                                                                                                                            |
+| `lint_flags`              | array of strings         | no        | combined linter & tidier |         | If a command is both a linter and tidier than it may take extra flags to operate in linting mode. This is how you set that flag.                                                                                                                                                                                                                                                                 |
+| `tidy_flags`              | array of strings         | no        | combined linter & tidier |         | If a command is both a linter and tidier than it may take extra flags to operate in tidying mode. This is how you set that flag.                                                                                                                                                                                                                                                                 |
+| `run_mode`                | "files", "dirs", "root"  | no        | all                      | "files" | This determines how the command is run. The default, "files", means that the command is run once per file that matches its include/exclude settings. If this is set to "dirs", then the command is run once per directory _containing_ files that matches its include/exclude settings. If it's set to "root", then it is run exactly once from the root of the project if it matches any files. |
+| `chdir`                   | boolean                  | no        | all                      | false   | If this is true, then the command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if `run_mode` is `dirs` and `chdir` is true then `precious` will not pass the path to the executable as an argument.                                   |
+| `ok_exit_codes`           | array of integers        | **yes**   | all                      |         | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit.                                                                                                                                                                                                                  |
+| `lint_failure_exit_codes` | array of integers        | no        | linters                  |         | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue.                                                                                                                                                             |
+| `expect_stderr`           | boolean                  | all       | false                    |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. If this is not the case, set this to true.                                                                                                                                                                                                                                 |
 
 ### Referencing the Project Root
 
@@ -120,16 +121,16 @@ To get help run `precious --help`.
 
 The root command takes the following options:
 
-| Flag | Description |
-| ---- | ----------- |
-| `-h`, `--help` | Prints help information |
-| `-q`, `--quiet` | Suppresses most output |
-| `-V`, `--version` | Prints version information |
-| `-v`, `--verbose` | Enable verbose output |
-| `-d`, `--debug` | Enable debugging output |
-| `-t`, `--trace` | Enable tracing output (maximum logging) |
-| `--ascii` | Replace super-fun Unicode symbols with terribly boring ASCII |
-| `-c`, `--config` `<config>` | Path to config file |
+| Flag                        | Description                                                         |
+| --------------------------- | ------------------------------------------------------------------- |
+| `-h`, `--help`              | Prints help information                                             |
+| `-q`, `--quiet`             | Suppresses most output                                              |
+| `-V`, `--version`           | Prints version information                                          |
+| `-v`, `--verbose`           | Enable verbose output                                               |
+| `-d`, `--debug`             | Enable debugging output                                             |
+| `-t`, `--trace`             | Enable tracing output (maximum logging)                             |
+| `--ascii`                   | Replace super-fun Unicode symbols with terribly boring ASCII        |
+| `-c`, `--config` `<config>` | Path to config file                                                 |
 | `-j`, `--jobs` `<jobs>`     | Number of parallel jobs (threads) to run (defaults to one per core) |
 
 ### Subcommands
@@ -143,22 +144,22 @@ are for selecting paths to operate on.
 When you run `precious` you must tell it what paths to operate on. Precious
 supports several ways of setting these via command line arguments:
 
-| Mode | Flag | Description |
-| ---- | ---- | ----------- |
-| All paths | `-a`, `--all` | Run on all paths in the project. |
-| Modified files according to git | `-g`, `--git` | Run on all files that git reports as having been modified. |
-| Staged files according to git | `-s`, `--staged` | Run on all files that git reports as having been staged. This will stash unstaged changes while it runs and pop the stash at the end. This ensures that filters only run against the staged version of your codebase. |
-| Paths given on CLI | | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other options. If any of these paths are directories then that entire directory tree will be included. |
+| Mode                            | Flag             | Description                                                                                                                                                                                                                              |
+| ------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All paths                       | `-a`, `--all`    | Run on all paths in the project.                                                                                                                                                                                                         |
+| Modified files according to git | `-g`, `--git`    | Run on all files that git reports as having been modified.                                                                                                                                                                               |
+| Staged files according to git   | `-s`, `--staged` | Run on all files that git reports as having been staged. This will stash unstaged changes while it runs and pop the stash at the end. This ensures that filters only run against the staged version of your codebase.                    |
+| Paths given on CLI              |                  | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other options. If any of these paths are directories then that entire directory tree will be included. |
 
 #### Default Exclusions
 
-When selecting paths `precious` *always* respects your ignore files. Right now
+When selecting paths `precious` _always_ respects your ignore files. Right now
 it only knows how this works for git, and it will respect all of the following
 ignore files:
 
-* Per-directory `.ignore` and  `.gitignore` files.
-* The `.git/info/exclude` file.
-* Global gitignore globs, usually found in `$XDG_CONFIG_HOME/git/ignore`.
+- Per-directory `.ignore` and `.gitignore` files.
+- The `.git/info/exclude` file.
+- Global gitignore globs, usually found in `$XDG_CONFIG_HOME/git/ignore`.
 
 This is implemented using the [rust `ignore`
 crate](https://crates.io/crates/ignore), so adding support for other VCS
@@ -172,19 +173,19 @@ Finally, you can specify per-filter `include` and `exclude` keys.
 When `precious` runs it does the following to determine which filters apply to
 which paths.
 
-* The base paths are selected based on the command line option specified.
-* VCS ignore rules are applied to remove paths from this list.
-* Each filter is given either the files or directories from the list of paths,
+- The base paths are selected based on the command line option specified.
+- VCS ignore rules are applied to remove paths from this list.
+- Each filter is given either the files or directories from the list of paths,
   depending on the `run_mode` setting for that filter.
-  * If the filter's `run_mode` is `root`, then it will get all of the files in
+  - If the filter's `run_mode` is `root`, then it will get all of the files in
     all directories and will use those to determine whether to run or
     not. These filters are always run exactly once if any of the files match.
-* The filter will check its include and exclude rules. The path must match at
-  least one include rule *and* not match any exclude rules to be accepted.
-  * If the filter is per-file, it matches each path against its rules as is.
-  * If the filter is per-directory, it matches the files in the directory
-    against its include and exclude rules. If *any* of the files match the
-    filter is run. If *none* of the files match the filter is not run.
+- The filter will check its include and exclude rules. The path must match at
+  least one include rule _and_ not match any exclude rules to be accepted.
+  - If the filter is per-file, it matches each path against its rules as is.
+  - If the filter is per-directory, it matches the files in the directory
+    against its include and exclude rules. If _any_ of the files match the
+    filter is run. If _none_ of the files match the filter is not run.
 
 ## Configuration Recommendations
 
@@ -195,7 +196,7 @@ Here are some recommendations for how to get the best experience with precious.
 Some tools might work equally well with "root" or "dirs" as a the run
 mode. The right run mode to choose depends on how you are using precious.
 
-In general, if you either have a very small set of directories, *or* you are
+In general, if you either have a very small set of directories, _or_ you are
 running precious on most or all of the directories at once, then the "root"
 mode will be faster.
 
@@ -205,13 +206,13 @@ tidy a small subset of these at once, then "dirs" mode will be faster.
 ### Quiet Flags
 
 Many tools will accept a "quiet" flag of some sort. In general, you probably
-*do not* want to run tools in a quiet mode with precious.
+_do not_ want to run tools in a quiet mode with precious.
 
 In the case of a successful tidy or lint command execution, precious already
 traps all stdout from the command that it runs. If the command fails somehow,
 precious will print out stdout (and stderr) output.
 
-By default, precious treats *any* output to stderr as an error in the command
+By default, precious treats _any_ output to stderr as an error in the command
 (as opposed to a linting failure). If you set `expect_stderr = true`, then
 precious treats stderr just like stdout.
 
@@ -241,7 +242,7 @@ run_mode = "root"
 ```
 
 This combination of flags will cause `precious` to run the command exactly
-once in the project root. 
+once in the project root.
 
 The above config will pass a path to the command, `.`. If the command does not
 need a path, set `chdir` to `true`:

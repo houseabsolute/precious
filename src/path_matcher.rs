@@ -28,7 +28,6 @@ impl Matcher {
 mod tests {
     use super::*;
     use anyhow::Result;
-    use spectral::prelude::*;
     use std::path::PathBuf;
 
     struct TestSet {
@@ -71,14 +70,10 @@ mod tests {
         for t in tests {
             let m = Matcher::new(&t.globs)?;
             for y in t.yes {
-                assert_that(&m.path_matches(&PathBuf::from(y)))
-                    .named(format!("{} matches", y).as_str())
-                    .is_true();
+                assert!(m.path_matches(&PathBuf::from(y)), "{} matches", y);
             }
             for n in t.no {
-                assert_that(&m.path_matches(&PathBuf::from(n)))
-                    .named(format!("{} matches", n).as_str())
-                    .is_false();
+                assert!(!m.path_matches(&PathBuf::from(n)), "{} matches", n);
             }
         }
 

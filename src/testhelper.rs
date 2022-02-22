@@ -50,11 +50,11 @@ impl TestHelper {
         Ok(self)
     }
 
-    pub fn with_config_file(self, content: &str) -> Result<Self> {
+    pub fn with_config_file(self, file_name: &str, content: &str) -> Result<Self> {
         if cfg!(windows) {
-            self.write_file(&self.config_file(), &content.replace("\n", "\r\n"))?;
+            self.write_file(&self.config_file(file_name), &content.replace("\n", "\r\n"))?;
         } else {
-            self.write_file(&self.config_file(), content)?;
+            self.write_file(&self.config_file(file_name), content)?;
         }
         Ok(self)
     }
@@ -68,45 +68,19 @@ impl TestHelper {
             self.write_file(p, "some content")?;
         }
 
-        command::run_command(
-            "git".to_string(),
-            ["init", "--initial-branch", "master"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        self.run_git(&["init", "--initial-branch", "master"])?;
 
+        // If the tests are run in a totally clean environment they will blow
+        // up if this isnt't set. This fixes
+        // https://github.com/houseabsolute/precious/issues/15.
+        self.run_git(&["config", "user.email", "precious@example.com"])?;
         // With this on I get line ending warnings from git on Windows if I
         // don't write out files with CRLF. Disabling this simplifies things
         // greatly.
-        command::run_command(
-            "git".to_string(),
-            ["config", "core.autocrlf", "false"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        self.run_git(&["config", "core.autocrlf", "false"])?;
 
         self.stage_all()?;
-        command::run_command(
-            "git".to_string(),
-            ["commit", "-m", "initial commit"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        self.run_git(&["commit", "-m", "initial commit"])?;
 
         Ok(())
     }
@@ -115,9 +89,9 @@ impl TestHelper {
         self.root.clone()
     }
 
-    pub fn config_file(&self) -> PathBuf {
+    pub fn config_file(&self, file_name: &str) -> PathBuf {
         let mut path = self.root.clone();
-        path.push("precious.toml");
+        path.push(file_name);
         path
     }
 
@@ -126,30 +100,11 @@ impl TestHelper {
     }
 
     pub fn stage_all(&self) -> Result<()> {
-        command::run_command(
-            "git".to_string(),
-            ["add", "."].iter().map(|a| a.to_string()).collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root()),
-        )?;
-        Ok(())
+        self.run_git(&["add", "."])
     }
 
     pub fn commit_all(&self) -> Result<()> {
-        command::run_command(
-            "git".to_string(),
-            ["commit", "-a", "-m", "committed"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root()),
-        )?;
-        Ok(())
+        self.run_git(&["commit", "-a", "-m", "committed"])
     }
 
     const ROOT_GITIGNORE: &'static str = "
@@ -221,6 +176,18 @@ generated.*
         ])
     }
 
+    fn run_git(&self, args: &[&str]) -> Result<()> {
+        command::run_command(
+            "git".to_string(),
+            args.iter().map(|a| a.to_string()).collect(),
+            &HashMap::new(),
+            &[0],
+            false,
+            Some(&self.root),
+        )?;
+        Ok(())
+    }
+
     const TO_MODIFY: &'static [&'static str] = &["src/module.rs", "tests/data/foo.txt"];
 
     pub fn modify_files(&self) -> Result<Vec<PathBuf>> {
@@ -249,6 +216,7 @@ generated.*
         Ok(())
     }
 
+    #[cfg(not(target_os = "windows"))]
     pub fn read_file(&self, rel: &Path) -> Result<String> {
         let mut full = self.root.clone();
         full.push(rel);
