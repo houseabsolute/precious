@@ -11,9 +11,20 @@ License-Grant:
 License: Apache-2.0 or Expat
 Reference: Cargo.toml
 
+Files: debian/extralibs/path-clean-0.1.0/*
+Copyright:
+  2018  Dan Reeves <hey@danreev.es>
+License-Grant:
+ license = "MIT OR Apache-2.0"
+License: Apache-2.0 or Expat
+Reference:
+ debian/extralibs/path-clean-0.1.0/Cargo.toml
+ debian/extralibs/path-clean-0.1.0/LICENSE-APACHE
+ debian/extralibs/path-clean-0.1.0/LICENSE-MIT
+
 Files: debian/*
 Copyright:
-  2021  Jonas Smedegaard <dr@jones.dk>
+  2021-2022  Jonas Smedegaard <dr@jones.dk>
 License-Grant:
  This packaging is free software;
  you can redistribute it and/or modify it
