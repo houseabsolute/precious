@@ -4,7 +4,7 @@ use crate::config;
 use crate::filter;
 use crate::vcs;
 use anyhow::{Error, Result};
-use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
+use clap::{App, Arg, ArgGroup, ArgMatches};
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
 use log::{debug, error, info};
@@ -59,66 +59,67 @@ struct ActionError {
 
 #[derive(Debug)]
 pub struct Precious<'a> {
-    matches: &'a ArgMatches<'a>,
+    matches: &'a ArgMatches,
     mode: basepaths::Mode,
     root: PathBuf,
     cwd: PathBuf,
     config: config::Config,
-    config_file: PathBuf,
     chars: chars::Chars,
     quiet: bool,
     thread_pool: ThreadPool,
 }
 
-pub fn app<'a>() -> App<'a, 'a> {
+const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
+
+pub fn app<'a>() -> App<'a> {
     App::new("precious")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Dave Rolsky <autarch@urth.org>")
         .about("One code quality tool to rule them all")
         .arg(
-            Arg::with_name("config")
-                .short("c")
+            Arg::new("config")
+                .short('c')
                 .long("config")
                 .takes_value(true)
                 .help("Path to config file"),
         )
         .arg(
-            Arg::with_name("jobs")
-                .short("j")
+            Arg::new("jobs")
+                .short('j')
                 .long("jobs")
                 .takes_value(true)
                 .help("Number of parallel jobs (threads) to run (defaults to one per core)"),
         )
         .arg(
-            Arg::with_name("ascii")
+            Arg::new("ascii")
                 .long("ascii")
                 .help("Replace super-fun Unicode symbols with terribly boring ASCII"),
         )
         .arg(
-            Arg::with_name("verbose")
-                .short("v")
+            Arg::new("verbose")
+                .short('v')
                 .long("verbose")
                 .help("Enable verbose output"),
         )
         .arg(
-            Arg::with_name("debug")
-                .short("d")
+            Arg::new("debug")
+                .short('d')
                 .long("debug")
                 .help("Enable debugging output"),
         )
         .arg(
-            Arg::with_name("trace")
-                .short("t")
+            Arg::new("trace")
+                .short('t')
                 .long("trace")
                 .help("Enable tracing output (maximum logging)"),
         )
         .arg(
-            Arg::with_name("quiet")
-                .short("q")
+            Arg::new("quiet")
+                .short('q')
                 .long("quiet")
                 .help("Suppresses most output"),
         )
-        .group(ArgGroup::with_name("log-level").args(&["verbose", "debug", "trace", "quiet"]))
+        .group(ArgGroup::new("log-level").args(&["verbose", "debug", "trace", "quiet"]))
         .subcommand(common_subcommand(
             "tidy",
             "Tidies the specified files and/or directories",
@@ -129,35 +130,35 @@ pub fn app<'a>() -> App<'a, 'a> {
         ))
 }
 
-fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a, 'a> {
-    SubCommand::with_name(name)
+fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a> {
+    App::new(name)
         .about(about)
         .arg(
-            Arg::with_name("all")
-                .short("a")
+            Arg::new("all")
+                .short('a')
                 .long("all")
                 .help("Run against all files in the current directory and below"),
         )
         .arg(
-            Arg::with_name("git")
-                .short("g")
+            Arg::new("git")
+                .short('g')
                 .long("git")
                 .help("Run against files that have been modified according to git"),
         )
         .arg(
-            Arg::with_name("staged")
-                .short("s")
+            Arg::new("staged")
+                .short('s')
                 .long("staged")
                 .help("Run against file content that is staged for a git commit"),
         )
         .arg(
-            Arg::with_name("paths")
-                .multiple(true)
+            Arg::new("paths")
+                .multiple_occurrences(true)
                 .takes_value(true)
                 .help("A list of paths on which to operate"),
         )
         .group(
-            ArgGroup::with_name("operate-on")
+            ArgGroup::new("operate-on")
                 .args(&["all", "git", "staged", "paths"])
                 .required(true),
         )
@@ -217,13 +218,12 @@ impl<'a> Precious<'a> {
 
         let cwd = env::current_dir()?;
         let root = Self::root(&cwd)?;
-        let (config, config_file) = Self::config(matches, &root)?;
+        let (config, _) = Self::config(matches, &root)?;
 
         Ok(Precious {
             matches,
             mode: Self::mode(matches)?,
             config,
-            config_file,
             root,
             cwd,
             chars: c,
@@ -236,7 +236,7 @@ impl<'a> Precious<'a> {
 
     fn mode(matches: &'a ArgMatches) -> Result<basepaths::Mode> {
         match matches.subcommand() {
-            (_, Some(subc_matches)) => {
+            Some((_, subc_matches)) => {
                 if subc_matches.is_present("all") {
                     return Ok(basepaths::Mode::All);
                 } else if subc_matches.is_present("git") {
@@ -251,7 +251,7 @@ impl<'a> Precious<'a> {
 
                 Ok(basepaths::Mode::FromCli)
             }
-            _ => Err(PreciousError::NoSubcommandInCliArgs.into()),
+            None => Err(PreciousError::NoSubcommandInCliArgs.into()),
         }
     }
 
@@ -306,9 +306,30 @@ impl<'a> Precious<'a> {
     }
 
     fn default_config_file(root: &Path) -> PathBuf {
-        let mut file = root.to_path_buf();
-        file.push("precious.toml");
-        file
+        let root_path = root.to_path_buf();
+        // It'd be nicer to use the version of this provided by itertools, but
+        // that requires itertools 0.10.1, and we want to keep the version at
+        // 0.9.0 for the benefit of Debian.
+        Self::find_or_first(
+            CONFIG_FILE_NAMES.iter().map(|n| {
+                let mut path = root_path.clone();
+                path.push(n);
+                path
+            }),
+            |p| p.exists(),
+        )
+    }
+
+    fn find_or_first<I, P>(mut iter: I, pred: P) -> PathBuf
+    where
+        I: Iterator<Item = PathBuf>,
+        P: Fn(&Path) -> bool,
+    {
+        let first = iter.next().unwrap();
+        if pred(&first) {
+            return first;
+        }
+        iter.find(|i| pred(i)).unwrap_or(first)
     }
 
     pub fn run(&mut self) -> i8 {
@@ -661,10 +682,10 @@ impl<'a> Precious<'a> {
             .collect::<Vec<PathBuf>>()
     }
 
-    fn matched_subcommand(&self) -> &ArgMatches<'a> {
+    fn matched_subcommand(&self) -> &ArgMatches {
         match self.matches.subcommand() {
-            ("tidy", Some(m)) => m,
-            ("lint", Some(m)) => m,
+            Some(("tidy", m)) => m,
+            Some(("lint", m)) => m,
             _ => panic!("Somehow none of our subcommands matched and clap did not return an error"),
         }
     }
@@ -681,9 +702,7 @@ impl<'a> Precious<'a> {
     }
 
     fn has_config_file(path: &Path) -> bool {
-        let mut file = path.to_path_buf();
-        file.push("precious.toml");
-        file.exists()
+        Self::default_config_file(path).exists()
     }
 }
 
@@ -722,10 +741,13 @@ mod tests {
     use super::*;
     use crate::testhelper;
     use itertools::Itertools;
+    use pretty_assertions::assert_eq;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
-    use spectral::prelude::*;
-    use std::{path::PathBuf, str::FromStr};
+    use std::path::PathBuf;
+    #[cfg(not(target_os = "windows"))]
+    use std::str::FromStr;
+    #[cfg(not(target_os = "windows"))]
     use which::which;
 
     const SIMPLE_CONFIG: &str = r#"
@@ -738,21 +760,27 @@ ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
 
+    const DEFAULT_CONFIG_FILE_NAME: &str = super::CONFIG_FILE_NAMES[0];
+
     #[test]
     #[serial]
     fn new() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
-        let _pushd = helper.pushd_to_root()?;
+        for name in super::CONFIG_FILE_NAMES {
+            let helper = testhelper::TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
+            let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "tidy", "--all"])?;
+            let app = app();
+            let matches = app.try_get_matches_from(&["precious", "tidy", "--all"])?;
 
-        let p = Precious::new(&matches)?;
-        assert_that(&p.chars).is_equal_to(chars::FUN_CHARS);
-        let mut expect_config_file = p.root;
-        expect_config_file.push("precious.toml");
-        assert_that(&p.config_file).is_equal_to(expect_config_file);
-        assert_that(&p.quiet).is_equal_to(false);
+            let p = Precious::new(&matches)?;
+            assert_eq!(p.chars, chars::FUN_CHARS);
+            assert!(!p.quiet);
+
+            let (_, config_file) = Precious::config(&matches, &p.root)?;
+            let mut expect_config_file = p.root;
+            expect_config_file.push(name);
+            assert_eq!(config_file, expect_config_file);
+        }
 
         Ok(())
     }
@@ -760,14 +788,15 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_ascii_flag() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let helper = testhelper::TestHelper::new()?
+            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--ascii", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--ascii", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.chars).is_equal_to(chars::BORING_CHARS);
+        assert_eq!(p.chars, chars::BORING_CHARS);
 
         Ok(())
     }
@@ -775,20 +804,28 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_config_path() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_config_file(SIMPLE_CONFIG)?;
+        let helper = testhelper::TestHelper::new()?
+            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&[
+        let matches = app.try_get_matches_from(&[
             "precious",
             "--config",
-            helper.config_file().to_str().unwrap(),
+            helper
+                .config_file(DEFAULT_CONFIG_FILE_NAME)
+                .to_str()
+                .unwrap(),
             "tidy",
             "--all",
         ])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.config_file).is_equal_to(helper.config_file());
+
+        let (_, config_file) = Precious::config(&matches, &p.root)?;
+        let mut expect_config_file = p.root;
+        expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
+        assert_eq!(config_file, expect_config_file);
 
         Ok(())
     }
@@ -801,15 +838,15 @@ lint_failure_exit_codes = [1]
         let mut src_dir = helper.root();
         src_dir.push("src");
         let mut subdir_config = src_dir.clone();
-        subdir_config.push("precious.toml");
+        subdir_config.push(DEFAULT_CONFIG_FILE_NAME);
         helper.write_file(&subdir_config, SIMPLE_CONFIG)?;
         let _pushd = testhelper::Pushd::new(src_dir.clone())?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
-        assert_that(&p.root).is_equal_to(src_dir);
+        assert_eq!(p.root, src_dir);
 
         Ok(())
     }
@@ -818,7 +855,7 @@ lint_failure_exit_codes = [1]
     #[serial]
     fn basepaths_uses_cwd() -> Result<()> {
         let helper = testhelper::TestHelper::new()?
-            .with_config_file(SIMPLE_CONFIG)?
+            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
             .with_git_repo()?;
 
         let mut src_dir = helper.root();
@@ -826,7 +863,7 @@ lint_failure_exit_codes = [1]
         let _pushd = testhelper::Pushd::new(src_dir)?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let mut paths = p.basepaths()?;
@@ -838,7 +875,7 @@ lint_failure_exit_codes = [1]
                 .map(PathBuf::from)
                 .collect(),
         }];
-        assert_that(&paths.paths(vec![])?).is_equal_to(Some(expect));
+        assert_eq!(paths.paths(vec![])?, Some(expect));
 
         Ok(())
     }
@@ -853,16 +890,17 @@ include = "**/*"
 cmd     = ["true"]
 ok_exit_codes = [0]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(0);
+        assert_eq!(status, 0);
 
         Ok(())
     }
@@ -877,16 +915,17 @@ include = "**/*"
 cmd     = ["false"]
 ok_exit_codes = [0]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(1);
+        assert_eq!(status, 1);
 
         Ok(())
     }
@@ -902,16 +941,17 @@ cmd     = ["true"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(0);
+        assert_eq!(status, 0);
 
         Ok(())
     }
@@ -927,16 +967,17 @@ cmd     = ["false"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(1);
+        assert_eq!(status, 1);
 
         Ok(())
     }
@@ -975,21 +1016,22 @@ cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper = testhelper::TestHelper::new()?.with_config_file(config)?;
+        let helper =
+            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
         helper.write_file(test_replace.as_ref(), "The letter A")?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
-        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "-a"])?;
+        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "-a"])?;
 
         let mut p = Precious::new(&matches)?;
         let status = p.run();
 
-        assert_that(&status).is_equal_to(0);
+        assert_eq!(status, 0);
 
         let content = helper.read_file(test_replace.as_ref())?;
-        assert_that(&content).is_equal_to("The letter b".to_string());
+        assert_eq!(content, "The letter b".to_string());
 
         Ok(())
     }
@@ -1043,9 +1085,7 @@ lint_failure_exit_codes = [1]
         for k in tests.keys().sorted() {
             let f = format_duration(k);
             let e = tests.get(k).unwrap().to_string();
-            assert_that(&f)
-                .named(&format!("{}s {}ns", k.as_secs(), k.as_nanos()))
-                .is_equal_to(&e);
+            assert_eq!(f, e, "{}s {}ns", k.as_secs(), k.as_nanos());
         }
     }
 }

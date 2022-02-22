@@ -14,8 +14,7 @@ function install_tools () {
     run "rustup component add clippy"
     run "ubi --project houseabsolute/precious --in ~/bin"
     run "ubi --project houseabsolute/omegasort --in ~/bin"
-    # We need the unstable version for --skip-children
-    run "ubi --project rust-lang/rustfmt --in ~/bin"
+    run "sudo npm install --global prettier"
 }
 
 if [ "$1" == "-v" ]; then

@@ -330,7 +330,8 @@ mod tests {
     use super::*;
     use crate::testhelper;
     use anyhow::Result;
-    use spectral::prelude::*;
+    use pretty_assertions::assert_eq;
+
     use std::fs;
 
     fn new_basepaths(mode: Mode, root: PathBuf) -> Result<BasePaths> {
@@ -351,39 +352,46 @@ mod tests {
 
         let bp = new_basepaths(Mode::All, helper.root())?;
         let paths = bp.files_to_paths(helper.all_files())?.unwrap();
-        assert_that(&paths.len())
-            .named("got three paths entries")
-            .is_equal_to(3);
-        assert_that(&paths[0]).is_equal_to(Paths {
-            dir: PathBuf::from("."),
-            files: ["README.md", "can_ignore.x", "merge-conflict-file"]
+        assert_eq!(paths.len(), 3, "got three paths entries");
+        assert_eq!(
+            paths[0],
+            Paths {
+                dir: PathBuf::from("."),
+                files: ["README.md", "can_ignore.x", "merge-conflict-file"]
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect(),
+            }
+        );
+        assert_eq!(
+            paths[1],
+            Paths {
+                dir: PathBuf::from("src"),
+                files: [
+                    "src/bar.rs",
+                    "src/can_ignore.rs",
+                    "src/main.rs",
+                    "src/module.rs",
+                ]
                 .iter()
                 .map(PathBuf::from)
                 .collect(),
-        });
-        assert_that(&paths[1]).is_equal_to(Paths {
-            dir: PathBuf::from("src"),
-            files: [
-                "src/bar.rs",
-                "src/can_ignore.rs",
-                "src/main.rs",
-                "src/module.rs",
-            ]
-            .iter()
-            .map(PathBuf::from)
-            .collect(),
-        });
-        assert_that(&paths[2]).is_equal_to(Paths {
-            dir: PathBuf::from("tests/data"),
-            files: [
-                "tests/data/bar.txt",
-                "tests/data/foo.txt",
-                "tests/data/generated.txt",
-            ]
-            .iter()
-            .map(PathBuf::from)
-            .collect(),
-        });
+            }
+        );
+        assert_eq!(
+            paths[2],
+            Paths {
+                dir: PathBuf::from("tests/data"),
+                files: [
+                    "tests/data/bar.txt",
+                    "tests/data/foo.txt",
+                    "tests/data/generated.txt",
+                ]
+                .iter()
+                .map(PathBuf::from)
+                .collect(),
+            }
+        );
         Ok(())
     }
 
@@ -391,7 +399,7 @@ mod tests {
     fn all_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(Mode::All, helper.root())?;
-        assert_that(&bp.paths(vec![])?).is_equal_to(bp.files_to_paths(helper.all_files())?);
+        assert_eq!(bp.paths(vec![])?, bp.files_to_paths(helper.all_files())?);
         Ok(())
     }
 
@@ -403,7 +411,7 @@ mod tests {
         expect.append(&mut gitignores);
 
         let mut bp = new_basepaths(Mode::All, helper.root())?;
-        assert_that(&bp.paths(vec![])?).is_equal_to(bp.files_to_paths(expect)?);
+        assert_eq!(bp.paths(vec![])?, bp.files_to_paths(expect)?);
         Ok(())
     }
 
@@ -412,8 +420,8 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(Mode::GitModified, helper.root())?;
         let res = bp.paths(vec![]);
-        assert_that(&res).is_ok();
-        assert_that(&res.unwrap()).is_none();
+        assert!(res.is_ok());
+        assert!(res.unwrap().is_none());
         Ok(())
     }
 
@@ -429,7 +437,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
+        assert_eq!(bp.paths(vec![])?, expect);
         Ok(())
     }
 
@@ -454,7 +462,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
+        assert_eq!(bp.paths(vec![])?, expect);
         Ok(())
     }
 
@@ -463,8 +471,8 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
         let res = bp.paths(vec![]);
-        assert_that(&res).is_ok();
-        assert_that(&res.unwrap()).is_none();
+        assert!(res.is_ok());
+        assert!(res.unwrap().is_none());
         Ok(())
     }
 
@@ -476,8 +484,8 @@ mod tests {
         {
             let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
             let res = bp.paths(vec![]);
-            assert_that(&res).is_ok();
-            assert_that(&res.unwrap()).is_none();
+            assert!(res.is_ok());
+            assert!(res.unwrap().is_none());
         }
 
         {
@@ -490,7 +498,7 @@ mod tests {
                     .map(PathBuf::from)
                     .collect::<Vec<PathBuf>>(),
             )?;
-            assert_that(&bp.paths(vec![])?).is_equal_to(expect);
+            assert_eq!(bp.paths(vec![])?, expect);
         }
         Ok(())
     }
@@ -513,7 +521,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
+        assert_eq!(bp.paths(vec![])?, expect);
         Ok(())
     }
 
@@ -534,12 +542,16 @@ mod tests {
                     .map(PathBuf::from)
                     .collect::<Vec<PathBuf>>(),
             )?;
-            assert_that(&bp.paths(vec![])?).is_equal_to(expect);
-            assert_that(&String::from_utf8(fs::read(helper.root().join(unstaged))?)?)
-                .is_equal_to(String::from("some content"));
+            assert_eq!(bp.paths(vec![])?, expect);
+            assert_eq!(
+                String::from_utf8(fs::read(helper.root().join(unstaged))?)?,
+                String::from("some content"),
+            );
         }
-        assert_that(&String::from_utf8(fs::read(helper.root().join(unstaged))?)?)
-            .is_equal_to(String::from("new content"));
+        assert_eq!(
+            String::from_utf8(fs::read(helper.root().join(unstaged))?)?,
+            String::from("new content"),
+        );
         Ok(())
     }
 
@@ -576,8 +588,8 @@ mod tests {
         let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
         let expect = bp.files_to_paths(vec![PathBuf::from("merge-conflict-here")])?;
 
-        assert_that(&bp.paths(vec![])?).is_equal_to(expect);
-        assert_that(&bp.stashed).is_equal_to(false);
+        assert_eq!(bp.paths(vec![])?, expect);
+        assert!(!bp.stashed);
         Ok(())
     }
 
@@ -594,7 +606,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths(vec![PathBuf::from("tests")])?).is_equal_to(expect);
+        assert_eq!(bp.paths(vec![PathBuf::from("tests")])?, expect);
         Ok(())
     }
 
@@ -615,7 +627,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_that(&bp.paths(vec![PathBuf::from(".")])?).is_equal_to(expect);
+        assert_eq!(bp.paths(vec![PathBuf::from(".")])?, expect);
         Ok(())
     }
 
@@ -633,7 +645,7 @@ mod tests {
             helper.all_files()[0].clone(),
             PathBuf::from("vendor/foo/bar.txt"),
         ];
-        assert_that(&bp.paths(cli_paths)?).is_equal_to(expect);
+        assert_eq!(bp.paths(cli_paths)?, expect);
         Ok(())
     }
 
@@ -646,15 +658,13 @@ mod tests {
             PathBuf::from("does/not/exist"),
         ];
         let res = bp.paths(cli_paths);
-        assert_that(&res).is_err();
-        assert_that(&std::mem::discriminant(
-            res.unwrap_err().downcast_ref().unwrap(),
-        ))
-        .is_equal_to(std::mem::discriminant(
-            &BasePathsError::NonExistentPathOnCli {
+        assert!(res.is_err());
+        assert_eq!(
+            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
+            std::mem::discriminant(&BasePathsError::NonExistentPathOnCli {
                 path: String::from("does/not/exist"),
-            },
-        ));
+            }),
+        );
         Ok(())
     }
 }

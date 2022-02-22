@@ -562,7 +562,7 @@ mod tests {
     use crate::path_matcher;
     use crate::testhelper;
     use anyhow::Result;
-    use spectral::prelude::*;
+    use pretty_assertions::assert_eq;
 
     type Mock = i8;
 
@@ -610,21 +610,19 @@ mod tests {
         };
 
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        assert_that(&filter.require_path_type("tidy", &helper.root())).is_ok();
+        assert!(filter.require_path_type("tidy", &helper.root()).is_ok());
 
         let mut file = helper.root();
         file.push(helper.all_files()[0].clone());
         let res = filter.require_path_type("tidy", &file);
-        assert_that(&res).is_err();
-        assert_that(&std::mem::discriminant(
-            res.unwrap_err().downcast_ref().unwrap(),
-        ))
-        .is_equal_to(std::mem::discriminant(
-            &FilterError::CanOnlyOperateOnDirectories {
+        assert!(res.is_err());
+        assert_eq!(
+            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
+            std::mem::discriminant(&FilterError::CanOnlyOperateOnDirectories {
                 method: "tidy",
                 path: file.to_string_lossy().to_string(),
-            },
-        ));
+            }),
+        );
 
         Ok(())
     }
@@ -643,20 +641,18 @@ mod tests {
 
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let res = filter.require_path_type("tidy", &helper.root());
-        assert_that(&res).is_err();
-        assert_that(&std::mem::discriminant(
-            res.unwrap_err().downcast_ref().unwrap(),
-        ))
-        .is_equal_to(std::mem::discriminant(
-            &FilterError::CanOnlyOperateOnFiles {
+        assert!(res.is_err());
+        assert_eq!(
+            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
+            std::mem::discriminant(&FilterError::CanOnlyOperateOnFiles {
                 method: "tidy",
                 path: helper.root().to_string_lossy().to_string(),
-            },
-        ));
+            }),
+        );
 
         let mut file = helper.root();
         file.push(helper.all_files()[0].clone());
-        assert_that(&filter.require_path_type("tidy", &file)).is_ok();
+        assert!(filter.require_path_type("tidy", &file).is_ok());
 
         Ok(())
     }
@@ -676,9 +672,11 @@ mod tests {
         let include = &["something.go", "dir/foo.go", ".foo.go", "bar/foo/x.go"];
         for i in include.iter().map(PathBuf::from) {
             let name = i.clone();
-            assert_that(&filter.should_process_path(&i.clone(), &[i]))
-                .named(&name.to_string_lossy())
-                .is_true();
+            assert!(
+                filter.should_process_path(&i.clone(), &[i]),
+                "{}",
+                name.to_string_lossy(),
+            );
         }
 
         let exclude = &[
@@ -689,9 +687,11 @@ mod tests {
         ];
         for e in exclude.iter().map(PathBuf::from) {
             let name = e.clone();
-            assert_that(&filter.should_process_path(&e.clone(), &[e]))
-                .named(&name.to_string_lossy())
-                .is_false();
+            assert!(
+                !filter.should_process_path(&e.clone(), &[e]),
+                "{}",
+                name.to_string_lossy(),
+            );
         }
 
         Ok(())
@@ -717,9 +717,11 @@ mod tests {
             let dir = PathBuf::from(i[0]);
             let files = i[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files))
-                .named(&name.to_string_lossy())
-                .is_true();
+            assert!(
+                filter.should_process_path(&dir, &files),
+                "{}",
+                name.to_string_lossy(),
+            );
         }
 
         let exclude = &[
@@ -735,9 +737,11 @@ mod tests {
             let dir = PathBuf::from(e[0]);
             let files = e[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files))
-                .named(&name.to_string_lossy())
-                .is_false();
+            assert!(
+                !filter.should_process_path(&dir, &files),
+                "{}",
+                name.to_string_lossy(),
+            );
         }
 
         Ok(())
@@ -763,9 +767,11 @@ mod tests {
             let dir = PathBuf::from(i[0]);
             let files = i[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files))
-                .named(&name.to_string_lossy())
-                .is_true();
+            assert!(
+                filter.should_process_path(&dir, &files),
+                "{}",
+                name.to_string_lossy(),
+            );
         }
 
         let exclude = &[
@@ -781,9 +787,11 @@ mod tests {
             let dir = PathBuf::from(e[0]);
             let files = e[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
-            assert_that(&filter.should_process_path(&dir, &files))
-                .named(&name.to_string_lossy())
-                .is_false();
+            assert!(
+                !filter.should_process_path(&dir, &files),
+                "{}",
+                name.to_string_lossy(),
+            );
         }
 
         Ok(())
@@ -804,9 +812,11 @@ mod tests {
                 run_mode: RunMode::Root,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
-                .named("root mode, no chdir")
-                .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
+            assert_eq!(
+                command.command_for_path(Path::new("foo.go"), &None),
+                vec!["test".to_string(), "foo.go".to_string()],
+                "root mode, no chdir",
+            );
         }
 
         {
@@ -822,15 +832,15 @@ mod tests {
                 run_mode: RunMode::Root,
                 expect_stderr: false,
             };
-            assert_that(
-                &command.command_for_path(Path::new("foo.go"), &Some(vec!["--flag".to_string()])),
-            )
-            .named("root mode, no chdir with flags")
-            .is_equal_to(vec![
-                "test".to_string(),
-                "--flag".to_string(),
-                "foo.go".to_string(),
-            ]);
+            assert_eq!(
+                command.command_for_path(Path::new("foo.go"), &Some(vec!["--flag".to_string()])),
+                vec![
+                    "test".to_string(),
+                    "--flag".to_string(),
+                    "foo.go".to_string(),
+                ],
+                "root mode, no chdir with flags",
+            );
         }
 
         {
@@ -846,9 +856,11 @@ mod tests {
                 run_mode: RunMode::Root,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
-                .named("root mode, with chdir")
-                .is_equal_to(vec!["test".to_string()]);
+            assert_eq!(
+                command.command_for_path(Path::new("foo.go"), &None),
+                vec!["test".to_string()],
+                "root mode, with chdir",
+            );
         }
 
         {
@@ -864,9 +876,11 @@ mod tests {
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
-                .named("files mode, with chdir")
-                .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
+            assert_eq!(
+                command.command_for_path(Path::new("foo.go"), &None),
+                vec!["test".to_string(), "foo.go".to_string()],
+                "files mode, with chdir",
+            );
         }
 
         {
@@ -882,9 +896,11 @@ mod tests {
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
-                .named("files mode, no chdir")
-                .is_equal_to(vec!["test".to_string(), "foo.go".to_string()]);
+            assert_eq!(
+                command.command_for_path(Path::new("foo.go"), &None),
+                vec!["test".to_string(), "foo.go".to_string()],
+                "files mode, no chdir",
+            );
         }
 
         {
@@ -900,13 +916,15 @@ mod tests {
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
-                .named("files mode, no chdir, with path flag")
-                .is_equal_to(vec![
+            assert_eq!(
+                command.command_for_path(Path::new("foo.go"), &None),
+                vec![
                     "test".to_string(),
                     "--file".to_string(),
                     "foo.go".to_string(),
-                ]);
+                ],
+                "files mode, no chdir, with path flag"
+            );
         }
 
         {
@@ -922,13 +940,15 @@ mod tests {
                 run_mode: RunMode::Files,
                 expect_stderr: false,
             };
-            assert_that(&command.command_for_path(Path::new("foo.go"), &None))
-                .named("files mode, with chdir, with path flag")
-                .is_equal_to(vec![
+            assert_eq!(
+                command.command_for_path(Path::new("foo.go"), &None),
+                vec![
                     "test".to_string(),
                     "--file".to_string(),
                     "foo.go".to_string(),
-                ]);
+                ],
+                "files mode, with chdir, with path flag",
+            );
         }
     }
 }

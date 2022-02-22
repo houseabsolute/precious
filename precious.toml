@@ -5,7 +5,7 @@ exclude = [
 [commands.rustfmt]
 type    = "both"
 include = "**/*.rs"
-cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
+cmd     = [ "rustfmt", "--edition", "2021" ]
 lint_flags = "--check"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
@@ -15,10 +15,19 @@ type     = "lint"
 include  = "**/*.rs"
 run_mode = "root"
 chdir    = true
-cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
+cmd      = [ "cargo", "clippy", "--locked", "--all-targets", "--all-features", "--", "-D", "clippy::all" ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 101
 expect_stderr = true
+
+[commands.prettier]
+type    = "both"
+include = [ "**/*.md", "**/*.yml" ]
+cmd     = "prettier"
+lint_flags = "--check"
+tidy_flags = "--write"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
 
 [commands.omegasort-gitignore]
 type = "both"

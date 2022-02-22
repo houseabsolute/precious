@@ -187,30 +187,31 @@ fn signal_from_status(_: process::ExitStatus) -> i32 {
 mod tests {
     use crate::testhelper;
     use anyhow::Result;
-    use spectral::prelude::*;
+    use pretty_assertions::assert_eq;
     use std::collections::HashMap;
     use std::env;
     use tempfile::tempdir;
 
     #[test]
     fn command_string() {
-        assert_that(&super::command_string(&String::from("foo"), &[]))
-            .named("command without args")
-            .is_equal_to(String::from("foo"));
-
-        assert_that(&super::command_string(
-            &String::from("foo"),
-            &[String::from("bar")],
-        ))
-        .named("command with one arg")
-        .is_equal_to(String::from("foo bar"));
-
-        assert_that(&super::command_string(
-            &String::from("foo"),
-            &[String::from("--bar"), String::from("baz")],
-        ))
-        .named("command with multiple args")
-        .is_equal_to(String::from("foo --bar baz"));
+        assert_eq!(
+            super::command_string(&String::from("foo"), &[]),
+            String::from("foo"),
+            "command without args",
+        );
+        assert_eq!(
+            super::command_string(&String::from("foo"), &[String::from("bar")],),
+            String::from("foo bar"),
+            "command with one arg"
+        );
+        assert_eq!(
+            super::command_string(
+                &String::from("foo"),
+                &[String::from("--bar"), String::from("baz")],
+            ),
+            String::from("foo --bar baz"),
+            "command with multiple args",
+        );
     }
 
     #[test]
@@ -223,9 +224,7 @@ mod tests {
             false,
             None,
         )?;
-        assert_that(&res.exit_code)
-            .named("command exits 0")
-            .is_equal_to(&0);
+        assert_eq!(res.exit_code, 0, "command exits 0");
 
         let env_key = "PRECIOUS_ENV_TEST";
         let mut env = HashMap::new();
@@ -238,20 +237,21 @@ mod tests {
             false,
             None,
         )?;
-        assert_that(&res.exit_code)
-            .named("command exits 0")
-            .is_equal_to(&0);
-        assert_that(&res.stdout.is_some())
-            .named("command has stdout output")
-            .is_true();
-        assert_that(&res.stdout.unwrap())
-            .named(format!("{} env var was set when command was run", env_key).as_str())
-            .is_equal_to(&String::from("foo\n"));
-
+        assert_eq!(res.exit_code, 0, "command exits 0");
+        assert!(res.stdout.is_some(), "command has stdout output");
+        assert_eq!(
+            res.stdout.unwrap(),
+            String::from("foo\n"),
+            "{} env var was set when command was run",
+            env_key,
+        );
         let val = env::var(env_key);
-        assert_that(&val.err().unwrap())
-            .named(format!("{} env var is not set after command was run", env_key).as_str())
-            .is_equal_to(&std::env::VarError::NotPresent);
+        assert_eq!(
+            val.err().unwrap(),
+            std::env::VarError::NotPresent,
+            "{} env var is not set after command was run",
+            env_key,
+        );
 
         let res = super::run_command(
             String::from("sh"),
@@ -261,7 +261,7 @@ mod tests {
             false,
             None,
         );
-        assert_that(&res).named("command exits non-zero").is_err();
+        assert!(res.is_err(), "command exits non-zero");
 
         match res {
             Ok(_) => panic!("did not get an error in the returned Result"),
@@ -270,9 +270,7 @@ mod tests {
                 match r {
                     Some(c) => match c {
                         super::CommandError::UnexpectedExitCode { cmd: _, code } => {
-                            assert_that(code)
-                                .named("command unexpectedly exits 32")
-                                .is_equal_to(&32);
+                            assert_eq!(code, &32, "command unexpectedly exits 32");
                         }
                         _ => panic!("expected a CommandError::UnexpectedExitCode "),
                     },
@@ -303,19 +301,16 @@ mod tests {
             false,
             Some(td_path.as_ref()),
         )?;
-        assert_that(&res.exit_code)
-            .named("command exits 0")
-            .is_equal_to(&0);
-
-        assert_that(&res.stdout.is_some())
-            .named("command produced stdout output")
-            .is_true();
+        assert_eq!(res.exit_code, 0, "command exits 0");
+        assert!(res.stdout.is_some(), "command produced stdout output");
 
         let stdout = res.stdout.unwrap();
         let stdout_trimmed = stdout.trim_end();
-        assert_that(&stdout_trimmed)
-            .named("command runs in another dir")
-            .is_equal_to(td_path.to_string_lossy().to_string().as_str());
+        assert_eq!(
+            stdout_trimmed,
+            td_path.to_string_lossy(),
+            "command runs in another dir",
+        );
 
         Ok(())
     }
@@ -325,11 +320,11 @@ mod tests {
         let exe = "I hope this binary does not exist on any system!";
         let args = vec![String::from("--arg"), String::from("42")];
         let res = super::run_command(String::from(exe), args, &HashMap::new(), &[0], false, None);
-        assert_that!(res.is_err());
+        assert!(res.is_err());
         if let Err(e) = res {
-            assert_that(&e.to_string()).contains(
+            assert!(e.to_string().contains(
                 r#"Could not find "I hope this binary does not exist on any system!" in your path"#,
-            );
+            ));
         }
     }
 }
