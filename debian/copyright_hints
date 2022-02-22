@@ -9,24 +9,37 @@ Files: CODE_OF_CONDUCT.md
  Cargo.toml
  Changes.md
  README.md
+ debian/TODO
+ debian/cargo-checksum.json
  debian/control
  debian/copyright-check
+ debian/extralibs/path-clean-0.1.0/.cargo-checksum.json
+ debian/extralibs/path-clean-0.1.0/Cargo.toml
+ debian/extralibs/path-clean-0.1.0/README.md
+ debian/extralibs/path-clean-0.1.0/src/lib.rs
  debian/gbp.conf
+ debian/patches/1001_anyhow.patch
+ debian/patches/1002_indexmap.patch
+ debian/patches/1003_log.patch
+ debian/patches/1004_rayon.patch
+ debian/patches/1005_serde.patch
+ debian/patches/1006_thiserror.patch
+ debian/patches/1007_pretty_assertions.patch
+ debian/patches/1008_clap.patch
+ debian/patches/README
+ debian/patches/series
  debian/precious.docs
  debian/precious.examples
- debian/precious.install
  debian/precious.manpages
  debian/rules
  debian/source/format
+ debian/source/lintian-overrides
  debian/watch
- dev/bin/force-clippy.sh
  dev/bin/install-dev-tools.sh
- do-release.pl
  examples/bin/install-dev-tools.sh
  examples/golang/helpers/check-go-mod.sh
  examples/golang/precious.toml
  examples/perl/precious.toml
- examples/rust/helpers/force-clippy.sh
  examples/rust/precious.toml
  git/hooks/pre-commit.sh
  git/setup.pl
@@ -45,11 +58,13 @@ Copyright: NONE
 License: UNKNOWN
  FIXME
 
-Files: debian/source/lintian-overrides
-Copyright: debian/copyright Apache-2.0
-  debian/copyright GPL-3+
-  debian/copyright apache-2.0
-  debian/copyright gpl-3+
-License: UNKNOWN
+Files: debian/extralibs/path-clean-0.1.0/LICENSE-APACHE
+Copyright: 2018, Dan Reeves
+License: Apache-2.0
+ FIXME
+
+Files: debian/extralibs/path-clean-0.1.0/LICENSE-MIT
+Copyright: 2018, Dan Reeves
+License: Expat
  FIXME
 

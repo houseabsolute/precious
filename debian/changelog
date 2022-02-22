@@ -1,3 +1,20 @@
+precious (0.1.3-1) experimental; urgency=medium
+
+  [ upstream ]
+  * new release
+
+  [ Jonas Smedegaard ]
+  * drop patches 1001 1002 1003 adopted upstream
+  * add patches 1001-1007 to relax dependencies for cargo;
+    add patch 2001 to use clap 2.x (not 3.x);
+    adjust build-dependencies;
+    stop embed rust library indexmap
+  * tighten lintian overrides
+  * update TODOs
+  * update copyright info: update coverage
+
+ -- Jonas Smedegaard <dr@jones.dk>  Wed, 23 Feb 2022 00:38:49 +0100
+
 precious (0.1.2-1) experimental; urgency=low
 
   * initial packaging;
