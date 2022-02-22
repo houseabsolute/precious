@@ -1,0 +1,381 @@
+Description: use clap 2.x
+ This reverts upstream git commit c6ae7d2.
+Author: Jonas Smedegaard <dr@jones.dk>
+Last-Update: 2022-02-23
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -66,17 +66,17 @@
+ 
+ [[package]]
+ name = "clap"
+-version = "3.0.14"
++version = "2.34.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b63edc3f163b3c71ec8aa23f9bd6070f77edbf3d1d198b164afa90ff00e4ec62"
++checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
+ dependencies = [
++ "ansi_term",
+  "atty",
+  "bitflags",
+- "indexmap",
+- "os_str_bytes",
+  "strsim",
+- "termcolor",
+  "textwrap",
++ "unicode-width",
++ "vec_map",
+ ]
+ 
+ [[package]]
+@@ -324,15 +324,6 @@
+ checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
+ 
+ [[package]]
+-name = "os_str_bytes"
+-version = "6.0.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
+-dependencies = [
+- "memchr",
+-]
+-
+-[[package]]
+ name = "output_vt100"
+ version = "0.1.3"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -551,9 +542,9 @@
+ 
+ [[package]]
+ name = "strsim"
+-version = "0.10.0"
++version = "0.8.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
++checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
+ 
+ [[package]]
+ name = "syn"
+@@ -581,21 +572,15 @@
+ ]
+ 
+ [[package]]
+-name = "termcolor"
+-version = "1.1.2"
++name = "textwrap"
++version = "0.11.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
++checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
+ dependencies = [
+- "winapi-util",
++ "unicode-width",
+ ]
+ 
+ [[package]]
+-name = "textwrap"
+-version = "0.14.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
+-
+-[[package]]
+ name = "thiserror"
+ version = "1.0.30"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+@@ -634,12 +619,24 @@
+ ]
+ 
+ [[package]]
++name = "unicode-width"
++version = "0.1.9"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "3ed742d4ea2bd1176e236172c8429aaf54486e7ac098db29ffe6529e0ce50973"
++
++[[package]]
+ name = "unicode-xid"
+ version = "0.2.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
+ 
+ [[package]]
++name = "vec_map"
++version = "0.8.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
++
++[[package]]
+ name = "walkdir"
+ version = "2.3.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -10,7 +10,7 @@
+ 
+ [dependencies]
+ anyhow = ">= 1.0.44, < 2"
+-clap = ">= 3.0.14, < 3.1.0"
++clap = "~2"
+ fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }
+ globset = "0.4.8"
+ ignore = "0.4.18"
+--- a/src/precious.rs
++++ b/src/precious.rs
+@@ -4,7 +4,7 @@
+ use crate::filter;
+ use crate::vcs;
+ use anyhow::{Error, Result};
+-use clap::{App, Arg, ArgGroup, ArgMatches};
++use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
+ use fern::colors::{Color, ColoredLevelConfig};
+ use fern::Dispatch;
+ use log::{debug, error, info};
+@@ -59,7 +59,7 @@
+ 
+ #[derive(Debug)]
+ pub struct Precious<'a> {
+-    matches: &'a ArgMatches,
++    matches: &'a ArgMatches<'a>,
+     mode: basepaths::Mode,
+     root: PathBuf,
+     cwd: PathBuf,
+@@ -71,55 +71,55 @@
+ 
+ const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
+ 
+-pub fn app<'a>() -> App<'a> {
++pub fn app<'a>() -> App<'a, 'a> {
+     App::new("precious")
+         .version(env!("CARGO_PKG_VERSION"))
+         .author("Dave Rolsky <autarch@urth.org>")
+         .about("One code quality tool to rule them all")
+         .arg(
+-            Arg::new("config")
+-                .short('c')
++            Arg::with_name("config")
++                .short("c")
+                 .long("config")
+                 .takes_value(true)
+                 .help("Path to config file"),
+         )
+         .arg(
+-            Arg::new("jobs")
+-                .short('j')
++            Arg::with_name("jobs")
++                .short("j")
+                 .long("jobs")
+                 .takes_value(true)
+                 .help("Number of parallel jobs (threads) to run (defaults to one per core)"),
+         )
+         .arg(
+-            Arg::new("ascii")
++            Arg::with_name("ascii")
+                 .long("ascii")
+                 .help("Replace super-fun Unicode symbols with terribly boring ASCII"),
+         )
+         .arg(
+-            Arg::new("verbose")
+-                .short('v')
++            Arg::with_name("verbose")
++                .short("v")
+                 .long("verbose")
+                 .help("Enable verbose output"),
+         )
+         .arg(
+-            Arg::new("debug")
+-                .short('d')
++            Arg::with_name("debug")
++                .short("d")
+                 .long("debug")
+                 .help("Enable debugging output"),
+         )
+         .arg(
+-            Arg::new("trace")
+-                .short('t')
++            Arg::with_name("trace")
++                .short("t")
+                 .long("trace")
+                 .help("Enable tracing output (maximum logging)"),
+         )
+         .arg(
+-            Arg::new("quiet")
+-                .short('q')
++            Arg::with_name("quiet")
++                .short("q")
+                 .long("quiet")
+                 .help("Suppresses most output"),
+         )
+-        .group(ArgGroup::new("log-level").args(&["verbose", "debug", "trace", "quiet"]))
++        .group(ArgGroup::with_name("log-level").args(&["verbose", "debug", "trace", "quiet"]))
+         .subcommand(common_subcommand(
+             "tidy",
+             "Tidies the specified files and/or directories",
+@@ -130,35 +130,35 @@
+         ))
+ }
+ 
+-fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a> {
+-    App::new(name)
++fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a, 'a> {
++    SubCommand::with_name(name)
+         .about(about)
+         .arg(
+-            Arg::new("all")
+-                .short('a')
++            Arg::with_name("all")
++                .short("a")
+                 .long("all")
+                 .help("Run against all files in the current directory and below"),
+         )
+         .arg(
+-            Arg::new("git")
+-                .short('g')
++            Arg::with_name("git")
++                .short("g")
+                 .long("git")
+                 .help("Run against files that have been modified according to git"),
+         )
+         .arg(
+-            Arg::new("staged")
+-                .short('s')
++            Arg::with_name("staged")
++                .short("s")
+                 .long("staged")
+                 .help("Run against file content that is staged for a git commit"),
+         )
+         .arg(
+-            Arg::new("paths")
+-                .multiple_occurrences(true)
++            Arg::with_name("paths")
++                .multiple(true)
+                 .takes_value(true)
+                 .help("A list of paths on which to operate"),
+         )
+         .group(
+-            ArgGroup::new("operate-on")
++            ArgGroup::with_name("operate-on")
+                 .args(&["all", "git", "staged", "paths"])
+                 .required(true),
+         )
+@@ -236,7 +236,7 @@
+ 
+     fn mode(matches: &'a ArgMatches) -> Result<basepaths::Mode> {
+         match matches.subcommand() {
+-            Some((_, subc_matches)) => {
++            (_, Some(subc_matches)) => {
+                 if subc_matches.is_present("all") {
+                     return Ok(basepaths::Mode::All);
+                 } else if subc_matches.is_present("git") {
+@@ -251,7 +251,7 @@
+ 
+                 Ok(basepaths::Mode::FromCli)
+             }
+-            None => Err(PreciousError::NoSubcommandInCliArgs.into()),
++            _ => Err(PreciousError::NoSubcommandInCliArgs.into()),
+         }
+     }
+ 
+@@ -682,10 +682,10 @@
+             .collect::<Vec<PathBuf>>()
+     }
+ 
+-    fn matched_subcommand(&self) -> &ArgMatches {
++    fn matched_subcommand(&self) -> &ArgMatches<'a> {
+         match self.matches.subcommand() {
+-            Some(("tidy", m)) => m,
+-            Some(("lint", m)) => m,
++            ("tidy", Some(m)) => m,
++            ("lint", Some(m)) => m,
+             _ => panic!("Somehow none of our subcommands matched and clap did not return an error"),
+         }
+     }
+@@ -770,7 +770,7 @@
+             let _pushd = helper.pushd_to_root()?;
+ 
+             let app = app();
+-            let matches = app.try_get_matches_from(&["precious", "tidy", "--all"])?;
++            let matches = app.get_matches_from_safe(&["precious", "tidy", "--all"])?;
+ 
+             let p = Precious::new(&matches)?;
+             assert_eq!(p.chars, chars::FUN_CHARS);
+@@ -793,7 +793,7 @@
+         let _pushd = helper.pushd_to_root()?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--ascii", "tidy", "--all"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--ascii", "tidy", "--all"])?;
+ 
+         let p = Precious::new(&matches)?;
+         assert_eq!(p.chars, chars::BORING_CHARS);
+@@ -809,7 +809,7 @@
+         let _pushd = helper.pushd_to_root()?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&[
++        let matches = app.get_matches_from_safe(&[
+             "precious",
+             "--config",
+             helper
+@@ -843,7 +843,7 @@
+         let _pushd = testhelper::Pushd::new(src_dir.clone())?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+ 
+         let p = Precious::new(&matches)?;
+         assert_eq!(p.root, src_dir);
+@@ -863,7 +863,7 @@
+         let _pushd = testhelper::Pushd::new(src_dir)?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+ 
+         let mut p = Precious::new(&matches)?;
+         let mut paths = p.basepaths()?;
+@@ -895,7 +895,7 @@
+         let _pushd = helper.pushd_to_root()?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+ 
+         let mut p = Precious::new(&matches)?;
+         let status = p.run();
+@@ -920,7 +920,7 @@
+         let _pushd = helper.pushd_to_root()?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "--all"])?;
+ 
+         let mut p = Precious::new(&matches)?;
+         let status = p.run();
+@@ -946,7 +946,7 @@
+         let _pushd = helper.pushd_to_root()?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+ 
+         let mut p = Precious::new(&matches)?;
+         let status = p.run();
+@@ -972,7 +972,7 @@
+         let _pushd = helper.pushd_to_root()?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--quiet", "lint", "--all"])?;
+ 
+         let mut p = Precious::new(&matches)?;
+         let status = p.run();
+@@ -1023,7 +1023,7 @@
+         let _pushd = helper.pushd_to_root()?;
+ 
+         let app = app();
+-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "-a"])?;
++        let matches = app.get_matches_from_safe(&["precious", "--quiet", "tidy", "-a"])?;
+ 
+         let mut p = Precious::new(&matches)?;
+         let status = p.run();

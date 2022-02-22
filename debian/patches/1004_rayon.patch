@@ -1,0 +1,16 @@
+Description: relax dependency on rayon
+Author: Jonas Smedegaard <dr@jones.dk>
+Last-Update: 2022-02-23
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -20,7 +20,7 @@
+ md5 = "0.7.0"
+ path-clean = "0.1.0"
+ pretty_assertions = "1.1.0"
+-rayon = "1.5.1"
++rayon = ">= 1.4.1, < 1.6"
+ serde = { version = "1.0.136", features = ["derive"] }
+ thiserror = "1.0.30"
+ toml = "0.5.8"

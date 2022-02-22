@@ -1,0 +1,16 @@
+Description: relax dependency on thiserror
+Author: Jonas Smedegaard <dr@jones.dk>
+Last-Update: 2022-02-23
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -22,7 +22,7 @@
+ pretty_assertions = "1.1.0"
+ rayon = ">= 1.4.1, < 1.6"
+ serde = { version = ">= 1.0.130, < 1.1", features = ["derive"] }
+-thiserror = "1.0.30"
++thiserror = ">= 1.0.20, < 1.1"
+ toml = "0.5.8"
+ which = ">= 3.0.0, < 5.0.0"
+ 
