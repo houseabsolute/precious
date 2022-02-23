@@ -1,7 +1,3 @@
-  * stop embed Rust library indexmap when updated in Debian:
-    + build-depend on librust-indexmap-1.6.1+serde-dev
-    + stop explicitly build-depend on librust-hashbrown-dev
-    + maybe stop explicitly build-conflict with librust-indexmap-1.3-dev
   * stop embed Rust library path-clean when available in Debian:
     + build-depend on librust-path-clean-dev
   * maybe suggest linters and tidiers available in Debian:
