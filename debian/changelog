@@ -1,3 +1,20 @@
+precious (0.1.3-2) unstable; urgency=medium
+
+  * update copyright info:
+    + fix reorder wildcard Files sections
+    + fix Upstream-Name
+  * fix update package relations:
+    + tighten build-dependency on librust-indexmap+serde-dev
+    + stop build-depend on librust-hashbrown-dev
+    + stop build-conflict against librust-indexmap-1.3-dev
+  * check testsuite
+  * generate html and plaintext README from upstream markdown;
+    build-depend on cmark-gfm
+  * add patch 2002 to avoid privacy leak in documentation
+  * update cargo-checksum file
+
+ -- Jonas Smedegaard <dr@jones.dk>  Wed, 23 Feb 2022 10:57:46 +0100
+
 precious (0.1.3-1) experimental; urgency=medium
 
   [ upstream ]

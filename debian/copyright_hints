@@ -25,10 +25,9 @@ Files: CODE_OF_CONDUCT.md
  debian/patches/1005_serde.patch
  debian/patches/1006_thiserror.patch
  debian/patches/1007_pretty_assertions.patch
- debian/patches/1008_clap.patch
+ debian/patches/2001_clap.patch
  debian/patches/README
  debian/patches/series
- debian/precious.docs
  debian/precious.examples
  debian/precious.manpages
  debian/rules
