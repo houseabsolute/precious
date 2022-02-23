@@ -11,9 +11,6 @@ EXTRALIBS = path-clean-0.1.0
 _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
  || { $1 --help; false; }
 
-%:
-	dh $@ --buildsystem cargo
-
 execute_after_dh_auto_configure:
 	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../extralibs/%,$(EXTRALIBS))
 
@@ -35,3 +32,6 @@ fetch-extralibs:
 	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
 	rm -rf debian/build
 	git restore Cargo.lock
+
+%:
+	dh $@ --buildsystem cargo
