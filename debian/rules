@@ -11,16 +11,11 @@ EXTRALIBS = path-clean-0.1.0
 _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
  || { $1 --help; false; }
 
-# TODO: simplify when librust-path-clean is in Debian
 %:
 	dh $@ --buildsystem cargo
 
 execute_after_dh_auto_configure:
 	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../extralibs/%,$(EXTRALIBS))
-
-# TODO: enable when <https://github.com/houseabsolute/precious/issues/15> is fixed
-override_dh_auto_test:
-#	cargo test
 
 execute_after_dh_auto_install: $(MANPAGES)
 
