@@ -2,6 +2,8 @@
 
 # generate documentation unless nodoc requested
 ifeq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
+DOCS = README.html README.txt
+CHANGELOGS = Changes.html Changes.txt
 MANPAGES = debian/build/precious.1
 endif
 
@@ -14,7 +16,15 @@ _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
 execute_after_dh_auto_configure:
 	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../extralibs/%,$(EXTRALIBS))
 
+execute_after_dh_auto_build: $(DOCS) $(CHANGELOGS)
+
 execute_after_dh_auto_install: $(MANPAGES)
+
+override_dh_installdocs:
+	dh_installdocs --all -- $(DOCS)
+
+override_dh_installchangelogs:
+	dh_installchangelogs -- $(CHANGELOGS)
 
 # build manpages
 debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
@@ -32,6 +42,12 @@ fetch-extralibs:
 	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
 	rm -rf debian/build
 	git restore Cargo.lock
+
+%.html: %.md
+	cmark-gfm $< > $@
+
+%.txt: %.md
+	cmark-gfm --to plaintext $< > $@
 
 %:
 	dh $@ --buildsystem cargo

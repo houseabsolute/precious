@@ -3,6 +3,7 @@ Section: devel
 Priority: optional
 Maintainer: Jonas Smedegaard <dr@jones.dk>
 Build-Depends:
+ cmark-gfm <!nodoc>,
  debhelper-compat (= 13),
  dh-cargo,
  git <!nocheck>,
