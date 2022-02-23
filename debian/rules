@@ -5,7 +5,7 @@ ifeq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
 MANPAGES = debian/build/precious.1
 endif
 
-EXTRALIBS = indexmap-1.6.2 path-clean-0.1.0
+EXTRALIBS = path-clean-0.1.0
 
 # generate manpage with help2man from --help option of executable
 _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
@@ -34,7 +34,6 @@ create-cargo-checksum:
 	echo '{"package":"$(shell sha256sum Cargo.toml | grep -Po '^\S+')","files":{}}' > debian/cargo-checksum.json
 
 fetch-extralibs:
-	CARGO_HOME=debian/build/cargo-home cargo update --package indexmap --precise 1.6.2
 	CARGO_HOME=debian/build/cargo-home cargo vendor --versioned-dirs debian/build/extralibs
 	rm -rf debian/extralibs
 	mkdir debian/extralibs
