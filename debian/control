@@ -28,7 +28,7 @@ Build-Depends:
  librust-thiserror-dev (<< 1.1),
  librust-toml-dev (<< 6),
  librust-vec-map-dev,
- librust-which+failure-dev (<< 5),
+ librust-which+default-dev (<< 5),
 Standards-Version: 4.6.0
 Homepage: https://github.com/houseabsolute/precious
 Vcs-Git: https://salsa.debian.org/debian/precious.git
