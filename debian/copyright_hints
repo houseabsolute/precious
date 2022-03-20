@@ -11,6 +11,7 @@ Files: CODE_OF_CONDUCT.md
  README.md
  debian/TODO
  debian/cargo-checksum.json
+ debian/clean
  debian/control
  debian/copyright-check
  debian/extralibs/path-clean-0.1.0/.cargo-checksum.json
@@ -26,6 +27,7 @@ Files: CODE_OF_CONDUCT.md
  debian/patches/1006_thiserror.patch
  debian/patches/1007_pretty_assertions.patch
  debian/patches/2001_clap.patch
+ debian/patches/2002_privacy.patch
  debian/patches/README
  debian/patches/series
  debian/precious.examples
