@@ -48,6 +48,8 @@ Suggests:
  perltidy,
  rust-clippy,
  rustfmt,
+Built-Using: ${cargo:Built-Using}
+XB-X-Cargo-Built-Using: ${cargo:X-Cargo-Built-Using}
 Description: one code quality tool to rule them all
  Precious is a command-line tool to unify
  the execution of source code tidiers and validators.
