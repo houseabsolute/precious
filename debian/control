@@ -11,7 +11,7 @@ Build-Depends:
  librust-ansi-term-dev,
  librust-anyhow-dev (<< 2),
  librust-atty-dev,
- librust-clap-dev (<< 4),
+ librust-clap-2-dev,
  librust-fern+colored-dev (<< 7),
  librust-globset-dev (<< 5),
  librust-ignore-dev (<< 5),
