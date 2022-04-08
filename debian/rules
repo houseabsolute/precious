@@ -32,7 +32,9 @@ execute_before_dh_auto_configure:
 		|| cp Cargo.lock Cargo.lock.orig
 
 execute_after_dh_auto_configure:
-	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../vendorlibs/%,$(VENDORLIBS))
+	ln --symbolic --force --relative \
+		--target-directory=debian/cargo_registry \
+		debian/vendorlibs/*
 
 # use and update local Cargo.lock, if available
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
