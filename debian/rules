@@ -10,7 +10,7 @@ endif
 export CARGO_HOME = $(CURDIR)/debian/cargo_home
 export CARGO_NET_OFFLINE = true
 
-EXTRALIBS = path-clean-0.1.0
+VENDORLIBS = path-clean-0.1.0
 
 # generate manpage with help2man from --help option of executable
 _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
@@ -28,7 +28,7 @@ execute_before_dh_auto_configure:
 		|| cp Cargo.lock Cargo.lock.orig
 
 execute_after_dh_auto_configure:
-	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../extralibs/%,$(EXTRALIBS))
+	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../vendorlibs/%,$(VENDORLIBS))
 
 # use and update local Cargo.lock, if available
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
@@ -65,17 +65,17 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 	dh $@ --buildsystem cargo
 
 # custom target unused during official build
-fetch-extralibs: CARGO_NET_OFFLINE = false
-fetch-extralibs: export CARGO_HOME = $(CURDIR)/debian/cargo_vendor_home
-fetch-extralibs:
+get-vendorlibs: CARGO_NET_OFFLINE = false
+get-vendorlibs: export CARGO_HOME = $(CURDIR)/debian/cargo_vendor_home
+get-vendorlibs:
 # preserve upstream Cargo.lock, and reset to use that
 	[ -f Cargo.lock.orig ] || cp Cargo.lock Cargo.lock.orig
 	cp -f Cargo.lock.orig Cargo.lock
 
 	cargo vendor --versioned-dirs debian/vendorlibs~
-	rm -rf debian/extralibs
-	mkdir debian/extralibs
-	cd debian/vendorlibs~ && mv --target-directory=../extralibs $(EXTRALIBS)
+	rm -rf debian/vendorlibs
+	mkdir debian/vendorlibs
+	cd debian/vendorlibs~ && mv --target-directory=../vendorlibs $(VENDORLIBS)
 
 # preserve mangled Cargo.lock for use during build
 	sed -e '/^checksum / d' Cargo.lock > debian/Cargo.lock
