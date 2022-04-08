@@ -72,11 +72,10 @@ fetch-extralibs:
 	[ -f Cargo.lock.orig ] || cp Cargo.lock Cargo.lock.orig
 	cp -f Cargo.lock.orig Cargo.lock
 
-	cargo vendor --versioned-dirs debian/build/extralibs
+	cargo vendor --versioned-dirs debian/vendorlibs~
 	rm -rf debian/extralibs
 	mkdir debian/extralibs
-	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
-	rm -rf debian/build
+	cd debian/vendorlibs~ && mv --target-directory=../extralibs $(EXTRALIBS)
 
 # preserve mangled Cargo.lock for use during build
 	sed -e '/^checksum / d' Cargo.lock > debian/Cargo.lock
