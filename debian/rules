@@ -39,14 +39,6 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 	$(call _mkman, $<, $@, \
 		one code quality tool to rule them all)
 
-fetch-extralibs:
-	CARGO_HOME=debian/build/cargo-home cargo vendor --versioned-dirs debian/build/extralibs
-	rm -rf debian/extralibs
-	mkdir debian/extralibs
-	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
-	rm -rf debian/build
-	git restore Cargo.lock
-
 %.html: %.md
 	cmark-gfm $< > $@
 
@@ -55,3 +47,12 @@ fetch-extralibs:
 
 %:
 	dh $@ --buildsystem cargo
+
+# custom target unused during official build
+fetch-extralibs:
+	CARGO_HOME=debian/build/cargo-home cargo vendor --versioned-dirs debian/build/extralibs
+	rm -rf debian/extralibs
+	mkdir debian/extralibs
+	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
+	rm -rf debian/build
+	git restore Cargo.lock
