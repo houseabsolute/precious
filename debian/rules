@@ -66,12 +66,13 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 
 # custom target unused during official build
 fetch-extralibs: CARGO_NET_OFFLINE = false
+fetch-extralibs: export CARGO_HOME = $(CURDIR)/debian/cargo_vendor_home
 fetch-extralibs:
 # preserve upstream Cargo.lock, and reset to use that
 	[ -f Cargo.lock.orig ] || cp Cargo.lock Cargo.lock.orig
 	cp -f Cargo.lock.orig Cargo.lock
 
-	CARGO_HOME=debian/build/cargo-home cargo vendor --versioned-dirs debian/build/extralibs
+	cargo vendor --versioned-dirs debian/build/extralibs
 	rm -rf debian/extralibs
 	mkdir debian/extralibs
 	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
