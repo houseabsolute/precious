@@ -10,7 +10,11 @@ endif
 export CARGO_HOME = $(CURDIR)/debian/cargo_home
 export CARGO_NET_OFFLINE = true
 
-VENDORLIBS = path-clean-0.1.0
+# resolve all direct entries in first "package..." section in TODO
+VENDORLIBS = $(shell perl -nE \
+ '/^(?:\s{2}[*]\s*(?:(package)|(\S+))|\s{4}[*]\s*(\S+))/ or next; \
+ $$i++ if $$1; exit if $$i > 1 or $$2; say $$3 if $$3 and $$i;' \
+ debian/TODO)
 
 # generate manpage with help2man from --help option of executable
 _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
