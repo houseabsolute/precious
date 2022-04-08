@@ -1,0 +1,16 @@
+Description: relax dependency on tempfile
+Author: Jonas Smedegaard <dr@jones.dk>
+Last-Update: 2022-04-08
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -28,7 +28,7 @@
+ 
+ [dev-dependencies]
+ serial_test = "0.5.1"
+-tempfile = "3.3.0"
++tempfile = "3"
+ 
+ [workspace.metadata.release]
+ allow-branch = ["master"]
