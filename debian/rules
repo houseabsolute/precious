@@ -16,10 +16,6 @@ VENDORLIBS = $(shell perl -nE \
  $$i++ if $$1; exit if $$i > 1 or $$2; say $$3 if $$3 and $$i;' \
  debian/TODO)
 
-# generate manpage with help2man from --help option of executable
-_mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
- || { $1 --help; false; }
-
 # generate cargo-checksum file
 _mkchecksum = printf '{"package":"%s","files":{}}\n' \
  $$(sha256sum $(or $2,$(dir $1)Cargo.toml) | grep -Po '^\S+') > $1;
@@ -58,8 +54,10 @@ execute_after_dh_auto_clean:
 # build manpages
 debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 	mkdir --parents $(dir $@)
-	$(call _mkman, $<, $@, \
-		one code quality tool to rule them all)
+	help2man --section 1 --no-info \
+		--name "one code quality tool to rule them all" \
+		--output $@ $< \
+		|| { $1 --help; false; }
 
 %.html: %.md
 	cmark-gfm $< > $@
