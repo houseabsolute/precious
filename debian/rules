@@ -13,6 +13,13 @@ EXTRALIBS = path-clean-0.1.0
 _mkman = help2man $(if $3,--name "$(strip $3)") --no-info --output $2 $1 \
  || { $1 --help; false; }
 
+# generate cargo-checksum file
+_mkchecksum = printf '{"package":"%s","files":{}}\n' \
+ $$(sha256sum $(or $2,$(dir $1)Cargo.toml) | grep -Po '^\S+') > $1;
+
+execute_before_dh_auto_configure:
+	$(call _mkchecksum,debian/cargo-checksum.json,Cargo.toml)
+
 execute_after_dh_auto_configure:
 	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../extralibs/%,$(EXTRALIBS))
 
@@ -31,9 +38,6 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 	mkdir --parents $(dir $@)
 	$(call _mkman, $<, $@, \
 		one code quality tool to rule them all)
-
-create-cargo-checksum:
-	echo '{"package":"$(shell sha256sum Cargo.toml | grep -Po '^\S+')","files":{}}' > debian/cargo-checksum.json
 
 fetch-extralibs:
 	CARGO_HOME=debian/build/cargo-home cargo vendor --versioned-dirs debian/build/extralibs
