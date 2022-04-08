@@ -7,6 +7,9 @@ CHANGELOGS = Changes.html Changes.txt
 MANPAGES = debian/build/precious.1
 endif
 
+export CARGO_HOME = $(CURDIR)/debian/cargo_home
+export CARGO_NET_OFFLINE = true
+
 EXTRALIBS = path-clean-0.1.0
 
 # generate manpage with help2man from --help option of executable
@@ -20,8 +23,18 @@ _mkchecksum = printf '{"package":"%s","files":{}}\n' \
 execute_before_dh_auto_configure:
 	$(call _mkchecksum,debian/cargo-checksum.json,Cargo.toml)
 
+# preserve upstream Cargo.lock during build, if provided
+	[ -f Cargo.lock.orig ] || [ ! -f Cargo.lock ] \
+		|| cp Cargo.lock Cargo.lock.orig
+
 execute_after_dh_auto_configure:
 	ln --symbolic --target-directory=debian/cargo_registry $(patsubst %,../extralibs/%,$(EXTRALIBS))
+
+# use and update local Cargo.lock, if available
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	[ ! -f debian/Cargo.lock ] || cp -f debian/Cargo.lock Cargo.lock
+	[ ! -f debian/Cargo.lock ] || cargo update
+endif
 
 execute_after_dh_auto_build: $(DOCS) $(CHANGELOGS)
 
@@ -32,6 +45,9 @@ override_dh_installdocs:
 
 override_dh_installchangelogs:
 	dh_installchangelogs -- $(CHANGELOGS)
+
+execute_after_dh_auto_clean:
+	[ ! -f Cargo.lock.orig ] || mv -f Cargo.lock.orig Cargo.lock
 
 # build manpages
 debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
@@ -49,10 +65,17 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 	dh $@ --buildsystem cargo
 
 # custom target unused during official build
+fetch-extralibs: CARGO_NET_OFFLINE = false
 fetch-extralibs:
+# preserve upstream Cargo.lock, and reset to use that
+	[ -f Cargo.lock.orig ] || cp Cargo.lock Cargo.lock.orig
+	cp -f Cargo.lock.orig Cargo.lock
+
 	CARGO_HOME=debian/build/cargo-home cargo vendor --versioned-dirs debian/build/extralibs
 	rm -rf debian/extralibs
 	mkdir debian/extralibs
 	mv --target-directory=debian/extralibs $(patsubst %,debian/build/extralibs/%,$(EXTRALIBS))
 	rm -rf debian/build
-	git restore Cargo.lock
+
+# preserve mangled Cargo.lock for use during build
+	sed -e '/^checksum / d' Cargo.lock > debian/Cargo.lock
