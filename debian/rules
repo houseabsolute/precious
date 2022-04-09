@@ -76,6 +76,7 @@ get-vendorlibs:
 	[ -f Cargo.lock.orig ] || cp Cargo.lock Cargo.lock.orig
 	cp -f Cargo.lock.orig Cargo.lock
 
+# preserve needed crates
 	cargo vendor --versioned-dirs debian/vendorlibs~
 	rm -rf debian/vendorlibs
 	mkdir debian/vendorlibs
