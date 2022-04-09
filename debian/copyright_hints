@@ -9,15 +9,11 @@ Files: CODE_OF_CONDUCT.md
  Cargo.toml
  Changes.md
  README.md
+ debian/Cargo.lock
  debian/TODO
- debian/cargo-checksum.json
  debian/clean
  debian/control
  debian/copyright-check
- debian/extralibs/path-clean-0.1.0/.cargo-checksum.json
- debian/extralibs/path-clean-0.1.0/Cargo.toml
- debian/extralibs/path-clean-0.1.0/README.md
- debian/extralibs/path-clean-0.1.0/src/lib.rs
  debian/gbp.conf
  debian/patches/1001_anyhow.patch
  debian/patches/1002_indexmap.patch
@@ -26,6 +22,7 @@ Files: CODE_OF_CONDUCT.md
  debian/patches/1005_serde.patch
  debian/patches/1006_thiserror.patch
  debian/patches/1007_pretty_assertions.patch
+ debian/patches/1008_tempfile.patch
  debian/patches/2001_clap.patch
  debian/patches/2002_privacy.patch
  debian/patches/README
@@ -35,6 +32,10 @@ Files: CODE_OF_CONDUCT.md
  debian/rules
  debian/source/format
  debian/source/lintian-overrides
+ debian/vendorlibs/path-clean-0.1.0/.cargo-checksum.json
+ debian/vendorlibs/path-clean-0.1.0/Cargo.toml
+ debian/vendorlibs/path-clean-0.1.0/README.md
+ debian/vendorlibs/path-clean-0.1.0/src/lib.rs
  debian/watch
  dev/bin/install-dev-tools.sh
  examples/bin/install-dev-tools.sh
@@ -59,12 +60,12 @@ Copyright: NONE
 License: UNKNOWN
  FIXME
 
-Files: debian/extralibs/path-clean-0.1.0/LICENSE-APACHE
+Files: debian/vendorlibs/path-clean-0.1.0/LICENSE-APACHE
 Copyright: 2018, Dan Reeves
 License: Apache-2.0
  FIXME
 
-Files: debian/extralibs/path-clean-0.1.0/LICENSE-MIT
+Files: debian/vendorlibs/path-clean-0.1.0/LICENSE-MIT
 Copyright: 2018, Dan Reeves
 License: Expat
  FIXME
