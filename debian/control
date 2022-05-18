@@ -27,7 +27,7 @@ Build-Depends:
  librust-serial-test-0.5+default-dev <!nocheck>,
  librust-tempfile-3+default-dev <!nocheck>,
  librust-thiserror-1+default-dev (>= 1.0.30),
- librust-toml-dev (<< 6),
+ librust-toml-0.5+default-dev (>= 0.5.8),
  librust-which+default-dev (<< 5),
 Standards-Version: 4.6.0
 Homepage: https://github.com/houseabsolute/precious
