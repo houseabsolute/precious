@@ -9,8 +9,7 @@ Build-Depends:
  git <!nocheck>,
  help2man <!nodoc>,
  librust-anyhow-1+default-dev (>= 1.0.44),
- librust-atty-dev,
- librust-clap-2-dev,
+ librust-clap-2+default-dev,
  librust-fern+colored-dev (<< 7),
  librust-globset-dev (<< 5),
  librust-ignore-dev (<< 5),
@@ -25,11 +24,9 @@ Build-Depends:
  librust-serde-1+default-dev (>= 1.0.130),
  librust-serde-1+derive-dev (>= 1.0.130),
  librust-serial-test-0.5+default-dev <!nocheck>,
- librust-strsim-dev,
  librust-tempfile-3+default-dev <!nocheck>,
  librust-thiserror-1+default-dev (>= 1.0.30),
  librust-toml-dev (<< 6),
- librust-vec-map-dev,
  librust-which+default-dev (<< 5),
 Standards-Version: 4.6.0
 Homepage: https://github.com/houseabsolute/precious
