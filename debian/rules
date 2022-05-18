@@ -7,19 +7,16 @@ CHANGELOGS = Changes.html Changes.txt
 MANPAGES = debian/build/precious.1
 endif
 
+# use local fork of dh-cargo and cargo wrapper
+PATH := $(CURDIR)/debian/dh-cargo/bin:$(PATH)
+PERL5LIB = $(CURDIR)/debian/dh-cargo/lib
+export PATH PERL5LIB
+
 # resolve all direct entries in first "package..." section in TODO
 VENDORLIBS = $(shell perl -nE \
  '/^(?:\s{2}[*]\s*(?:(package)|(\S+))|\s{4}[*]\s*(\S+))/ or next; \
  $$i++ if $$1; exit if $$i > 1 or $$2; say $$3 if $$3 and $$i;' \
  debian/TODO)
-
-# preserve a file, and reset to use that (or optionally another)
-_preserve_and_use = set -e; [ -f $1.orig ] || cp $1 $1.orig;\
- cp -f $(or $2,$1.orig) $1
-
-# generate cargo-checksum file
-_mkchecksum = printf '{"package":"%s","files":{}}\n' \
- $$(sha256sum $(or $2,$(dir $1)Cargo.toml) | grep -Po '^\S+') > $1;
 
 %:
 	dh $@ --buildsystem cargo
@@ -29,21 +26,6 @@ _mkchecksum = printf '{"package":"%s","files":{}}\n' \
 
 %.txt: %.md
 	cmark-gfm --to plaintext $< > $@
-
-execute_before_dh_auto_configure:
-	$(call _mkchecksum,debian/cargo-checksum.json,Cargo.toml)
-	$(call _preserve_and_use,Cargo.lock)
-
-execute_after_dh_auto_configure:
-	ln --symbolic --force --relative \
-		--target-directory=debian/cargo_registry \
-		debian/vendorlibs/*
-
-# use and update local Cargo.lock, if available
-ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
-	[ ! -f debian/Cargo.lock ] || cp -f debian/Cargo.lock Cargo.lock
-	[ ! -f debian/Cargo.lock ] || cargo update
-endif
 
 execute_after_dh_auto_build: $(DOCS) $(CHANGELOGS)
 
@@ -55,9 +37,6 @@ override_dh_installdocs:
 override_dh_installchangelogs:
 	dh_installchangelogs -- $(CHANGELOGS)
 
-execute_after_dh_auto_clean:
-	[ ! -f Cargo.lock.orig ] || mv -f Cargo.lock.orig Cargo.lock
-
 # build manpages
 debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 	mkdir --parents $(dir $@)
@@ -68,13 +47,8 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 
 # custom target unused during official build
 get-vendorlibs:
-	$(call _preserve_and_use,Cargo.lock)
-
 # preserve needed crates
 	cargo vendor --versioned-dirs debian/vendorlibs~
 	rm -rf debian/vendorlibs
 	mkdir debian/vendorlibs
 	cd debian/vendorlibs~ && mv --target-directory=../vendorlibs $(VENDORLIBS)
-
-# preserve mangled Cargo.lock for use during build
-	sed -e '/^checksum / d' Cargo.lock > debian/Cargo.lock
