@@ -27,7 +27,7 @@ Build-Depends:
  librust-serial-test-0.5+default-dev <!nocheck>,
  librust-strsim-dev,
  librust-tempfile-3+default-dev <!nocheck>,
- librust-thiserror-dev (<< 1.1),
+ librust-thiserror-1+default-dev (>= 1.0.30),
  librust-toml-dev (<< 6),
  librust-vec-map-dev,
  librust-which+default-dev (<< 5),
