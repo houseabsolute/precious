@@ -7,9 +7,6 @@ CHANGELOGS = Changes.html Changes.txt
 MANPAGES = debian/build/precious.1
 endif
 
-export CARGO_HOME = $(CURDIR)/debian/cargo_home
-export CARGO_NET_OFFLINE = true
-
 # resolve all direct entries in first "package..." section in TODO
 VENDORLIBS = $(shell perl -nE \
  '/^(?:\s{2}[*]\s*(?:(package)|(\S+))|\s{4}[*]\s*(\S+))/ or next; \
@@ -69,8 +66,6 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 		|| { $1 --help; false; }
 
 # custom target unused during official build
-get-vendorlibs: CARGO_NET_OFFLINE = false
-get-vendorlibs: export CARGO_HOME = $(CURDIR)/debian/cargo_vendor_home
 get-vendorlibs:
 # preserve upstream Cargo.lock, and reset to use that
 	[ -f Cargo.lock.orig ] || cp Cargo.lock Cargo.lock.orig
