@@ -8,7 +8,7 @@ Build-Depends:
  dh-cargo,
  git <!nocheck>,
  help2man <!nodoc>,
- librust-anyhow-dev (<< 2),
+ librust-anyhow-1+default-dev (>= 1.0.44),
  librust-atty-dev,
  librust-clap-2-dev,
  librust-fern+colored-dev (<< 7),
