@@ -22,7 +22,8 @@ Build-Depends:
 #path-clean = "~0.1"
  librust-pretty-assertions-1+default-dev (>= 1.1),
  librust-rayon-1+default-dev (>= 1.4.1),
- librust-serde+derive-dev (<< 1.1),
+ librust-serde-1+default-dev (>= 1.0.130),
+ librust-serde-1+derive-dev (>= 1.0.130),
  librust-serial-test-0.5+default-dev <!nocheck>,
  librust-strsim-dev,
  librust-tempfile-3+default-dev <!nocheck>,
