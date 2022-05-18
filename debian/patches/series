@@ -3,7 +3,6 @@
 1003_log.patch
 1004_rayon.patch
 1005_serde.patch
-1007_pretty_assertions.patch
 1008_tempfile.patch
 2001_clap.patch
 2002_privacy.patch

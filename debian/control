@@ -8,7 +8,6 @@ Build-Depends:
  dh-cargo,
  git <!nocheck>,
  help2man <!nodoc>,
- librust-ansi-term-dev,
  librust-anyhow-dev (<< 2),
  librust-atty-dev,
  librust-clap-2-dev,
@@ -21,7 +20,7 @@ Build-Depends:
  librust-log-dev (<< 0.5),
  librust-md5-dev (<< 8),
 #path-clean = "~0.1"
- librust-pretty-assertions-dev (<< 1.2),
+ librust-pretty-assertions-1+default-dev (>= 1.1),
  librust-rayon-dev (<< 1.9),
  librust-serde+derive-dev (<< 1.1),
  librust-serial-test-0.5+default-dev <!nocheck>,
