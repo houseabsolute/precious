@@ -10,7 +10,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  globset = "0.4.8"
  ignore = "0.4.18"
 -indexmap = { version = "1.8.0", features = ["serde"] }
-+indexmap = { version = ">= 1.7.0, < 1.9", features = ["serde"] }
++indexmap = { version = "1.7", features = ["serde"] }
  itertools = ">= 0.9.0, < 0.11.0"
  log = "0.4.14"
  md5 = "0.7.0"

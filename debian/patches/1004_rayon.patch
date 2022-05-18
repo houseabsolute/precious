@@ -10,7 +10,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  path-clean = "0.1.0"
  pretty_assertions = "1.1.0"
 -rayon = "1.5.1"
-+rayon = ">= 1.4.1, < 1.6"
++rayon = "1.4.1"
  serde = { version = "1.0.136", features = ["derive"] }
  thiserror = "1.0.30"
  toml = "0.5.8"
