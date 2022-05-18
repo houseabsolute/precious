@@ -15,7 +15,7 @@ Build-Depends:
  librust-ignore-0.4+default-dev (>= 0.4.18),
  librust-indexmap-1+default-dev (>= 1.7),
  librust-indexmap-1+serde-dev (>= 1.7),
- librust-itertools-dev (<< 0.11),
+ librust-itertools+default-dev (<< 0.11),
  librust-log-0.4+default-dev,
  librust-md5-dev (<< 8),
 #path-clean = "~0.1"
