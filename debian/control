@@ -11,7 +11,7 @@ Build-Depends:
  librust-anyhow-1+default-dev (>= 1.0.44),
  librust-clap-2+default-dev,
  librust-fern+colored-dev (<< 7),
- librust-globset-dev (<< 5),
+ librust-globset-0.4+default-dev (>= 0.4.8),
  librust-ignore-dev (<< 5),
  librust-indexmap-1+default-dev (>= 1.7),
  librust-indexmap-1+serde-dev (>= 1.7),
