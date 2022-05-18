@@ -20,6 +20,15 @@ VENDORLIBS = $(shell perl -nE \
 _mkchecksum = printf '{"package":"%s","files":{}}\n' \
  $$(sha256sum $(or $2,$(dir $1)Cargo.toml) | grep -Po '^\S+') > $1;
 
+%:
+	dh $@ --buildsystem cargo
+
+%.html: %.md
+	cmark-gfm $< > $@
+
+%.txt: %.md
+	cmark-gfm --to plaintext $< > $@
+
 execute_before_dh_auto_configure:
 	$(call _mkchecksum,debian/cargo-checksum.json,Cargo.toml)
 
@@ -58,15 +67,6 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 		--name "one code quality tool to rule them all" \
 		--output $@ $< \
 		|| { $1 --help; false; }
-
-%.html: %.md
-	cmark-gfm $< > $@
-
-%.txt: %.md
-	cmark-gfm --to plaintext $< > $@
-
-%:
-	dh $@ --buildsystem cargo
 
 # custom target unused during official build
 get-vendorlibs: CARGO_NET_OFFLINE = false
