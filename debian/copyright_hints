@@ -14,14 +14,13 @@ Files: CODE_OF_CONDUCT.md
  debian/clean
  debian/control
  debian/copyright-check
+ debian/dh-cargo/README.md
  debian/gbp.conf
  debian/patches/1001_anyhow.patch
  debian/patches/1002_indexmap.patch
  debian/patches/1003_log.patch
  debian/patches/1004_rayon.patch
  debian/patches/1005_serde.patch
- debian/patches/1006_thiserror.patch
- debian/patches/1007_pretty_assertions.patch
  debian/patches/1008_tempfile.patch
  debian/patches/2001_clap.patch
  debian/patches/2002_privacy.patch
@@ -60,9 +59,19 @@ Copyright: NONE
 License: UNKNOWN
  FIXME
 
+Files: debian/dh-cargo/lib/Debian/Debhelper/Buildsystem/cargo.pm
+Copyright: NONE
+License: Apache-2.0
+ FIXME
+
 Files: debian/vendorlibs/path-clean-0.1.0/LICENSE-APACHE
 Copyright: 2018, Dan Reeves
 License: Apache-2.0
+ FIXME
+
+Files: debian/dh-cargo/bin/cargo
+Copyright: NONE
+License: Expat
  FIXME
 
 Files: debian/vendorlibs/path-clean-0.1.0/LICENSE-MIT

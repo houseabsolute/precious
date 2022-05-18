@@ -1,3 +1,15 @@
+precious (0.1.3-6) unstable; urgency=medium
+
+  * stop set CARGO_HOME CARGO_NET_OFFLINE: handled by dh-cargo
+  * drop obsolete patches 1006 1007
+  * update patches to simplify version declarations
+  * tighten build-dependencies
+  * declare compliance with Debian Policy 4.6.1
+  * update TODOs
+  * simplify rules, using embedded dh-cargo fork
+
+ -- Jonas Smedegaard <dr@jones.dk>  Thu, 19 May 2022 00:06:50 +0200
+
 precious (0.1.3-5) unstable; urgency=medium
 
   * add patch 1008 to relax dependency on tempfile
