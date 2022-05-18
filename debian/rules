@@ -13,6 +13,10 @@ VENDORLIBS = $(shell perl -nE \
  $$i++ if $$1; exit if $$i > 1 or $$2; say $$3 if $$3 and $$i;' \
  debian/TODO)
 
+# preserve a file, and reset to use that (or optionally another)
+_preserve_and_use = set -e; [ -f $1.orig ] || cp $1 $1.orig;\
+ cp -f $(or $2,$1.orig) $1
+
 # generate cargo-checksum file
 _mkchecksum = printf '{"package":"%s","files":{}}\n' \
  $$(sha256sum $(or $2,$(dir $1)Cargo.toml) | grep -Po '^\S+') > $1;
@@ -28,10 +32,7 @@ _mkchecksum = printf '{"package":"%s","files":{}}\n' \
 
 execute_before_dh_auto_configure:
 	$(call _mkchecksum,debian/cargo-checksum.json,Cargo.toml)
-
-# preserve upstream Cargo.lock during build, if provided
-	[ -f Cargo.lock.orig ] || [ ! -f Cargo.lock ] \
-		|| cp Cargo.lock Cargo.lock.orig
+	$(call _preserve_and_use,Cargo.lock)
 
 execute_after_dh_auto_configure:
 	ln --symbolic --force --relative \
@@ -67,9 +68,7 @@ debian/build/precious.1: debian/build/%.1: debian/precious/usr/bin/%
 
 # custom target unused during official build
 get-vendorlibs:
-# preserve upstream Cargo.lock, and reset to use that
-	[ -f Cargo.lock.orig ] || cp Cargo.lock Cargo.lock.orig
-	cp -f Cargo.lock.orig Cargo.lock
+	$(call _preserve_and_use,Cargo.lock)
 
 # preserve needed crates
 	cargo vendor --versioned-dirs debian/vendorlibs~
