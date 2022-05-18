@@ -1,8 +1,5 @@
   * package needed Rust crates missing in Debian
     * path-clean-0.1.0
-  * drop build-dependency when all above is packaged
-    * ca-certificates
-    * [any package without "+" in its name]
   * maybe suggest linters and tidiers available in Debian:
     + shfmt
     + eslint
