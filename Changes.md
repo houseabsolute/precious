@@ -1,3 +1,12 @@
+## 0.1.4
+
+- Running precious with the `--staged` flag would exit with an error if a
+  post-checkout hook wrote any output to stderr, and it appears that any
+  output from a hook to stdout ends up on stderr for some reason, probably
+  related to
+  https://github.com/git/git/commit/e258eb4800e30da2adbdb2df8d8d8c19d9b443e4. Based
+  on PR#24 by Olaf Alders. Fixes #23.
+
 ## 0.1.3 - 2022-02-19
 
 - Relaxed some dependencies for the benefit of packaging precious for
