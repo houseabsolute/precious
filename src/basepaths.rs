@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::str;
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Mode {
     FromCli,
     All,
@@ -38,13 +38,13 @@ pub struct BasePaths {
     stashed: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Paths {
     pub dir: PathBuf,
     pub files: Vec<PathBuf>,
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum BasePathsError {
     #[error("You cannot pass an explicit list of files when looking for {mode:}")]
     GotPathsFromCliWithWrongMode { mode: Mode },
