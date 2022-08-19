@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Chars {
     pub ring: &'static str,
     pub tidied: &'static str,

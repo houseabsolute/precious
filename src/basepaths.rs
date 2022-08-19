@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::str;
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Mode {
     FromCli,
     All,
@@ -38,13 +38,13 @@ pub struct BasePaths {
     stashed: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Paths {
     pub dir: PathBuf,
     pub files: Vec<PathBuf>,
 }
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum BasePathsError {
     #[error("You cannot pass an explicit list of files when looking for {mode:}")]
     GotPathsFromCliWithWrongMode { mode: Mode },
@@ -130,7 +130,7 @@ impl BasePaths {
                     .collect(),
                 &HashMap::new(),
                 &[0],
-                false,
+                true,
                 Some(&self.root),
             )?;
             self.stashed = true;
@@ -346,6 +346,27 @@ mod tests {
         BasePaths::new(mode, root, exclude)
     }
 
+    #[cfg(not(target_os = "windows"))]
+    fn set_up_post_checkout_hook(helper: &testhelper::TestHelper) -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let hook = r#"
+            #!/bin/sh
+            echo "X"
+        "#;
+
+        let mut file_path = helper.root();
+        file_path.push(".git/hooks/post-checkout");
+        helper.write_file(&file_path, hook)?;
+
+        let path_string = &file_path.into_os_string();
+        let metadata = fs::metadata(path_string)?;
+        let mut perms = metadata.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(path_string, perms)?;
+        Ok(())
+    }
+
     #[test]
     fn files_to_paths() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
@@ -480,6 +501,9 @@ mod tests {
     fn git_staged_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
+
+        #[cfg(not(target_os = "windows"))]
+        set_up_post_checkout_hook(&helper)?;
 
         {
             let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
