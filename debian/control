@@ -9,7 +9,7 @@ Build-Depends:
  git <!nocheck>,
  help2man <!nodoc>,
  librust-anyhow-1+default-dev (>= 1.0.44),
- librust-clap-2+default-dev,
+ librust-clap-3+default-dev,
  librust-fern+colored-dev (<< 7),
  librust-fern+default-dev (<< 7),
  librust-globset-0.4+default-dev (>= 0.4.8),
