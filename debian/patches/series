@@ -1,8 +1,2 @@
-1001_anyhow.patch
-1002_indexmap.patch
-1003_log.patch
-1004_rayon.patch
-1005_serde.patch
-1008_tempfile.patch
 2001_clap.patch
 2002_privacy.patch
