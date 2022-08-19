@@ -1,5 +1,6 @@
   * package needed Rust crates missing in Debian
     * path-clean-0.1.0
-  * maybe suggest linters and tidiers available in Debian:
-    + shfmt
+  * maybe suggest additional linters and tidiers available in Debian:
     + eslint
+    + perlimports
+    + shfmt
