@@ -1,9 +1,16 @@
+## 0.1.4
+
+- Running precious with the `--staged` flag would exit with an error if a
+  post-checkout hook wrote any output to stderr. It appears that any output
+  from a hook to stdout ends up on stderr for some reason, probably related to
+  https://github.com/git/git/commit/e258eb4800e30da2adbdb2df8d8d8c19d9b443e4. Based
+  on PR#24 by Olaf Alders. Fixes #23.
+
 ## 0.1.3 - 2022-02-19
 
 - Relaxed some dependencies for the benefit of packaging precious for
   Debian. Implemented by Jonas Smedegaard.
-
-- Added support for `.precious.toml` as a config name. Based on #21, by Olaf
+- Added support for `.precious.toml` as a config name. Based on PR#21 by Olaf
   Alders. Fixes #13.
 
 ## 0.1.2 - 2021-10-14
@@ -11,7 +18,6 @@
 - The order of commands in the config file is now preserved, and commands are
   executed in the order in which they appear in the config file. This
   addresses #12, requested by Olaf Alders.
-
 - Fixed the tests so that they set the default branch name when running `git init`, rather than setting this via `git config`. This lets anyone run the
   tests, whereas it was only safe to set this via `git config` in CI. This
   fixes #14, reported by Olaf Alders.
@@ -26,7 +32,6 @@
 - The verbose and debugging level output now includes timing information on
   each linter and tidier that is run. This is helpful if you want to figure
   out why linting or tidying is slower than expected.
-
 - Fixed a bug in the debug output. It was not showing the correct cwd for
   commands where `chdir = true` was set. It always showed the project root
   directory instead of the directory where the command was run. It _was_
@@ -44,7 +49,6 @@
 - Errors are now printed out a bit differently, and in particular errors when
   trying to execute a command (not in the path, command fails unexpectedly,
   etc.) should be more readable now.
-
 - When running any commands, precious now explicitly checks to see if the
   executable is in your `PATH`. If it's not it prints a new error for this
   case, as opposed to when running the executable produces an error. This
@@ -55,7 +59,6 @@
 - Added a --jobs (-j) option for all subcommands. This lets you limit how many
   parallel threads are run. The default is to run one thread per available
   core. Requested by Shane Warden. GH #7.
-
 - Fixed a bug where running precious in "git staged mode" (`precious lint --staged`) would cause breakage with merge commits that were the result of
   resolving a merge conflict. Basically, you'd get the commit but git would no
   longer know it was merging a commit, because precious was running `git stash` under the hood to only check the staged files, then `git stash pop`
@@ -77,10 +80,8 @@
 
 - Look for a `precious.toml` file in the current directory before trying to
   find one in the root of the current VCS checkout.
-
 - Use the current directory as the root for finding files, rather than the VCS
   checkout root.
-
 - When a filter command does not exist, the error output now shows the full
   command that was run, including any arguments. Fixes GH #6.
 
@@ -89,18 +90,14 @@
 - Precious can now be run outside of a VCS repo, as long as there is a
   `precious.toml` file in the current directory. There is probably more work
   to be done for precious to not expect to be run inside a VCS repo.
-
 - Fixed a bug where lint failures would still result in precious exiting
   with 0. I'm not sure when this bug was introduced.
-
 - Replaced deprecated failure and failure_derive crates with anyhow and
   thiserror.
-
 - Replaced the `on_dir` and `run_once` config flags with a single `run_mode`
   flag, which can be one of "files" (the default)", "dirs", or "root". If the
   mode is "root" then the command runs exactly once from the root of the
   project.
-
 - Added an `env` config key for filters. This allows you to define env vars
   that will be set when the filter's command is run.
 
@@ -108,7 +105,6 @@
 
 - Renamed the config key `lint_flag` to `lint_flags` so it can now be an array
   of strings as well as a single string.
-
 - Added a `tidy_flags` option as well. Now commands which are both must define
   either `lint_flags` or `tidy_flags` (or both).
 
@@ -125,7 +121,6 @@
   set your `include` and `exclude` rules based on files properly. Previously
   you would have to set `include = "."` and the command would run when any
   files changed, even files which shouldn't trigger a run.
-
 - Fixed a bug where a command with `on_dir` set to `true` would incorrectly be
   run when a file matched both an include _and_ exclude rule. Exclude rules
   should always win in these situations.
