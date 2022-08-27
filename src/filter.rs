@@ -469,7 +469,15 @@ impl Command {
             if let Some(pf) = &self.path_flag {
                 cmd.push(pf.clone());
             }
-            cmd.push(path.to_string_lossy().to_string());
+            let file = if self.chdir {
+                // We know that this is a file because we already checked this
+                // in the tidy() or lint() method by calling
+                // require_path_type().
+                Path::new(path.file_name().unwrap())
+            } else {
+                path
+            };
+            cmd.push(file.to_string_lossy().to_string());
         }
 
         cmd
@@ -877,7 +885,7 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec!["test".to_string(), "foo.go".to_string()],
                 "files mode, with chdir",
             );
@@ -897,8 +905,8 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
-                vec!["test".to_string(), "foo.go".to_string()],
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
+                vec!["test".to_string(), "some_dir/foo.go".to_string()],
                 "files mode, no chdir",
             );
         }
@@ -917,11 +925,11 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec![
                     "test".to_string(),
                     "--file".to_string(),
-                    "foo.go".to_string(),
+                    "some_dir/foo.go".to_string(),
                 ],
                 "files mode, no chdir, with path flag"
             );
@@ -941,7 +949,7 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec![
                     "test".to_string(),
                     "--file".to_string(),

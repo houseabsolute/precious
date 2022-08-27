@@ -4,6 +4,10 @@
   includes both stdout and stderr from that command. Reported by Greg
   Oschwald. Fixes #26.
 
+- When a command was configured with the `run_mode` as `files` and `chdir` as
+  `true`, the paths passed to the command would still include parent
+  directories. Reported by Greg Oschwald. Fixes #25.
+
 ## 0.1.4
 
 - Running precious with the `--staged` flag would exit with an error if a
