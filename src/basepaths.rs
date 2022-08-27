@@ -185,7 +185,7 @@ impl BasePaths {
         for e in &self.exclude_globs {
             excludes.add(&format!("!{}", e))?;
         }
-        for d in vcs::dirs() {
+        for d in vcs::DIRS {
             excludes.add(&format!("!{}/**/*", d))?;
         }
 
@@ -241,10 +241,10 @@ impl BasePaths {
     }
 
     fn excluder(&self) -> Result<path_matcher::Matcher> {
-        let mut globs = self.exclude_globs.clone();
-        let mut v = vcs::dirs();
-        globs.append(&mut v);
-        path_matcher::Matcher::new(globs.as_ref())
+        path_matcher::MatcherBuilder::new()
+            .with(&self.exclude_globs)?
+            .with(vcs::DIRS)?
+            .build()
     }
 
     fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>> {

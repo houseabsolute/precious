@@ -387,8 +387,12 @@ impl Command {
             root: params.root,
             name: params.name,
             typ: params.typ,
-            includer: path_matcher::Matcher::new(&params.include)?,
-            excluder: path_matcher::Matcher::new(&params.exclude)?,
+            includer: path_matcher::MatcherBuilder::new()
+                .with(&params.include)?
+                .build()?,
+            excluder: path_matcher::MatcherBuilder::new()
+                .with(&params.exclude)?
+                .build()?,
             run_mode: params.run_mode,
             implementation: Box::new(Command {
                 cmd,
@@ -598,12 +602,7 @@ mod tests {
     }
 
     fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher> {
-        path_matcher::Matcher::new(
-            &globs
-                .iter()
-                .map(|g| String::from(*g))
-                .collect::<Vec<String>>(),
-        )
+        path_matcher::MatcherBuilder::new().with(globs)?.build()
     }
 
     #[test]

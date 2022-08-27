@@ -682,7 +682,7 @@ impl<'a> Precious<'a> {
     }
 
     fn is_checkout_root(path: &Path) -> bool {
-        for dir in vcs::dirs() {
+        for dir in vcs::DIRS {
             let mut poss = PathBuf::from(path);
             poss.push(dir);
             if poss.exists() {
