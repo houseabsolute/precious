@@ -196,7 +196,7 @@ impl Filter {
         if self.excluder.path_matches(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
-                path.to_string_lossy(),
+                path.display(),
                 self.name,
             );
             return false;
@@ -205,7 +205,7 @@ impl Filter {
         if self.includer.path_matches(path) {
             debug!(
                 "Path {} is included in the {} filter",
-                path.to_string_lossy(),
+                path.display(),
                 self.name
             );
             return true;
@@ -220,16 +220,16 @@ impl Filter {
                 if self.includer.path_matches(f) {
                     debug!(
                         "Directory {} is included in the {} filter because it contains {} which is included",
-                        path.to_string_lossy(),
+                        path.display(),
                         self.name,
-                        f.to_string_lossy(),
+                        f.display(),
                     );
                     return true;
                 }
             }
             debug!(
                 "Directory {} is not included in the {} filter because neither it nor its files are included",
-                path.to_string_lossy(),
+                path.display(),
                 self.name
             );
             return false;
@@ -237,7 +237,7 @@ impl Filter {
 
         debug!(
             "Path {} is not included in the {} filter",
-            path.to_string_lossy(),
+            path.display(),
             self.name
         );
         false
@@ -490,7 +490,7 @@ impl FilterImplementation for Command {
 
         info!(
             "Tidying {} with {} command: {}",
-            path.to_string_lossy(),
+            path.display(),
             name,
             cmd.join(" "),
         );
@@ -514,7 +514,7 @@ impl FilterImplementation for Command {
 
         info!(
             "Linting {} with {} command: {}",
-            path.to_string_lossy(),
+            path.display(),
             name,
             cmd.join(" "),
         );
@@ -651,7 +651,7 @@ mod tests {
         let res = filter.require_path_type("tidy", &helper.root());
         assert!(res.is_err());
         assert_eq!(
-            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
+            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap()),
             std::mem::discriminant(&FilterError::CanOnlyOperateOnFiles {
                 method: "tidy",
                 path: helper.root().to_string_lossy().to_string(),
@@ -683,7 +683,7 @@ mod tests {
             assert!(
                 filter.should_process_path(&i.clone(), &[i]),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -698,7 +698,7 @@ mod tests {
             assert!(
                 !filter.should_process_path(&e.clone(), &[e]),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -728,7 +728,7 @@ mod tests {
             assert!(
                 filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -748,7 +748,7 @@ mod tests {
             assert!(
                 !filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -778,7 +778,7 @@ mod tests {
             assert!(
                 filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -798,7 +798,7 @@ mod tests {
             assert!(
                 !filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 

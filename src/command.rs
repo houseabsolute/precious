@@ -79,11 +79,7 @@ pub fn run_command(
 
     if log_enabled!(Debug) {
         let cstr = command_string(&cmd, &args);
-        debug!(
-            "Running command [{}] with cwd = {}",
-            cstr,
-            cwd.to_string_lossy(),
-        );
+        debug!("Running command [{}] with cwd = {}", cstr, cwd.display());
     }
 
     let output = output_from_command(c, ok_exit_codes, &cmd, &args).with_context(|| {

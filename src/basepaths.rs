@@ -52,8 +52,8 @@ pub enum BasePathsError {
     #[error("Found some paths when looking for {mode:} but they were all excluded")]
     AllPathsWereExcluded { mode: Mode },
 
-    #[error("Found a path on the Cli which does not exist: {path:}")]
-    NonExistentPathOnCli { path: String },
+    #[error("Found a path on the Cli which does not exist: {:}", path.display())]
+    NonExistentPathOnCli { path: PathBuf },
 
     #[error("Could not determine the repo root by running \"git rev-parse --show-toplevel\"")]
     CouldNotDetermineRepoRoot,
@@ -140,7 +140,7 @@ impl BasePaths {
     }
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>> {
-        debug!("Getting all files under {}", self.root.to_string_lossy());
+        debug!("Getting all files under {}", self.root.display());
         match self.walkdir_files(self.root.as_path())? {
             Some(all) => Ok(Some(self.relative_files(all)?)),
             None => Ok(None),
@@ -155,10 +155,7 @@ impl BasePaths {
         for rel in self.relative_files(cli_paths)? {
             let full = self.root.clone().join(rel.clone());
             if !full.exists() {
-                return Err(BasePathsError::NonExistentPathOnCli {
-                    path: rel.to_string_lossy().to_string(),
-                }
-                .into());
+                return Err(BasePathsError::NonExistentPathOnCli { path: rel }.into());
             }
 
             if excluder.path_matches(&rel) {
@@ -686,7 +683,7 @@ mod tests {
         assert_eq!(
             std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
             std::mem::discriminant(&BasePathsError::NonExistentPathOnCli {
-                path: String::from("does/not/exist"),
+                path: PathBuf::from("does/not/exist"),
             }),
         );
         Ok(())

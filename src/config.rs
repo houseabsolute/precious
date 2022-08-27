@@ -9,6 +9,7 @@ use std::fmt;
 use std::fs;
 use std::marker::PhantomData;
 use std::path::Path;
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]
@@ -69,8 +70,13 @@ pub struct Config {
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
-    #[error("File at {file:} cannot be read: {error:}")]
-    FileCannotBeRead { file: String, error: std::io::Error },
+    #[error("File at {} cannot be read: {error:}", file.display())]
+    FileCannotBeRead {
+        file: PathBuf,
+        error: std::io::Error,
+    },
+    #[error(transparent)]
+    Toml(#[from] toml::de::Error),
 }
 
 // Copied from https://stackoverflow.com/a/43627388 - CC-BY-SA 3.0
@@ -235,15 +241,9 @@ where
 }
 
 impl Config {
-    pub fn new(file: &Path) -> Result<Config> {
-        match fs::read(file) {
-            Err(e) => {
-                return Err(ConfigError::FileCannotBeRead {
-                    file: file.to_string_lossy().to_string(),
-                    error: e,
-                }
-                .into());
-            }
+    pub fn new(file: PathBuf) -> Result<Config> {
+        match fs::read(&file) {
+            Err(e) => Err(ConfigError::FileCannotBeRead { file, error: e }.into()),
             Ok(bytes) => Ok(toml::from_slice(&bytes)?),
         }
     }
