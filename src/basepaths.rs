@@ -1,8 +1,8 @@
 use crate::{command, path_matcher, vcs};
 use anyhow::Result;
+use clean_path::Clean;
 use itertools::Itertools;
 use log::{debug, error};
-use path_clean::PathClean;
 use std::{
     collections::HashMap,
     fmt,

@@ -80,6 +80,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "clean-path"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaa6b4b263a5d737e9bf6b7c09b72c41a5480aec4d7219af827f6564e950b6a5"
+
+[[package]]
 name = "colored"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -369,17 +375,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "path-clean"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecba01bf2678719532c5e3059e0b5f0811273d94b397088b82e3bd0a78c78fdd"
-
-[[package]]
 name = "precious"
 version = "0.1.5"
 dependencies = [
  "anyhow",
  "clap",
+ "clean-path",
  "fern",
  "globset",
  "ignore",
@@ -387,7 +388,6 @@ dependencies = [
  "itertools",
  "log",
  "md5",
- "path-clean",
  "pretty_assertions",
  "rayon",
  "serde",
