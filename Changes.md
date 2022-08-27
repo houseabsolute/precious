@@ -1,3 +1,9 @@
+## 0.1.5
+
+- When a command unexpectedly prints to stderr the error message we print now
+  includes both stdout and stderr from that command. Reported by Greg
+  Oschwald. Fixes #26.
+
 ## 0.1.4
 
 - Running precious with the `--staged` flag would exit with an error if a

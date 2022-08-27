@@ -20,10 +20,13 @@ pub enum CommandError {
     #[error("Got unexpected exit code {code:} from `{cmd:}`")]
     UnexpectedExitCode { cmd: String, code: i32 },
 
-    #[error("Got unexpected exit code {code:} from `{cmd:}`. Stderr was {stderr:}")]
+    #[error(
+        "Got unexpected exit code {code:} from `{cmd:}`. Stdout:\n{stdout:}\nStderr:\n{stderr:}"
+    )]
     UnexpectedExitCodeWithStderr {
         cmd: String,
         code: i32,
+        stdout: String,
         stderr: String,
     },
 
@@ -135,6 +138,7 @@ fn output_from_command(
                     return Err(CommandError::UnexpectedExitCodeWithStderr {
                         cmd: cstr,
                         code,
+                        stdout: String::from_utf8(output.stdout)?,
                         stderr: String::from_utf8(output.stderr)?,
                     }
                     .into());
