@@ -1,4 +1,4 @@
-## 0.1.5
+## 0.1.5 2022-08-27
 
 - When a command unexpectedly prints to stderr the error message we print now
   includes both stdout and stderr from that command. Reported by Greg
