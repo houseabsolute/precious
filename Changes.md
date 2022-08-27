@@ -8,7 +8,7 @@
   `true`, the paths passed to the command would still include parent
   directories. Reported by Greg Oschwald. Fixes #25.
 
-## 0.1.4
+## 0.1.4 2022-08-14
 
 - Running precious with the `--staged` flag would exit with an error if a
   post-checkout hook wrote any output to stderr. It appears that any output
