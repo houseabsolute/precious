@@ -3,7 +3,7 @@ use log::{
     Level::Debug,
     {debug, error, log_enabled},
 };
-use std::{collections::HashMap, env, fs, path::Path, process};
+use std::{collections::HashMap, env, ffi::OsStr, fs, path::Path, process};
 use thiserror::Error;
 use which::which;
 
@@ -186,8 +186,7 @@ mod tests {
     use crate::testhelper;
     use anyhow::Result;
     use pretty_assertions::assert_eq;
-    use std::collections::HashMap;
-    use std::env;
+    use std::{collections::HashMap, env, ffi::OsString};
     use tempfile::tempdir;
 
     #[test]

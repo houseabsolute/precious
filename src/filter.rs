@@ -572,8 +572,7 @@ fn replace_root(cmd: Vec<String>, root: &Path) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::path_matcher;
-    use crate::testhelper;
+    use crate::{path_matcher, testhelper};
     use anyhow::Result;
     use pretty_assertions::assert_eq;
 
