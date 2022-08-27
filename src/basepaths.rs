@@ -1,8 +1,8 @@
 use crate::{command, path_matcher, vcs};
 use anyhow::Result;
+use clean_path::Clean;
 use itertools::Itertools;
 use log::{debug, error};
-use path_clean::PathClean;
 use std::{
     collections::HashMap,
     fmt,
@@ -288,6 +288,7 @@ impl BasePaths {
                 f = self.root.clone().join(f);
             }
 
+            debug!("f = {:?}", f);
             // If the directory given is just "." then the first clean()
             // removes that and we then strip the prefix, leaving an empty
             // string. The second clean turns that back into ".".

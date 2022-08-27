@@ -44,7 +44,7 @@ pub struct CommandResult {
 
 pub fn run_command(
     cmd: String,
-    args: Vec<String>,
+    args: Vec<impl AsRef<OsStr>>,
     env: &HashMap<String, String>,
     ok_exit_codes: &[i32],
     expect_stderr: bool,
@@ -60,7 +60,7 @@ pub fn run_command(
 
     let mut c = process::Command::new(&cmd);
     for a in args.iter() {
-        c.arg(a);
+        c.arg(a.as_ref());
     }
 
     // We are canonicalizing this primarily for the benefit of our debugging
@@ -118,7 +118,7 @@ fn output_from_command(
     mut c: process::Command,
     ok_exit_codes: &[i32],
     cmd: &str,
-    args: &[String],
+    args: &[impl AsRef<OsStr>],
 ) -> Result<process::Output> {
     let output = c.output()?;
     match output.status.code() {
@@ -154,11 +154,17 @@ fn output_from_command(
     Ok(output)
 }
 
-fn command_string(cmd: &str, args: &[String]) -> String {
+fn command_string(cmd: &str, args: &[impl AsRef<OsStr>]) -> String {
     let mut cstr = cmd.to_string();
     if !args.is_empty() {
         cstr.push(' ');
-        cstr.push_str(args.join(" ").as_str());
+        cstr.push_str(
+            args.iter()
+                .map(|a| a.as_ref().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(" ")
+                .as_str(),
+        );
     }
     cstr
 }
@@ -191,8 +197,9 @@ mod tests {
 
     #[test]
     fn command_string() {
+        let empty: Vec<&str> = vec![];
         assert_eq!(
-            super::command_string(&String::from("foo"), &[]),
+            super::command_string(&String::from("foo"), &empty),
             String::from("foo"),
             "command without args",
         );
@@ -208,6 +215,13 @@ mod tests {
             ),
             String::from("foo --bar baz"),
             "command with multiple args",
+        );
+
+        let os_str_args = vec![OsString::from("test"), make_os_string()];
+        assert_eq!(
+            super::command_string(&String::from("foo"), &os_str_args,),
+            String::from("foo test �"),
+            "command with OsString args",
         );
     }
 
@@ -259,7 +273,6 @@ mod tests {
             None,
         );
         assert!(res.is_err(), "command exits non-zero");
-
         match res {
             Ok(_) => panic!("did not get an error in the returned Result"),
             Err(e) => {
@@ -276,6 +289,25 @@ mod tests {
             }
         }
 
+        let mut echo = OsString::from("echo foo");
+        echo.push(&make_os_string());
+        let res = super::run_command(
+            String::from("sh"),
+            vec![OsString::from("-c"), echo],
+            &env,
+            &[0],
+            false,
+            None,
+        )?;
+        assert_eq!(res.exit_code, 0, "command exits 0");
+        assert!(res.stdout.is_some(), "command has stdout output");
+        assert_eq!(
+            res.stdout.unwrap(),
+            String::from("foo�\n"),
+            "{} env var was set when command was run",
+            env_key,
+        );
+
         Ok(())
     }
 
@@ -290,9 +322,10 @@ mod tests {
         let td = tempdir()?;
         let td_path = testhelper::maybe_canonicalize(td.path())?;
 
+        let args: Vec<&str> = vec![];
         let res = super::run_command(
             String::from("pwd"),
-            vec![],
+            args,
             &HashMap::new(),
             &[0],
             false,
@@ -322,6 +355,19 @@ mod tests {
             assert!(e.to_string().contains(
                 r#"Could not find "I hope this binary does not exist on any system!" in your path"#,
             ));
+        }
+    }
+
+    fn make_os_string() -> OsString {
+        #[cfg(target_family = "unix")]
+        {
+            use std::os::unix::ffi::OsStringExt;
+            OsString::from_vec(vec![230])
+        }
+        #[cfg(target_family = "windows")]
+        {
+            use std::os::windows::ffi::OsStringExt;
+            OsString::from_wide(vec![230])
         }
     }
 }

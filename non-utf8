@@ -1,0 +1,10 @@
+#!/usr/bin/env perl
+
+use v5.32;
+use utf8;
+use Encode qw( encode );
+
+my $name = encode( 'ISO-8859-1', "non-utf8-ê" );
+open my $fh, '>', $name or die $!;
+close $fh;
+

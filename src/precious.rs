@@ -153,6 +153,7 @@ fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a> {
         )
         .arg(
             Arg::new("paths")
+                .value_parser(clap::value_parser!(PathBuf))
                 .multiple_occurrences(true)
                 .takes_value(true)
                 .help("A list of paths on which to operate"),
@@ -667,10 +668,9 @@ impl<'a> Precious<'a> {
     fn paths_from_args(&self) -> Vec<PathBuf> {
         let subc_matches = self.matched_subcommand();
         subc_matches
-            .values_of("paths")
-            .unwrap()
-            .map(PathBuf::from)
-            .collect::<Vec<PathBuf>>()
+            .get_many::<PathBuf>("paths")
+            .map(|v| v.map(|p| p.to_owned()).collect::<Vec<_>>())
+            .unwrap_or_default()
     }
 
     fn matched_subcommand(&self) -> &ArgMatches {
