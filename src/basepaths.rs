@@ -1,14 +1,13 @@
-use crate::command;
-use crate::path_matcher;
-use crate::vcs;
+use crate::{command, path_matcher, vcs};
 use anyhow::Result;
 use itertools::Itertools;
 use log::{debug, error};
 use path_clean::PathClean;
-use std::collections::HashMap;
-use std::fmt;
-use std::path::{Path, PathBuf};
-use std::str;
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

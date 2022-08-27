@@ -1,18 +1,18 @@
-use crate::basepaths;
-use crate::chars;
-use crate::config;
-use crate::filter;
-use crate::vcs;
+use crate::{basepaths, chars, config, filter, vcs};
 use anyhow::{Error, Result};
 use clap::{App, Arg, ArgGroup, ArgMatches};
-use fern::colors::{Color, ColoredLevelConfig};
-use fern::Dispatch;
+use fern::{
+    colors::{Color, ColoredLevelConfig},
+    Dispatch,
+};
 use log::{debug, error, info};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
-use std::collections::HashMap;
-use std::env;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]

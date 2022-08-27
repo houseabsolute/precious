@@ -3,11 +3,12 @@ use crate::path_matcher;
 use anyhow::Result;
 use log::{debug, info};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt, fs,
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Deserialize)]

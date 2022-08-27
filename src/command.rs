@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
-use log::Level::Debug;
-use log::{debug, error, log_enabled};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::process;
+use log::{
+    Level::Debug,
+    {debug, error, log_enabled},
+};
+use std::{collections::HashMap, env, fs, path::Path, process};
 use thiserror::Error;
 use which::which;
 

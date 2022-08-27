@@ -1,15 +1,13 @@
 use crate::filter;
 use anyhow::Result;
 use indexmap::IndexMap;
-use serde::de;
-use serde::de::Deserializer;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::fmt;
-use std::fs;
-use std::marker::PhantomData;
-use std::path::Path;
-use std::path::PathBuf;
+use serde::{de, de::Deserializer, Deserialize};
+use std::{
+    collections::HashMap,
+    fmt, fs,
+    marker::PhantomData,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]

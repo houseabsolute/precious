@@ -1,11 +1,12 @@
 #[cfg(test)]
 use crate::command;
 use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::io::prelude::*;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    env, fs,
+    io::prelude::*,
+    path::{Path, PathBuf},
+};
 use tempfile::{tempdir, TempDir};
 
 pub struct TestHelper {
