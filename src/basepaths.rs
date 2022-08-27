@@ -327,7 +327,6 @@ mod tests {
     use crate::testhelper;
     use anyhow::Result;
     use pretty_assertions::assert_eq;
-
     use std::fs;
 
     fn new_basepaths(mode: Mode, root: PathBuf) -> Result<BasePaths> {
