@@ -1,3 +1,10 @@
+precious (0.1.5-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release
+
+ -- Jonas Smedegaard <dr@jones.dk>  Thu, 01 Sep 2022 14:26:48 +0200
+
 precious (0.1.4-1) unstable; urgency=medium
 
   [ upstream ]
