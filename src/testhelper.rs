@@ -1,11 +1,12 @@
 #[cfg(test)]
 use crate::command;
 use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::io::prelude::*;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    env, fs,
+    io::prelude::*,
+    path::{Path, PathBuf},
+};
 use tempfile::{tempdir, TempDir};
 
 pub struct TestHelper {
@@ -202,16 +203,12 @@ generated.*
     pub fn write_file(&self, rel: &Path, content: &str) -> Result<()> {
         let mut full = self.root.clone();
         full.push(rel);
-        fs::create_dir_all(full.parent().unwrap()).with_context(|| {
-            format!(
-                "Creating dir at {}",
-                full.parent().unwrap().to_string_lossy(),
-            )
-        })?;
+        fs::create_dir_all(full.parent().unwrap())
+            .with_context(|| format!("Creating dir at {}", full.parent().unwrap().display(),))?;
         let mut file = fs::File::create(full.clone())
-            .context(format!("Creating file at {}", full.to_string_lossy()))?;
+            .context(format!("Creating file at {}", full.display()))?;
         file.write_all(content.as_bytes())
-            .context(format!("Writing to file at {}", full.to_string_lossy()))?;
+            .context(format!("Writing to file at {}", full.display()))?;
 
         Ok(())
     }
@@ -221,7 +218,7 @@ generated.*
         let mut full = self.root.clone();
         full.push(rel);
         let content = fs::read_to_string(full.clone())
-            .context(format!("Reading file at {}", full.to_string_lossy()))?;
+            .context(format!("Reading file at {}", full.display()))?;
 
         Ok(content)
     }
@@ -248,7 +245,7 @@ impl Drop for Pushd {
         if let Err(e) = res {
             panic!(
                 "Could not return to original dir, {}: {}",
-                self.0.to_string_lossy(),
+                self.0.display(),
                 e,
             );
         }

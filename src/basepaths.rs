@@ -1,14 +1,13 @@
-use crate::command;
-use crate::path_matcher;
-use crate::vcs;
+use crate::{command, path_matcher, vcs};
 use anyhow::Result;
 use itertools::Itertools;
 use log::{debug, error};
 use path_clean::PathClean;
-use std::collections::HashMap;
-use std::fmt;
-use std::path::{Path, PathBuf};
-use std::str;
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -52,8 +51,8 @@ pub enum BasePathsError {
     #[error("Found some paths when looking for {mode:} but they were all excluded")]
     AllPathsWereExcluded { mode: Mode },
 
-    #[error("Found a path on the Cli which does not exist: {path:}")]
-    NonExistentPathOnCli { path: String },
+    #[error("Found a path on the Cli which does not exist: {:}", path.display())]
+    NonExistentPathOnCli { path: PathBuf },
 
     #[error("Could not determine the repo root by running \"git rev-parse --show-toplevel\"")]
     CouldNotDetermineRepoRoot,
@@ -140,7 +139,7 @@ impl BasePaths {
     }
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>> {
-        debug!("Getting all files under {}", self.root.to_string_lossy());
+        debug!("Getting all files under {}", self.root.display());
         match self.walkdir_files(self.root.as_path())? {
             Some(all) => Ok(Some(self.relative_files(all)?)),
             None => Ok(None),
@@ -155,10 +154,7 @@ impl BasePaths {
         for rel in self.relative_files(cli_paths)? {
             let full = self.root.clone().join(rel.clone());
             if !full.exists() {
-                return Err(BasePathsError::NonExistentPathOnCli {
-                    path: rel.to_string_lossy().to_string(),
-                }
-                .into());
+                return Err(BasePathsError::NonExistentPathOnCli { path: rel }.into());
             }
 
             if excluder.path_matches(&rel) {
@@ -189,7 +185,7 @@ impl BasePaths {
         for e in &self.exclude_globs {
             excludes.add(&format!("!{}", e))?;
         }
-        for d in vcs::dirs() {
+        for d in vcs::DIRS {
             excludes.add(&format!("!{}/**/*", d))?;
         }
 
@@ -245,10 +241,10 @@ impl BasePaths {
     }
 
     fn excluder(&self) -> Result<path_matcher::Matcher> {
-        let mut globs = self.exclude_globs.clone();
-        let mut v = vcs::dirs();
-        globs.append(&mut v);
-        path_matcher::Matcher::new(globs.as_ref())
+        path_matcher::MatcherBuilder::new()
+            .with(&self.exclude_globs)?
+            .with(vcs::DIRS)?
+            .build()
     }
 
     fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>> {
@@ -686,7 +682,7 @@ mod tests {
         assert_eq!(
             std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
             std::mem::discriminant(&BasePathsError::NonExistentPathOnCli {
-                path: String::from("does/not/exist"),
+                path: PathBuf::from("does/not/exist"),
             }),
         );
         Ok(())

@@ -1,18 +1,18 @@
-use crate::basepaths;
-use crate::chars;
-use crate::config;
-use crate::filter;
-use crate::vcs;
+use crate::{basepaths, chars, config, filter, vcs};
 use anyhow::{Error, Result};
 use clap::{App, Arg, ArgGroup, ArgMatches};
-use fern::colors::{Color, ColoredLevelConfig};
-use fern::Dispatch;
+use fern::{
+    colors::{Color, ColoredLevelConfig},
+    Dispatch,
+};
 use log::{debug, error, info};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
-use std::collections::HashMap;
-use std::env;
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -218,7 +218,8 @@ impl<'a> Precious<'a> {
 
         let cwd = env::current_dir()?;
         let root = Self::root(&cwd)?;
-        let (config, _) = Self::config(matches, &root)?;
+        let config_file = Self::config_file(matches, &root)?;
+        let config = config::Config::new(config_file)?;
 
         Ok(Precious {
             matches,
@@ -288,21 +289,19 @@ impl<'a> Precious<'a> {
         .into())
     }
 
-    fn config(matches: &'a ArgMatches, root: &Path) -> Result<(config::Config, PathBuf)> {
-        let file = if matches.is_present("config") {
+    fn config_file(matches: &'a ArgMatches, root: &Path) -> Result<PathBuf> {
+        if matches.is_present("config") {
             let conf_file = matches.value_of("config").unwrap();
             debug!("Loading config from {} (set via flag)", conf_file);
-            PathBuf::from(conf_file)
-        } else {
-            let default = Self::default_config_file(root);
-            debug!(
-                "Loading config from {} (default location)",
-                default.to_string_lossy()
-            );
-            default
-        };
+            return Ok(PathBuf::from(conf_file));
+        }
 
-        Ok((config::Config::new(file.as_path())?, file))
+        let default = Self::default_config_file(root);
+        debug!(
+            "Loading config from {} (default location)",
+            default.display()
+        );
+        Ok(default)
     }
 
     fn default_config_file(root: &Path) -> PathBuf {
@@ -435,7 +434,7 @@ impl<'a> Precious<'a> {
                     .map(|ae| format!(
                         "  {} {} [{}]\n    {}\n",
                         self.chars.bullet,
-                        ae.path.to_string_lossy(),
+                        ae.path.display(),
                         ae.config_key,
                         ae.error,
                     ))
@@ -465,7 +464,7 @@ impl<'a> Precious<'a> {
                                 "{} Tidied by {}:    {}",
                                 s.chars.tidied,
                                 t.name,
-                                p.to_string_lossy()
+                                p.display()
                             );
                         }
                         Some(Ok(()))
@@ -476,7 +475,7 @@ impl<'a> Precious<'a> {
                                 "{} Unchanged by {}: {}",
                                 s.chars.unchanged,
                                 t.name,
-                                p.to_string_lossy()
+                                p.display()
                             );
                         }
                         Some(Ok(()))
@@ -487,7 +486,7 @@ impl<'a> Precious<'a> {
                             "{} error {}: {}",
                             s.chars.execution_error,
                             t.name,
-                            p.to_string_lossy()
+                            p.display()
                         );
                         Some(Err(ActionError {
                             error: format!("{:#}", e),
@@ -506,57 +505,49 @@ impl<'a> Precious<'a> {
         all_paths: Vec<basepaths::Paths>,
         l: &filter::Filter,
     ) -> Option<Vec<ActionError>> {
-        let runner =
-            |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<Result<(), ActionError>> {
-                match l.lint(p, &paths.files) {
-                    Ok(Some(r)) => {
-                        if r.ok {
-                            if !s.quiet {
-                                println!(
-                                    "{} Passed {}: {}",
-                                    s.chars.lint_free,
-                                    l.name,
-                                    p.to_string_lossy()
-                                );
-                            }
-                            Some(Ok(()))
-                        } else {
-                            println!(
-                                "{} Failed {}: {}",
-                                s.chars.lint_dirty,
-                                l.name,
-                                p.to_string_lossy()
-                            );
-                            if let Some(s) = r.stdout {
-                                println!("{}", s);
-                            }
-                            if let Some(s) = r.stderr {
-                                println!("{}", s);
-                            }
-
-                            Some(Err(ActionError {
-                                error: "linting failed".into(),
-                                config_key: l.config_key(),
-                                path: p.to_owned(),
-                            }))
+        let runner = |s: &Self,
+                      p: &Path,
+                      paths: &basepaths::Paths|
+         -> Option<Result<(), ActionError>> {
+            match l.lint(p, &paths.files) {
+                Ok(Some(r)) => {
+                    if r.ok {
+                        if !s.quiet {
+                            println!("{} Passed {}: {}", s.chars.lint_free, l.name, p.display());
                         }
-                    }
-                    Ok(None) => None,
-                    Err(e) => {
-                        println!(
-                            "{} error {}: {}",
-                            s.chars.execution_error,
-                            l.name,
-                            p.to_string_lossy()
-                        );
+                        Some(Ok(()))
+                    } else {
+                        println!("{} Failed {}: {}", s.chars.lint_dirty, l.name, p.display());
+                        if let Some(s) = r.stdout {
+                            println!("{}", s);
+                        }
+                        if let Some(s) = r.stderr {
+                            println!("{}", s);
+                        }
+
                         Some(Err(ActionError {
-                            error: format!("{:#}", e),
+                            error: "linting failed".into(),
                             config_key: l.config_key(),
                             path: p.to_owned(),
                         }))
                     }
                 }
-            };
+                Ok(None) => None,
+                Err(e) => {
+                    println!(
+                        "{} error {}: {}",
+                        s.chars.execution_error,
+                        l.name,
+                        p.display()
+                    );
+                    Some(Err(ActionError {
+                        error: format!("{:#}", e),
+                        config_key: l.config_key(),
+                        path: p.to_owned(),
+                    }))
+                }
+            }
+        };
 
         self.run_parallel("Linting", all_paths, l, runner)
     }
@@ -691,7 +682,7 @@ impl<'a> Precious<'a> {
     }
 
     fn is_checkout_root(path: &Path) -> bool {
-        for dir in vcs::dirs() {
+        for dir in vcs::DIRS {
             let mut poss = PathBuf::from(path);
             poss.push(dir);
             if poss.exists() {
@@ -776,7 +767,7 @@ lint_failure_exit_codes = [1]
             assert_eq!(p.chars, chars::FUN_CHARS);
             assert!(!p.quiet);
 
-            let (_, config_file) = Precious::config(&matches, &p.root)?;
+            let config_file = Precious::config_file(&matches, &p.root)?;
             let mut expect_config_file = p.root;
             expect_config_file.push(name);
             assert_eq!(config_file, expect_config_file);
@@ -822,7 +813,7 @@ lint_failure_exit_codes = [1]
 
         let p = Precious::new(&matches)?;
 
-        let (_, config_file) = Precious::config(&matches, &p.root)?;
+        let config_file = Precious::config_file(&matches, &p.root)?;
         let mut expect_config_file = p.root;
         expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
         assert_eq!(config_file, expect_config_file);

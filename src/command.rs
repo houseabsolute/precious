@@ -1,11 +1,9 @@
 use anyhow::{Context, Result};
-use log::Level::Debug;
-use log::{debug, error, log_enabled};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::process;
+use log::{
+    Level::Debug,
+    {debug, error, log_enabled},
+};
+use std::{collections::HashMap, env, fs, path::Path, process};
 use thiserror::Error;
 use which::which;
 
@@ -20,10 +18,13 @@ pub enum CommandError {
     #[error("Got unexpected exit code {code:} from `{cmd:}`")]
     UnexpectedExitCode { cmd: String, code: i32 },
 
-    #[error("Got unexpected exit code {code:} from `{cmd:}`. Stderr was {stderr:}")]
+    #[error(
+        "Got unexpected exit code {code:} from `{cmd:}`. Stdout:\n{stdout:}\nStderr:\n{stderr:}"
+    )]
     UnexpectedExitCodeWithStderr {
         cmd: String,
         code: i32,
+        stdout: String,
         stderr: String,
     },
 
@@ -76,11 +77,7 @@ pub fn run_command(
 
     if log_enabled!(Debug) {
         let cstr = command_string(&cmd, &args);
-        debug!(
-            "Running command [{}] with cwd = {}",
-            cstr,
-            cwd.to_string_lossy(),
-        );
+        debug!("Running command [{}] with cwd = {}", cstr, cwd.display());
     }
 
     let output = output_from_command(c, ok_exit_codes, &cmd, &args).with_context(|| {
@@ -135,6 +132,7 @@ fn output_from_command(
                     return Err(CommandError::UnexpectedExitCodeWithStderr {
                         cmd: cstr,
                         code,
+                        stdout: String::from_utf8(output.stdout)?,
                         stderr: String::from_utf8(output.stderr)?,
                     }
                     .into());

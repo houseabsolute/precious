@@ -3,11 +3,12 @@ use crate::path_matcher;
 use anyhow::Result;
 use log::{debug, info};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt, fs,
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -196,7 +197,7 @@ impl Filter {
         if self.excluder.path_matches(path) {
             debug!(
                 "Path {} is excluded for the {} filter",
-                path.to_string_lossy(),
+                path.display(),
                 self.name,
             );
             return false;
@@ -205,7 +206,7 @@ impl Filter {
         if self.includer.path_matches(path) {
             debug!(
                 "Path {} is included in the {} filter",
-                path.to_string_lossy(),
+                path.display(),
                 self.name
             );
             return true;
@@ -220,16 +221,16 @@ impl Filter {
                 if self.includer.path_matches(f) {
                     debug!(
                         "Directory {} is included in the {} filter because it contains {} which is included",
-                        path.to_string_lossy(),
+                        path.display(),
                         self.name,
-                        f.to_string_lossy(),
+                        f.display(),
                     );
                     return true;
                 }
             }
             debug!(
                 "Directory {} is not included in the {} filter because neither it nor its files are included",
-                path.to_string_lossy(),
+                path.display(),
                 self.name
             );
             return false;
@@ -237,7 +238,7 @@ impl Filter {
 
         debug!(
             "Path {} is not included in the {} filter",
-            path.to_string_lossy(),
+            path.display(),
             self.name
         );
         false
@@ -386,8 +387,12 @@ impl Command {
             root: params.root,
             name: params.name,
             typ: params.typ,
-            includer: path_matcher::Matcher::new(&params.include)?,
-            excluder: path_matcher::Matcher::new(&params.exclude)?,
+            includer: path_matcher::MatcherBuilder::new()
+                .with(&params.include)?
+                .build()?,
+            excluder: path_matcher::MatcherBuilder::new()
+                .with(&params.exclude)?
+                .build()?,
             run_mode: params.run_mode,
             implementation: Box::new(Command {
                 cmd,
@@ -469,7 +474,15 @@ impl Command {
             if let Some(pf) = &self.path_flag {
                 cmd.push(pf.clone());
             }
-            cmd.push(path.to_string_lossy().to_string());
+            let file = if self.chdir {
+                // We know that this is a file because we already checked this
+                // in the tidy() or lint() method by calling
+                // require_path_type().
+                Path::new(path.file_name().unwrap())
+            } else {
+                path
+            };
+            cmd.push(file.to_string_lossy().to_string());
         }
 
         cmd
@@ -482,7 +495,7 @@ impl FilterImplementation for Command {
 
         info!(
             "Tidying {} with {} command: {}",
-            path.to_string_lossy(),
+            path.display(),
             name,
             cmd.join(" "),
         );
@@ -506,7 +519,7 @@ impl FilterImplementation for Command {
 
         info!(
             "Linting {} with {} command: {}",
-            path.to_string_lossy(),
+            path.display(),
             name,
             cmd.join(" "),
         );
@@ -589,12 +602,7 @@ mod tests {
     }
 
     fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher> {
-        path_matcher::Matcher::new(
-            &globs
-                .iter()
-                .map(|g| String::from(*g))
-                .collect::<Vec<String>>(),
-        )
+        path_matcher::MatcherBuilder::new().with(globs)?.build()
     }
 
     #[test]
@@ -643,7 +651,7 @@ mod tests {
         let res = filter.require_path_type("tidy", &helper.root());
         assert!(res.is_err());
         assert_eq!(
-            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
+            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap()),
             std::mem::discriminant(&FilterError::CanOnlyOperateOnFiles {
                 method: "tidy",
                 path: helper.root().to_string_lossy().to_string(),
@@ -675,7 +683,7 @@ mod tests {
             assert!(
                 filter.should_process_path(&i.clone(), &[i]),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -690,7 +698,7 @@ mod tests {
             assert!(
                 !filter.should_process_path(&e.clone(), &[e]),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -720,7 +728,7 @@ mod tests {
             assert!(
                 filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -740,7 +748,7 @@ mod tests {
             assert!(
                 !filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -770,7 +778,7 @@ mod tests {
             assert!(
                 filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -790,7 +798,7 @@ mod tests {
             assert!(
                 !filter.should_process_path(&dir, &files),
                 "{}",
-                name.to_string_lossy(),
+                name.display(),
             );
         }
 
@@ -877,7 +885,7 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec!["test".to_string(), "foo.go".to_string()],
                 "files mode, with chdir",
             );
@@ -897,8 +905,8 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
-                vec!["test".to_string(), "foo.go".to_string()],
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
+                vec!["test".to_string(), "some_dir/foo.go".to_string()],
                 "files mode, no chdir",
             );
         }
@@ -917,11 +925,11 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec![
                     "test".to_string(),
                     "--file".to_string(),
-                    "foo.go".to_string(),
+                    "some_dir/foo.go".to_string(),
                 ],
                 "files mode, no chdir, with path flag"
             );
@@ -941,7 +949,7 @@ mod tests {
                 expect_stderr: false,
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                command.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec![
                     "test".to_string(),
                     "--file".to_string(),
