@@ -3,22 +3,37 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::path::Path;
 
 #[derive(Debug)]
+pub struct MatcherBuilder {
+    builder: GlobSetBuilder,
+}
+
+impl MatcherBuilder {
+    pub fn new() -> Self {
+        Self {
+            builder: GlobSetBuilder::new(),
+        }
+    }
+
+    pub fn with(mut self, globs: &[impl AsRef<str>]) -> Result<Self> {
+        for g in globs {
+            self.builder.add(Glob::new(g.as_ref())?);
+        }
+        Ok(self)
+    }
+
+    pub fn build(self) -> Result<Matcher> {
+        Ok(Matcher {
+            globs: self.builder.build()?,
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct Matcher {
     globs: GlobSet,
 }
 
 impl Matcher {
-    pub fn new(globs: &[String]) -> Result<Matcher> {
-        let mut builder = GlobSetBuilder::new();
-        for g in globs {
-            builder.add(Glob::new(g.as_str())?);
-        }
-
-        Ok(Matcher {
-            globs: builder.build()?,
-        })
-    }
-
     pub fn path_matches(&self, path: &Path) -> bool {
         self.globs.is_match(path)
     }
@@ -68,7 +83,7 @@ mod tests {
             },
         ];
         for t in tests {
-            let m = Matcher::new(&t.globs)?;
+            let m = MatcherBuilder::new().with(&t.globs)?.build()?;
             for y in t.yes {
                 assert!(m.path_matches(&PathBuf::from(y)), "{} matches", y);
             }
