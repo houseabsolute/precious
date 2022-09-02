@@ -3,7 +3,7 @@ use log::{
     Level::Debug,
     {debug, error, log_enabled},
 };
-use std::{collections::HashMap, env, ffi::OsStr, fs, path::Path, process};
+use std::{collections::HashMap, env, fs, path::Path, process};
 use thiserror::Error;
 use which::which;
 
