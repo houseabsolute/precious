@@ -75,26 +75,47 @@ jobs:
   # Copied from https://github.com/urbica/martin/blob/master/.github/workflows/ci.yml
   release:
     name: Release - ${{ matrix.platform.os_name }}
-    if: startsWith( github.ref, 'refs/tags/v' )
+    if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/tags/test-release'
     needs: [test]
     strategy:
       matrix:
         platform:
-          - os_name: Linux
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+          - os_name: Linux-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
             bin: precious
-            name: precious-Linux-x86_64.tar.gz
+            name: precious-Linux-x86_64-musl.tar.gz
+            cross: true
+          - os_name: Linux-aarch64
+            os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+            bin: precious
+            name: precious-Linux-aarch64-musl.tar.gz
+            cross: true
+          - os_name: Linux-arm
+            os: ubuntu-20.04
+            target: arm-unknown-linux-musleabi
+            bin: precious
+            name: precious-Linux-arm-musl.tar.gz
+            cross: true
           - os_name: Windows
             os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-x86_64.zip
-          - os_name: macOS
+            cross: false
+          - os_name: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
             bin: precious
             name: precious-Darwin-x86_64.tar.gz
+            cross: false
+          - os_name: macOS-aarch64
+            os: macOS-latest
+            target: aarch64-apple-darwin
+            bin: precious
+            name: precious-Darwin-aarch64.tar.gz
+            cross: false
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout
@@ -109,15 +130,18 @@ jobs:
       - name: Build binary
         uses: actions-rs/cargo@v1
         with:
+          use-cross: ${{ matrix.platform.cross }}
           command: build
           args: --locked --release --target ${{ matrix.platform.target }}
       - name: Package as archive
         shell: bash
         run: |
-          strip target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+          if [[ "${{ matrix.platform.cross }}" == "false" ]]; then
+            # strip doesn't work with non-native binaries on Linux, AFAICT.
+            strip target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+          fi
           cd target/${{ matrix.platform.target }}/release
-          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]
-          then
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
             7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
           else
             tar czvf ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
@@ -126,6 +150,12 @@ jobs:
       - name: Generate SHA-256
         if: matrix.platform.os == 'macOS-latest'
         run: shasum -a 256 ${{ matrix.platform.name }}
+      - name: Publish release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: precious-${{ matrix.platform.os_name }}
+          path: "precious*"
+        if: github.ref == 'refs/tags/test-release'
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
         with:
@@ -134,3 +164,4 @@ jobs:
           body_path: Changes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: startsWith( github.ref, 'refs/tags/v' )
