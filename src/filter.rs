@@ -98,7 +98,7 @@ impl fmt::Debug for Filter {
 }
 
 #[derive(Debug)]
-pub struct LintResult {
+pub struct LintOutcome {
     pub ok: bool,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
@@ -106,7 +106,7 @@ pub struct LintResult {
 
 pub trait FilterImplementation {
     fn tidy(&self, name: &str, path: &Path) -> Result<()>;
-    fn lint(&self, name: &str, path: &Path) -> Result<LintResult>;
+    fn lint(&self, name: &str, path: &Path) -> Result<LintOutcome>;
     fn filter_key(&self) -> &str;
 }
 
@@ -139,7 +139,7 @@ impl Filter {
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
-    pub fn lint(&self, path: &Path, files: &[PathBuf]) -> Result<Option<LintResult>> {
+    pub fn lint(&self, path: &Path, files: &[PathBuf]) -> Result<Option<LintOutcome>> {
         self.require_is_not_filter_type(FilterType::Tidy)?;
 
         let mut full = self.root.clone();
@@ -514,7 +514,7 @@ impl FilterImplementation for Command {
         }
     }
 
-    fn lint(&self, name: &str, path: &Path) -> Result<LintResult> {
+    fn lint(&self, name: &str, path: &Path) -> Result<LintOutcome> {
         let mut cmd = self.command_for_path(path, &self.lint_flags);
 
         info!(
@@ -533,7 +533,7 @@ impl FilterImplementation for Command {
             self.expect_stderr,
             self.in_dir(path),
         ) {
-            Ok(result) => Ok(LintResult {
+            Ok(result) => Ok(LintOutcome {
                 ok: !self.lint_failure_exit_codes.contains(&result.exit_code),
                 stdout: result.stdout,
                 stderr: result.stderr,
@@ -583,8 +583,8 @@ mod tests {
             Ok(())
         }
 
-        fn lint(&self, _: &str, _: &Path) -> Result<LintResult> {
-            Ok(LintResult {
+        fn lint(&self, _: &str, _: &Path) -> Result<LintOutcome> {
+            Ok(LintOutcome {
                 ok: true,
                 stdout: None,
                 stderr: None,
