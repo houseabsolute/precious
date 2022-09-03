@@ -1,4 +1,4 @@
-## 0.1.7
+## 0.1.7 2022-09-03
 
 - If a command sent output to stdout, but not stderr, and exited with an
   unexpected error code, then the output to stdout would not be shown by
