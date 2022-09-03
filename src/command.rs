@@ -19,7 +19,8 @@ pub enum CommandError {
     UnexpectedExitCode { cmd: String, code: i32 },
 
     #[error(
-        "Got unexpected exit code {code:} from `{cmd:}`. Stdout:\n{stdout:}\nStderr:\n{stderr:}"
+        "Got unexpected exit code {code:} from `{cmd:}`.{}",
+        command_output_summary(stdout, stderr)
     )]
     UnexpectedExitCodeWithOutput {
         cmd: String,
@@ -33,6 +34,22 @@ pub enum CommandError {
 
     #[error("Got unexpected stderr output from `{cmd:}`:\n{stderr:}")]
     UnexpectedStderr { cmd: String, stderr: String },
+}
+
+fn command_output_summary(stdout: &str, stderr: &str) -> String {
+    let mut output = if stdout.is_empty() {
+        String::from("\nStdout was empty.")
+    } else {
+        format!("\nStdout:\n{stdout}")
+    };
+    if stderr.is_empty() {
+        output.push_str("\nStderr was empty.");
+    } else {
+        output.push_str("\nStderr:\n");
+        output.push_str(stderr);
+    };
+    output.push('\n');
+    output
 }
 
 #[derive(Debug)]
@@ -294,7 +311,16 @@ mod tests {
             None,
         );
         assert!(res.is_err(), "command exits non-zero");
-        match error_from_run_command(res)? {
+        let e = error_from_run_command(res)?;
+        let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDOUT" && exit 32`.
+Stdout:
+STDOUT
+
+Stderr was empty.
+"#;
+        assert_eq!(format!("{e}"), expect, "error display output");
+
+        match e {
             CommandError::UnexpectedExitCodeWithOutput {
                 cmd: _,
                 code,
@@ -305,7 +331,7 @@ mod tests {
                 assert_eq!(stdout, "STDOUT\n", "stdout was captured");
                 assert_eq!(stderr, "", "stderr was empty");
             }
-            e => return Err(dbg!(e).into()),
+            e => return Err(e.into()),
         }
 
         Ok(())
@@ -325,14 +351,27 @@ mod tests {
             None,
         );
         assert!(res.is_err(), "command exits non-zero");
-        match error_from_run_command(res)? {
+        let e = error_from_run_command(res)?;
+        let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDERR" 1>&2 && exit 32`.
+Stdout was empty.
+Stderr:
+STDERR
+
+"#;
+        assert_eq!(format!("{e}"), expect, "error display output");
+
+        match e {
             CommandError::UnexpectedExitCodeWithOutput {
                 cmd: _,
                 code,
                 stdout,
                 stderr,
             } => {
-                assert_eq!(code, 32, "command unexpectedly exits 32");
+                assert_eq!(
+                    code, 32,
+                    "command unexpectedly
+            exits 32"
+                );
                 assert_eq!(stdout, "", "stdout was empty");
                 assert_eq!(stderr, "STDERR\n", "stderr was captured");
             }
@@ -356,7 +395,18 @@ mod tests {
             None,
         );
         assert!(res.is_err(), "command exits non-zero");
-        match error_from_run_command(res)? {
+
+        let e = error_from_run_command(res)?;
+        let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDOUT" && echo "STDERR" 1>&2 && exit 32`.
+Stdout:
+STDOUT
+
+Stderr:
+STDERR
+
+"#;
+        assert_eq!(format!("{e}"), expect, "error display output");
+        match e {
             CommandError::UnexpectedExitCodeWithOutput {
                 cmd: _,
                 code,
