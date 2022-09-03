@@ -15,14 +15,11 @@ pub enum CommandError {
     #[error(r#"Could not find "{exe:}" in your path ({path:}"#)]
     ExecutableNotInPath { exe: String, path: String },
 
-    #[error("Got unexpected exit code {code:} from `{cmd:}`")]
-    UnexpectedExitCode { cmd: String, code: i32 },
-
     #[error(
         "Got unexpected exit code {code:} from `{cmd:}`.{}",
         command_output_summary(stdout, stderr)
     )]
-    UnexpectedExitCodeWithOutput {
+    UnexpectedExitCode {
         cmd: String,
         code: i32,
         stdout: String,
@@ -143,17 +140,13 @@ fn output_from_command(
             let cstr = command_string(cmd, args);
             debug!("Ran {} and got exit code of {}", cstr, code);
             if !ok_exit_codes.contains(&code) {
-                if output.stdout.is_empty() && output.stderr.is_empty() {
-                    return Err(CommandError::UnexpectedExitCode { cmd: cstr, code }.into());
-                } else {
-                    return Err(CommandError::UnexpectedExitCodeWithOutput {
-                        cmd: cstr,
-                        code,
-                        stdout: String::from_utf8(output.stdout)?,
-                        stderr: String::from_utf8(output.stderr)?,
-                    }
-                    .into());
+                return Err(CommandError::UnexpectedExitCode {
+                    cmd: cstr,
+                    code,
+                    stdout: String::from_utf8(output.stdout)?,
+                    stderr: String::from_utf8(output.stderr)?,
                 }
+                .into());
             }
         }
         None => {
@@ -288,8 +281,15 @@ mod tests {
         );
         assert!(res.is_err(), "command exits non-zero");
         match error_from_run_command(res)? {
-            CommandError::UnexpectedExitCode { cmd: _, code } => {
+            CommandError::UnexpectedExitCode {
+                cmd: _,
+                code,
+                stdout,
+                stderr,
+            } => {
                 assert_eq!(code, 32, "command unexpectedly exits 32");
+                assert_eq!(stdout, "", "command had no stdout");
+                assert_eq!(stderr, "", "command had no stderr");
             }
             e => return Err(e.into()),
         }
@@ -321,7 +321,7 @@ Stderr was empty.
         assert_eq!(format!("{e}"), expect, "error display output");
 
         match e {
-            CommandError::UnexpectedExitCodeWithOutput {
+            CommandError::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
@@ -361,7 +361,7 @@ STDERR
         assert_eq!(format!("{e}"), expect, "error display output");
 
         match e {
-            CommandError::UnexpectedExitCodeWithOutput {
+            CommandError::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
@@ -407,7 +407,7 @@ STDERR
 "#;
         assert_eq!(format!("{e}"), expect, "error display output");
         match e {
-            CommandError::UnexpectedExitCodeWithOutput {
+            CommandError::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
