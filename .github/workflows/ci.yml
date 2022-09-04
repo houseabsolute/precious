@@ -154,13 +154,13 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: precious-${{ matrix.platform.os_name }}
-          path: "precious*"
+          path: "precious-*"
         if: github.ref == 'refs/tags/test-release'
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          files: "precious*"
+          files: "precious-*"
           body_path: Changes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
