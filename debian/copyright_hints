@@ -25,10 +25,11 @@ Files: CODE_OF_CONDUCT.md
  debian/rules
  debian/source/format
  debian/source/lintian-overrides
- debian/vendorlibs/path-clean-0.1.0/.cargo-checksum.json
- debian/vendorlibs/path-clean-0.1.0/Cargo.toml
- debian/vendorlibs/path-clean-0.1.0/README.md
- debian/vendorlibs/path-clean-0.1.0/src/lib.rs
+ debian/vendorlibs/clean-path-0.2.1/.cargo-checksum.json
+ debian/vendorlibs/clean-path-0.2.1/Cargo.toml
+ debian/vendorlibs/clean-path-0.2.1/README.md
+ debian/vendorlibs/clean-path-0.2.1/benches/clean_benchmark.rs
+ debian/vendorlibs/clean-path-0.2.1/src/lib.rs
  debian/watch
  dev/bin/install-dev-tools.sh
  examples/bin/install-dev-tools.sh
@@ -58,8 +59,8 @@ Copyright: NONE
 License: Apache-2.0
  FIXME
 
-Files: debian/vendorlibs/path-clean-0.1.0/LICENSE-APACHE
-Copyright: 2018, Dan Reeves
+Files: debian/vendorlibs/clean-path-0.2.1/LICENSE-APACHE
+Copyright: 2022, Frank de Jong
 License: Apache-2.0
  FIXME
 
@@ -68,8 +69,8 @@ Copyright: NONE
 License: Expat
  FIXME
 
-Files: debian/vendorlibs/path-clean-0.1.0/LICENSE-MIT
-Copyright: 2018, Dan Reeves
+Files: debian/vendorlibs/clean-path-0.2.1/LICENSE-MIT
+Copyright: 2022, Frank de Jong
 License: Expat
  FIXME
 

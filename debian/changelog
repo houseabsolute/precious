@@ -1,3 +1,14 @@
+precious (0.1.7-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release(s)
+
+  [ Jonas Smedegaard ]
+  * embed crate clean-path (not path-clean)
+  * update copyright info: update coverage
+
+ -- Jonas Smedegaard <dr@jones.dk>  Mon, 05 Sep 2022 20:13:01 +0200
+
 precious (0.1.5-1) unstable; urgency=medium
 
   [ upstream ]
