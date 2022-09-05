@@ -24,9 +24,9 @@ License-Grant:
 License: GPL-3+
 Reference: debian/copyright
 
-Files: debian/vendorlibs/path-clean-0.1.0/*
+Files: debian/vendorlibs/clean-path-0.2.1/*
 Copyright:
-  2018  Dan Reeves <hey@danreev.es>
+  2022  Frank de Jong <f.jin@protonmail.com>
 License-Grant:
  license = "MIT OR Apache-2.0"
 License: Apache-2.0 or Expat
