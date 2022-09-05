@@ -51,7 +51,7 @@ impl From<Error> for Exit {
 }
 
 #[derive(Debug)]
-struct ActionError {
+struct ActionFailure {
     error: String,
     config_key: String,
     path: PathBuf,
@@ -387,7 +387,7 @@ impl<'a> Precious<'a> {
         run_filter: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, Vec<basepaths::Paths>, &filter::Filter) -> Option<Vec<ActionError>>,
+        R: Fn(&mut Self, Vec<basepaths::Paths>, &filter::Filter) -> Option<Vec<ActionFailure>>,
     {
         if filters.is_empty() {
             return Err(PreciousError::NoFilters {
@@ -403,25 +403,25 @@ impl<'a> Precious<'a> {
         match self.basepaths()?.paths(cli_paths)? {
             None => Ok(self.no_files_exit()),
             Some(paths) => {
-                let mut all_errors: Vec<ActionError> = vec![];
+                let mut all_failures: Vec<ActionFailure> = vec![];
                 for f in filters {
-                    if let Some(mut errors) = run_filter(self, paths.clone(), &f) {
-                        all_errors.append(&mut errors);
+                    if let Some(mut failures) = run_filter(self, paths.clone(), &f) {
+                        all_failures.append(&mut failures);
                     }
                 }
 
-                Ok(self.make_exit(all_errors, action))
+                Ok(self.make_exit(all_failures, action))
             }
         }
     }
 
-    fn make_exit(&self, errors: Vec<ActionError>, action: &str) -> Exit {
-        let (status, error) = if errors.is_empty() {
+    fn make_exit(&self, failures: Vec<ActionFailure>, action: &str) -> Exit {
+        let (status, error) = if failures.is_empty() {
             (0, None)
         } else {
             let red = format!("\x1B[{}m", Color::Red.to_fg_str());
             let ansi_off = "\x1B[0m";
-            let plural = if errors.len() > 1 { 's' } else { '\0' };
+            let plural = if failures.len() > 1 { 's' } else { '\0' };
 
             let error = format!(
                 "{}Error{} when {} files:{}\n{}",
@@ -429,14 +429,14 @@ impl<'a> Precious<'a> {
                 plural,
                 action,
                 ansi_off,
-                errors
+                failures
                     .iter()
-                    .map(|ae| format!(
+                    .map(|af| format!(
                         "  {} {} [{}]\n    {}\n",
                         self.chars.bullet,
-                        ae.path.display(),
-                        ae.config_key,
-                        ae.error,
+                        af.path.display(),
+                        af.config_key,
+                        af.error,
                     ))
                     .collect::<Vec<String>>()
                     .join("")
@@ -454,9 +454,9 @@ impl<'a> Precious<'a> {
         &mut self,
         all_paths: Vec<basepaths::Paths>,
         t: &filter::Filter,
-    ) -> Option<Vec<ActionError>> {
+    ) -> Option<Vec<ActionFailure>> {
         let runner =
-            |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<Result<(), ActionError>> {
+            |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<Result<(), ActionFailure>> {
                 match t.tidy(p, &paths.files) {
                     Ok(Some(true)) => {
                         if !s.quiet {
@@ -488,7 +488,7 @@ impl<'a> Precious<'a> {
                             t.name,
                             p.display()
                         );
-                        Some(Err(ActionError {
+                        Some(Err(ActionFailure {
                             error: format!("{:#}", e),
                             config_key: t.config_key(),
                             path: p.to_owned(),
@@ -504,28 +504,28 @@ impl<'a> Precious<'a> {
         &mut self,
         all_paths: Vec<basepaths::Paths>,
         l: &filter::Filter,
-    ) -> Option<Vec<ActionError>> {
+    ) -> Option<Vec<ActionFailure>> {
         let runner = |s: &Self,
                       p: &Path,
                       paths: &basepaths::Paths|
-         -> Option<Result<(), ActionError>> {
+         -> Option<Result<(), ActionFailure>> {
             match l.lint(p, &paths.files) {
-                Ok(Some(r)) => {
-                    if r.ok {
+                Ok(Some(lo)) => {
+                    if lo.ok {
                         if !s.quiet {
                             println!("{} Passed {}: {}", s.chars.lint_free, l.name, p.display());
                         }
                         Some(Ok(()))
                     } else {
                         println!("{} Failed {}: {}", s.chars.lint_dirty, l.name, p.display());
-                        if let Some(s) = r.stdout {
+                        if let Some(s) = lo.stdout {
                             println!("{}", s);
                         }
-                        if let Some(s) = r.stderr {
+                        if let Some(s) = lo.stderr {
                             println!("{}", s);
                         }
 
-                        Some(Err(ActionError {
+                        Some(Err(ActionFailure {
                             error: "linting failed".into(),
                             config_key: l.config_key(),
                             path: p.to_owned(),
@@ -540,7 +540,7 @@ impl<'a> Precious<'a> {
                         l.name,
                         p.display()
                     );
-                    Some(Err(ActionError {
+                    Some(Err(ActionFailure {
                         error: format!("{:#}", e),
                         config_key: l.config_key(),
                         path: p.to_owned(),
@@ -558,20 +558,20 @@ impl<'a> Precious<'a> {
         all_paths: Vec<basepaths::Paths>,
         f: &filter::Filter,
         runner: R,
-    ) -> Option<Vec<ActionError>>
+    ) -> Option<Vec<ActionFailure>>
     where
-        R: Fn(&Self, &Path, &basepaths::Paths) -> Option<Result<(), ActionError>> + Sync,
+        R: Fn(&Self, &Path, &basepaths::Paths) -> Option<Result<(), ActionFailure>> + Sync,
     {
         let map = self.path_map(all_paths, f);
 
         let start = Instant::now();
-        let mut results: Vec<Result<(), ActionError>> = vec![];
+        let mut results: Vec<Result<(), ActionFailure>> = vec![];
         self.thread_pool.install(|| {
             results.append(
                 &mut map
                     .par_iter()
                     .filter_map(|(p, paths)| runner(self, p, paths))
-                    .collect::<Vec<Result<(), ActionError>>>(),
+                    .collect::<Vec<Result<(), ActionFailure>>>(),
             );
         });
 
@@ -586,17 +586,17 @@ impl<'a> Precious<'a> {
             );
         }
 
-        let errors = results
+        let failures = results
             .into_iter()
             .filter_map(|r| match r {
                 Ok(_) => None,
                 Err(e) => Some(e),
             })
-            .collect::<Vec<ActionError>>();
-        if errors.is_empty() {
+            .collect::<Vec<ActionFailure>>();
+        if failures.is_empty() {
             None
         } else {
-            Some(errors)
+            Some(failures)
         }
     }
 
