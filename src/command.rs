@@ -15,13 +15,11 @@ pub enum CommandError {
     #[error(r#"Could not find "{exe:}" in your path ({path:}"#)]
     ExecutableNotInPath { exe: String, path: String },
 
-    #[error("Got unexpected exit code {code:} from `{cmd:}`")]
-    UnexpectedExitCode { cmd: String, code: i32 },
-
     #[error(
-        "Got unexpected exit code {code:} from `{cmd:}`. Stdout:\n{stdout:}\nStderr:\n{stderr:}"
+        "Got unexpected exit code {code:} from `{cmd:}`.{}",
+        command_output_summary(stdout, stderr)
     )]
-    UnexpectedExitCodeWithStderr {
+    UnexpectedExitCode {
         cmd: String,
         code: i32,
         stdout: String,
@@ -35,8 +33,24 @@ pub enum CommandError {
     UnexpectedStderr { cmd: String, stderr: String },
 }
 
+fn command_output_summary(stdout: &str, stderr: &str) -> String {
+    let mut output = if stdout.is_empty() {
+        String::from("\nStdout was empty.")
+    } else {
+        format!("\nStdout:\n{stdout}")
+    };
+    if stderr.is_empty() {
+        output.push_str("\nStderr was empty.");
+    } else {
+        output.push_str("\nStderr:\n");
+        output.push_str(stderr);
+    };
+    output.push('\n');
+    output
+}
+
 #[derive(Debug)]
-pub struct CommandResult {
+pub struct CommandOutput {
     pub exit_code: i32,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
@@ -49,11 +63,11 @@ pub fn run_command(
     ok_exit_codes: &[i32],
     expect_stderr: bool,
     in_dir: Option<&Path>,
-) -> Result<CommandResult> {
+) -> Result<CommandOutput> {
     if which(&cmd).is_err() {
         let path = match env::var("PATH") {
             Ok(p) => p,
-            Err(e) => format!("<could not get PATH environment variable: {}>", e),
+            Err(e) => format!("<could not get PATH environment variable: {e}>"),
         };
         return Err(CommandError::ExecutableNotInPath { exe: cmd, path }.into());
     }
@@ -107,7 +121,7 @@ pub fn run_command(
 
     let code = output.status.code().unwrap_or(-1);
 
-    Ok(CommandResult {
+    Ok(CommandOutput {
         exit_code: code,
         stdout: to_option_string(output.stdout),
         stderr: to_option_string(output.stderr),
@@ -126,17 +140,13 @@ fn output_from_command(
             let cstr = command_string(cmd, args);
             debug!("Ran {} and got exit code of {}", cstr, code);
             if !ok_exit_codes.contains(&code) {
-                if output.stderr.is_empty() {
-                    return Err(CommandError::UnexpectedExitCode { cmd: cstr, code }.into());
-                } else {
-                    return Err(CommandError::UnexpectedExitCodeWithStderr {
-                        cmd: cstr,
-                        code,
-                        stdout: String::from_utf8(output.stdout)?,
-                        stderr: String::from_utf8(output.stderr)?,
-                    }
-                    .into());
+                return Err(CommandError::UnexpectedExitCode {
+                    cmd: cstr,
+                    code,
+                    stdout: String::from_utf8(output.stdout)?,
+                    stderr: String::from_utf8(output.stderr)?,
                 }
+                .into());
             }
         }
         None => {
@@ -183,11 +193,11 @@ fn signal_from_status(_: process::ExitStatus) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use super::CommandError;
     use crate::testhelper;
-    use anyhow::Result;
+    use anyhow::{format_err, Result};
     use pretty_assertions::assert_eq;
-    use std::collections::HashMap;
-    use std::env;
+    use std::{collections::HashMap, env};
     use tempfile::tempdir;
 
     #[test]
@@ -213,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn run_command() -> Result<()> {
+    fn run_command_exit_0() -> Result<()> {
         let res = super::run_command(
             String::from("echo"),
             vec![String::from("foo")],
@@ -224,12 +234,17 @@ mod tests {
         )?;
         assert_eq!(res.exit_code, 0, "command exits 0");
 
+        Ok(())
+    }
+
+    #[test]
+    fn run_command_wth_env() -> Result<()> {
         let env_key = "PRECIOUS_ENV_TEST";
         let mut env = HashMap::new();
         env.insert(String::from(env_key), String::from("foo"));
         let res = super::run_command(
             String::from("sh"),
-            vec![String::from("-c"), format!("echo ${}", env_key)],
+            vec![String::from("-c"), format!("echo ${env_key}")],
             &env,
             &[0],
             false,
@@ -251,6 +266,11 @@ mod tests {
             env_key,
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn run_command_exit_32() -> Result<()> {
         let res = super::run_command(
             String::from("sh"),
             vec![String::from("-c"), String::from("exit 32")],
@@ -260,24 +280,154 @@ mod tests {
             None,
         );
         assert!(res.is_err(), "command exits non-zero");
-
-        match res {
-            Ok(_) => panic!("did not get an error in the returned Result"),
-            Err(e) => {
-                let r = e.downcast_ref::<super::CommandError>();
-                match r {
-                    Some(c) => match c {
-                        super::CommandError::UnexpectedExitCode { cmd: _, code } => {
-                            assert_eq!(code, &32, "command unexpectedly exits 32");
-                        }
-                        _ => panic!("expected a CommandError::UnexpectedExitCode "),
-                    },
-                    None => panic!("expected an error, not a None"),
-                }
+        match error_from_run_command(res)? {
+            CommandError::UnexpectedExitCode {
+                cmd: _,
+                code,
+                stdout,
+                stderr,
+            } => {
+                assert_eq!(code, 32, "command unexpectedly exits 32");
+                assert_eq!(stdout, "", "command had no stdout");
+                assert_eq!(stderr, "", "command had no stderr");
             }
+            e => return Err(e.into()),
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn run_command_exit_32_with_stdout() -> Result<()> {
+        let res = super::run_command(
+            String::from("sh"),
+            vec![
+                String::from("-c"),
+                String::from(r#"echo "STDOUT" && exit 32"#),
+            ],
+            &HashMap::new(),
+            &[0],
+            false,
+            None,
+        );
+        assert!(res.is_err(), "command exits non-zero");
+        let e = error_from_run_command(res)?;
+        let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDOUT" && exit 32`.
+Stdout:
+STDOUT
+
+Stderr was empty.
+"#;
+        assert_eq!(format!("{e}"), expect, "error display output");
+
+        match e {
+            CommandError::UnexpectedExitCode {
+                cmd: _,
+                code,
+                stdout,
+                stderr,
+            } => {
+                assert_eq!(code, 32, "command unexpectedly exits 32");
+                assert_eq!(stdout, "STDOUT\n", "stdout was captured");
+                assert_eq!(stderr, "", "stderr was empty");
+            }
+            e => return Err(e.into()),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn run_command_exit_32_with_stderr() -> Result<()> {
+        let res = super::run_command(
+            String::from("sh"),
+            vec![
+                String::from("-c"),
+                String::from(r#"echo "STDERR" 1>&2 && exit 32"#),
+            ],
+            &HashMap::new(),
+            &[0],
+            false,
+            None,
+        );
+        assert!(res.is_err(), "command exits non-zero");
+        let e = error_from_run_command(res)?;
+        let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDERR" 1>&2 && exit 32`.
+Stdout was empty.
+Stderr:
+STDERR
+
+"#;
+        assert_eq!(format!("{e}"), expect, "error display output");
+
+        match e {
+            CommandError::UnexpectedExitCode {
+                cmd: _,
+                code,
+                stdout,
+                stderr,
+            } => {
+                assert_eq!(
+                    code, 32,
+                    "command unexpectedly
+            exits 32"
+                );
+                assert_eq!(stdout, "", "stdout was empty");
+                assert_eq!(stderr, "STDERR\n", "stderr was captured");
+            }
+            e => return Err(dbg!(e).into()),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn run_command_exit_32_with_stdout_and_stderr() -> Result<()> {
+        let res = super::run_command(
+            String::from("sh"),
+            vec![
+                String::from("-c"),
+                String::from(r#"echo "STDOUT" && echo "STDERR" 1>&2 && exit 32"#),
+            ],
+            &HashMap::new(),
+            &[0],
+            false,
+            None,
+        );
+        assert!(res.is_err(), "command exits non-zero");
+
+        let e = error_from_run_command(res)?;
+        let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDOUT" && echo "STDERR" 1>&2 && exit 32`.
+Stdout:
+STDOUT
+
+Stderr:
+STDERR
+
+"#;
+        assert_eq!(format!("{e}"), expect, "error display output");
+        match e {
+            CommandError::UnexpectedExitCode {
+                cmd: _,
+                code,
+                stdout,
+                stderr,
+            } => {
+                assert_eq!(code, 32, "command unexpectedly exits 32");
+                assert_eq!(stdout, "STDOUT\n", "stdout was captured");
+                assert_eq!(stderr, "STDERR\n", "stderr was captured");
+            }
+            e => return Err(dbg!(e).into()),
+        }
+
+        Ok(())
+    }
+
+    fn error_from_run_command(result: Result<super::CommandOutput>) -> Result<CommandError> {
+        match result {
+            Ok(_) => Err(format_err!("did not get an error in the returned Result")),
+            Err(e) => e.downcast::<super::CommandError>(),
+        }
     }
 
     #[test]

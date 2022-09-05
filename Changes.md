@@ -1,3 +1,16 @@
+## 0.1.7 2022-09-03
+
+- If a command sent output to stdout, but not stderr, and exited with an
+  unexpected error code, then the output to stdout would not be shown by
+  precious in the error message. Reported by Greg Oschwald. GH #28.
+
+## 0.1.6 2022-09-02
+
+- All binaries now statically link musl instead of the system libc.
+
+- Added a number of new platforms for released binaries: Linux ARM 32-bit and
+  64-bit, and macOS ARM 64-bit.
+
 ## 0.1.5 2022-08-27
 
 - When a command unexpectedly prints to stderr the error message we print now
