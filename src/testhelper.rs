@@ -61,7 +61,7 @@ impl TestHelper {
     }
 
     pub fn pushd_to_root(&self) -> Result<Pushd> {
-        Pushd::new(self.root.clone())
+        pushd_to(self.root.clone())
     }
 
     fn create_git_repo(&self) -> Result<()> {
@@ -137,8 +137,8 @@ generated.*
         }
         args.push(branch);
         command::run_command(
-            "git".to_string(),
-            args.iter().map(|a| a.to_string()).collect(),
+            "git",
+            &args,
             &HashMap::new(),
             &[0],
             false,
@@ -154,11 +154,8 @@ generated.*
         }
 
         command::run_command(
-            "git".to_string(),
-            ["merge", "--quiet", "--no-ff", "--no-commit", "master"]
-                .iter()
-                .map(|a| a.to_string())
-                .collect(),
+            "git",
+            &["merge", "--quiet", "--no-ff", "--no-commit", "master"],
             &HashMap::new(),
             &expect_codes,
             true,
@@ -178,14 +175,7 @@ generated.*
     }
 
     fn run_git(&self, args: &[&str]) -> Result<()> {
-        command::run_command(
-            "git".to_string(),
-            args.iter().map(|a| a.to_string()).collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        command::run_command("git", args, &HashMap::new(), &[0], false, Some(&self.root))?;
         Ok(())
     }
 
@@ -224,12 +214,17 @@ generated.*
     }
 }
 
+pub fn pushd_to(to: PathBuf) -> Result<Pushd> {
+    Pushd::new(to)
+}
+
 pub struct Pushd(PathBuf);
 
 impl Pushd {
     pub fn new(path: PathBuf) -> Result<Pushd> {
         let cwd = env::current_dir()?;
-        env::set_current_dir(path)?;
+        env::set_current_dir(&path)
+            .with_context(|| format!("setting current directory to {}", path.display()))?;
         Ok(Pushd(cwd))
     }
 }

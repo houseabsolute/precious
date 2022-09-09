@@ -57,22 +57,26 @@ pub struct CommandOutput {
 }
 
 pub fn run_command(
-    cmd: String,
-    args: Vec<String>,
+    cmd: &str,
+    args: &[&str],
     env: &HashMap<String, String>,
     ok_exit_codes: &[i32],
     expect_stderr: bool,
     in_dir: Option<&Path>,
 ) -> Result<CommandOutput> {
-    if which(&cmd).is_err() {
+    if which(cmd).is_err() {
         let path = match env::var("PATH") {
             Ok(p) => p,
             Err(e) => format!("<could not get PATH environment variable: {e}>"),
         };
-        return Err(CommandError::ExecutableNotInPath { exe: cmd, path }.into());
+        return Err(CommandError::ExecutableNotInPath {
+            exe: cmd.to_string(),
+            path,
+        }
+        .into());
     }
 
-    let mut c = process::Command::new(&cmd);
+    let mut c = process::Command::new(cmd);
     for a in args.iter() {
         c.arg(a);
     }
@@ -90,14 +94,14 @@ pub fn run_command(
     c.envs(env);
 
     if log_enabled!(Debug) {
-        let cstr = command_string(&cmd, &args);
+        let cstr = command_string(cmd, args);
         debug!("Running command [{}] with cwd = {}", cstr, cwd.display());
     }
 
-    let output = output_from_command(c, ok_exit_codes, &cmd, &args).with_context(|| {
+    let output = output_from_command(c, ok_exit_codes, cmd, args).with_context(|| {
         format!(
             r#"Failed to execute command `{}`"#,
-            command_string(&cmd, &args)
+            command_string(cmd, args)
         )
     })?;
 
@@ -112,7 +116,7 @@ pub fn run_command(
 
         if !expect_stderr {
             return Err(CommandError::UnexpectedStderr {
-                cmd: command_string(&cmd, &args),
+                cmd: command_string(cmd, args),
                 stderr: String::from_utf8(output.stderr)?,
             }
             .into());
@@ -132,7 +136,7 @@ fn output_from_command(
     mut c: process::Command,
     ok_exit_codes: &[i32],
     cmd: &str,
-    args: &[String],
+    args: &[&str],
 ) -> Result<process::Output> {
     let output = c.output()?;
     match output.status.code() {
@@ -164,7 +168,7 @@ fn output_from_command(
     Ok(output)
 }
 
-fn command_string(cmd: &str, args: &[String]) -> String {
+fn command_string(cmd: &str, args: &[&str]) -> String {
     let mut cstr = cmd.to_string();
     if !args.is_empty() {
         cstr.push(' ');
@@ -203,20 +207,17 @@ mod tests {
     #[test]
     fn command_string() {
         assert_eq!(
-            super::command_string(&String::from("foo"), &[]),
+            super::command_string("foo", &[]),
             String::from("foo"),
             "command without args",
         );
         assert_eq!(
-            super::command_string(&String::from("foo"), &[String::from("bar")],),
+            super::command_string("foo", &["bar"],),
             String::from("foo bar"),
             "command with one arg"
         );
         assert_eq!(
-            super::command_string(
-                &String::from("foo"),
-                &[String::from("--bar"), String::from("baz")],
-            ),
+            super::command_string("foo", &["--bar", "baz"],),
             String::from("foo --bar baz"),
             "command with multiple args",
         );
@@ -224,14 +225,7 @@ mod tests {
 
     #[test]
     fn run_command_exit_0() -> Result<()> {
-        let res = super::run_command(
-            String::from("echo"),
-            vec![String::from("foo")],
-            &HashMap::new(),
-            &[0],
-            false,
-            None,
-        )?;
+        let res = super::run_command("echo", &["foo"], &HashMap::new(), &[0], false, None)?;
         assert_eq!(res.exit_code, 0, "command exits 0");
 
         Ok(())
@@ -243,8 +237,8 @@ mod tests {
         let mut env = HashMap::new();
         env.insert(String::from(env_key), String::from("foo"));
         let res = super::run_command(
-            String::from("sh"),
-            vec![String::from("-c"), format!("echo ${env_key}")],
+            "sh",
+            &["-c", &format!("echo ${env_key}")],
             &env,
             &[0],
             false,
@@ -271,14 +265,7 @@ mod tests {
 
     #[test]
     fn run_command_exit_32() -> Result<()> {
-        let res = super::run_command(
-            String::from("sh"),
-            vec![String::from("-c"), String::from("exit 32")],
-            &HashMap::new(),
-            &[0],
-            false,
-            None,
-        );
+        let res = super::run_command("sh", &["-c", "exit 32"], &HashMap::new(), &[0], false, None);
         assert!(res.is_err(), "command exits non-zero");
         match error_from_run_command(res)? {
             CommandError::UnexpectedExitCode {
@@ -300,11 +287,8 @@ mod tests {
     #[test]
     fn run_command_exit_32_with_stdout() -> Result<()> {
         let res = super::run_command(
-            String::from("sh"),
-            vec![
-                String::from("-c"),
-                String::from(r#"echo "STDOUT" && exit 32"#),
-            ],
+            "sh",
+            &["-c", r#"echo "STDOUT" && exit 32"#],
             &HashMap::new(),
             &[0],
             false,
@@ -340,11 +324,8 @@ Stderr was empty.
     #[test]
     fn run_command_exit_32_with_stderr() -> Result<()> {
         let res = super::run_command(
-            String::from("sh"),
-            vec![
-                String::from("-c"),
-                String::from(r#"echo "STDERR" 1>&2 && exit 32"#),
-            ],
+            "sh",
+            &["-c", r#"echo "STDERR" 1>&2 && exit 32"#],
             &HashMap::new(),
             &[0],
             false,
@@ -384,11 +365,8 @@ STDERR
     #[test]
     fn run_command_exit_32_with_stdout_and_stderr() -> Result<()> {
         let res = super::run_command(
-            String::from("sh"),
-            vec![
-                String::from("-c"),
-                String::from(r#"echo "STDOUT" && echo "STDERR" 1>&2 && exit 32"#),
-            ],
+            "sh",
+            &["-c", r#"echo "STDOUT" && echo "STDERR" 1>&2 && exit 32"#],
             &HashMap::new(),
             &[0],
             false,
@@ -442,8 +420,8 @@ STDERR
         let td_path = testhelper::maybe_canonicalize(td.path())?;
 
         let res = super::run_command(
-            String::from("pwd"),
-            vec![],
+            "pwd",
+            &[],
             &HashMap::new(),
             &[0],
             false,
@@ -466,8 +444,8 @@ STDERR
     #[test]
     fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
-        let args = vec![String::from("--arg"), String::from("42")];
-        let res = super::run_command(String::from(exe), args, &HashMap::new(), &[0], false, None);
+        let args = &["--arg", "42"];
+        let res = super::run_command(exe, args, &HashMap::new(), &[0], false, None);
         assert!(res.is_err());
         if let Err(e) = res {
             assert!(e.to_string().contains(

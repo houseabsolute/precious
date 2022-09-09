@@ -106,11 +106,8 @@ impl BasePaths {
         }
 
         let res = command::run_command(
-            String::from("git"),
-            ["rev-parse", "--show-toplevel"]
-                .iter()
-                .map(|a| (*a).to_string())
-                .collect(),
+            "git",
+            &["rev-parse", "--show-toplevel"],
             &HashMap::new(),
             &[0],
             false,
@@ -127,11 +124,8 @@ impl BasePaths {
 
         if !mm.exists() {
             command::run_command(
-                String::from("git"),
-                ["stash", "--keep-index"]
-                    .iter()
-                    .map(|a| (*a).to_string())
-                    .collect(),
+                "git",
+                &["stash", "--keep-index"],
                 &HashMap::new(),
                 &[0],
                 true,
@@ -215,14 +209,8 @@ impl BasePaths {
     }
 
     fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
-        let result = command::run_command(
-            String::from("git"),
-            args.iter().map(|a| String::from(*a)).collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        let result =
+            command::run_command("git", args, &HashMap::new(), &[0], false, Some(&self.root))?;
 
         let excluder = self.excluder()?;
         match result.stdout {
@@ -310,8 +298,8 @@ impl Drop for BasePaths {
         }
 
         let res = command::run_command(
-            String::from("git"),
-            ["stash", "pop"].iter().map(|a| (*a).to_string()).collect(),
+            "git",
+            &["stash", "pop"],
             &HashMap::new(),
             &[0],
             false,

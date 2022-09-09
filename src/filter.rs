@@ -501,9 +501,13 @@ impl FilterImplementation for Command {
         );
 
         let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
+        let bin = cmd.remove(0);
         match command::run_command(
-            cmd.remove(0),
-            cmd,
+            &bin,
+            cmd.iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .as_slice(),
             &self.env,
             &ok_exit_codes,
             self.expect_stderr,
@@ -525,9 +529,13 @@ impl FilterImplementation for Command {
         );
 
         let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
+        let bin = cmd.remove(0);
         match command::run_command(
-            cmd.remove(0),
-            cmd,
+            &bin,
+            cmd.iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .as_slice(),
             &self.env,
             &ok_exit_codes,
             self.expect_stderr,
