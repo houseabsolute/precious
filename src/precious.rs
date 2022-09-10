@@ -282,11 +282,9 @@ impl<'a> Precious<'a> {
             return Ok(cwd.into());
         }
 
-        let mut root = PathBuf::new();
         for anc in cwd.ancestors() {
             if Self::is_checkout_root(anc) {
-                root.push(anc);
-                return Ok(root);
+                return Ok(anc.to_owned());
             }
         }
 
