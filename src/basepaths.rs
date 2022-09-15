@@ -16,6 +16,7 @@ pub enum Mode {
     All,
     GitModified,
     GitStaged,
+    GitStagedWithStash,
 }
 
 impl fmt::Display for Mode {
@@ -25,6 +26,10 @@ impl fmt::Display for Mode {
             Mode::All => write!(f, "all files in the project"),
             Mode::GitModified => write!(f, "modified files according to git"),
             Mode::GitStaged => write!(f, "files staged for a git commit"),
+            Mode::GitStagedWithStash => write!(
+                f,
+                "files staged for a git commit, stashing unstaged content"
+            ),
         }
     }
 }
@@ -84,7 +89,7 @@ impl BasePaths {
             Mode::All => self.all_files()?,
             Mode::FromCli => self.files_from_cli(cli_paths)?,
             Mode::GitModified => self.git_modified_files()?,
-            Mode::GitStaged => self.git_staged_files()?,
+            Mode::GitStaged | Mode::GitStagedWithStash => self.git_staged_files()?,
         };
 
         if files.is_none() {
@@ -96,7 +101,7 @@ impl BasePaths {
     }
 
     fn maybe_git_stash(&mut self) -> Result<()> {
-        if self.mode != Mode::GitStaged {
+        if self.mode != Mode::GitStagedWithStash {
             return Ok(());
         }
 
@@ -553,7 +558,7 @@ mod tests {
         helper.write_file(&PathBuf::from(unstaged), "new content")?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
+            let mut bp = new_basepaths(Mode::GitStagedWithStash, helper.root())?;
             let expect = bp.files_to_paths(
                 modified
                     .iter()

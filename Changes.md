@@ -1,3 +1,10 @@
+## 0.2.0
+
+- The `--staged` mode no longer tries to stash unstaged content before linting
+  or tidying files. This can cause a number of issues, and shouldn't be the
+  default. There is a new `--staged-with-stash` mode that provides the old
+  `--staged` behavior. Reported by Greg Oschwald. Fixe #30.
+
 ## 0.1.7 2022-09-03
 
 - If a command sent output to stdout, but not stderr, and exited with an
