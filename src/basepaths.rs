@@ -577,11 +577,11 @@ mod tests {
     // This tests the issue reported in
     // https://github.com/houseabsolute/precious/issues/9. I had tried to test
     // for this earlier, but I thought it was a non-issue because I couldn't
-    // replicate the issue. Later, I realized that this only happens if a
-    // merge commit leads to a conflict. Otherwise, `git diff --cached` won't
-    // report any files at all for the commit. But if you've had a conflict
-    // and resolved it, any files that had a conflict will be reported as
-    // having a diff.
+    // replicate it. Later, I realized that this only happens if a merge
+    // commit leads to a conflict. Otherwise, `git diff --cached` won't report
+    // any files at all for the commit. But if you've had a conflict and
+    // resolved it, any files that had a conflict will be reported as having a
+    // diff.
     #[test]
     fn git_staged_mode_merge_stash() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
