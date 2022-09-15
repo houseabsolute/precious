@@ -9,7 +9,7 @@
 
 - If a command sent output to stdout, but not stderr, and exited with an
   unexpected error code, then the output to stdout would not be shown by
-  precious in the error message. Reported by Greg Oschwald. GH #28.
+  precious in the error message. Reported by Greg Oschwald. Fixes #28.
 
 ## 0.1.6 2022-09-02
 
