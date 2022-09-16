@@ -356,7 +356,7 @@ STDERR
                 assert_eq!(stdout, "", "stdout was empty");
                 assert_eq!(stderr, "STDERR\n", "stderr was captured");
             }
-            e => return Err(dbg!(e).into()),
+            e => return Err(e.into()),
         }
 
         Ok(())
@@ -395,7 +395,7 @@ STDERR
                 assert_eq!(stdout, "STDOUT\n", "stdout was captured");
                 assert_eq!(stderr, "STDERR\n", "stderr was captured");
             }
-            e => return Err(dbg!(e).into()),
+            e => return Err(e.into()),
         }
 
         Ok(())
