@@ -1,4 +1,4 @@
-## 0.2.0
+## 0.2.0 2022-09-15
 
 - The `--staged` mode no longer tries to stash unstaged content before linting
   or tidying files. This can cause a number of issues, and shouldn't be the
