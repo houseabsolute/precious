@@ -57,18 +57,6 @@ struct ActionFailure {
     path: PathBuf,
 }
 
-#[derive(Debug)]
-pub struct Precious<'a> {
-    matches: &'a ArgMatches,
-    mode: basepaths::Mode,
-    root: PathBuf,
-    cwd: PathBuf,
-    config: config::Config,
-    chars: chars::Chars,
-    quiet: bool,
-    thread_pool: ThreadPool,
-}
-
 const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 
 pub fn app<'a>() -> App<'a> {
@@ -208,6 +196,18 @@ pub fn init_logger(matches: &ArgMatches) -> Result<(), log::SetLoggerError> {
         .apply()
 }
 
+#[derive(Debug)]
+pub struct Precious<'a> {
+    matches: &'a ArgMatches,
+    mode: basepaths::Mode,
+    project_root: PathBuf,
+    cwd: PathBuf,
+    config: config::Config,
+    chars: chars::Chars,
+    quiet: bool,
+    thread_pool: ThreadPool,
+}
+
 impl<'a> Precious<'a> {
     pub fn new(matches: &'a ArgMatches) -> Result<Precious<'a>> {
         if log::log_enabled!(log::Level::Debug) {
@@ -223,15 +223,15 @@ impl<'a> Precious<'a> {
         };
 
         let cwd = env::current_dir()?;
-        let root = Self::root(&cwd)?;
-        let config_file = Self::config_file(matches, &root)?;
+        let project_root = Self::project_root(&cwd)?;
+        let config_file = Self::config_file(matches, &project_root)?;
         let config = config::Config::new(config_file)?;
 
         Ok(Precious {
             matches,
             mode: Self::mode(matches)?,
             config,
-            root,
+            project_root,
             cwd,
             chars: c,
             quiet: matches.is_present("quiet"),
@@ -278,7 +278,7 @@ impl<'a> Precious<'a> {
         }
     }
 
-    fn root(cwd: &Path) -> Result<PathBuf> {
+    fn project_root(cwd: &Path) -> Result<PathBuf> {
         if Self::has_config_file(cwd) {
             return Ok(cwd.into());
         }
@@ -295,14 +295,14 @@ impl<'a> Precious<'a> {
         .into())
     }
 
-    fn config_file(matches: &'a ArgMatches, root: &Path) -> Result<PathBuf> {
+    fn config_file(matches: &'a ArgMatches, dir: &Path) -> Result<PathBuf> {
         if matches.is_present("config") {
             let conf_file = matches.value_of("config").unwrap();
             debug!("Loading config from {} (set via flag)", conf_file);
             return Ok(PathBuf::from(conf_file));
         }
 
-        let default = Self::default_config_file(root);
+        let default = Self::default_config_file(dir);
         debug!(
             "Loading config from {} (default location)",
             default.display()
@@ -310,14 +310,13 @@ impl<'a> Precious<'a> {
         Ok(default)
     }
 
-    fn default_config_file(root: &Path) -> PathBuf {
-        let root_path = root.to_path_buf();
+    fn default_config_file(dir: &Path) -> PathBuf {
         // It'd be nicer to use the version of this provided by itertools, but
         // that requires itertools 0.10.1, and we want to keep the version at
         // 0.9.0 for the benefit of Debian.
         Self::find_or_first(
             CONFIG_FILE_NAMES.iter().map(|n| {
-                let mut path = root_path.clone();
+                let mut path = dir.to_path_buf();
                 path.push(n);
                 path
             }),
@@ -375,14 +374,14 @@ impl<'a> Precious<'a> {
     fn tidy(&mut self) -> Result<Exit> {
         println!("{} Tidying {}", self.chars.ring, self.mode);
 
-        let tidiers = self.config.tidy_filters(&self.root)?;
+        let tidiers = self.config.tidy_filters(&self.project_root)?;
         self.run_all_filters("tidying", tidiers, |s, p, t| s.run_one_tidier(p, t))
     }
 
     fn lint(&mut self) -> Result<Exit> {
         println!("{} Linting {}", self.chars.ring, self.mode);
 
-        let linters = self.config.lint_filters(&self.root)?;
+        let linters = self.config.lint_filters(&self.project_root)?;
         self.run_all_filters("linting", linters, |s, p, l| s.run_one_linter(p, l))
     }
 
@@ -406,9 +405,13 @@ impl<'a> Precious<'a> {
             basepaths::Mode::FromCli => self.paths_from_args(),
             _ => vec![],
         };
+
         match self.basepaths()?.paths(cli_paths)? {
             None => Ok(self.no_files_exit()),
             Some(paths) => {
+                debug!("Setting current dir to {}", self.project_root.display());
+                env::set_current_dir(&self.project_root)?;
+
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for f in filters {
                     if let Some(mut failures) = run_filter(self, paths.clone(), &f) {
@@ -667,7 +670,12 @@ impl<'a> Precious<'a> {
     }
 
     fn basepaths(&mut self) -> Result<basepaths::BasePaths> {
-        basepaths::BasePaths::new(self.mode, self.cwd.clone(), self.config.exclude.clone())
+        basepaths::BasePaths::new(
+            self.mode,
+            self.project_root.clone(),
+            self.cwd.clone(),
+            self.config.exclude.clone(),
+        )
     }
 
     fn paths_from_args(&self) -> Vec<PathBuf> {
@@ -687,10 +695,10 @@ impl<'a> Precious<'a> {
         }
     }
 
-    fn is_checkout_root(path: &Path) -> bool {
-        for dir in vcs::DIRS {
-            let mut poss = PathBuf::from(path);
-            poss.push(dir);
+    fn is_checkout_root(dir: &Path) -> bool {
+        for subdir in vcs::DIRS {
+            let mut poss = PathBuf::from(dir);
+            poss.push(subdir);
             if poss.exists() {
                 return true;
             }
@@ -698,8 +706,8 @@ impl<'a> Precious<'a> {
         false
     }
 
-    fn has_config_file(path: &Path) -> bool {
-        Self::default_config_file(path).exists()
+    fn has_config_file(dir: &Path) -> bool {
+        Self::default_config_file(dir).exists()
     }
 }
 
@@ -736,9 +744,9 @@ fn format_duration(d: &Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testhelper;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
+    use testhelper::{Pushd, TestHelper};
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
     use std::path::PathBuf;
@@ -763,7 +771,7 @@ lint_failure_exit_codes = [1]
     #[serial]
     fn new() -> Result<()> {
         for name in super::CONFIG_FILE_NAMES {
-            let helper = testhelper::TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
+            let helper = TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
             let _pushd = helper.pushd_to_root()?;
 
             let app = app();
@@ -773,8 +781,8 @@ lint_failure_exit_codes = [1]
             assert_eq!(p.chars, chars::FUN_CHARS);
             assert!(!p.quiet);
 
-            let config_file = Precious::config_file(&matches, &p.root)?;
-            let mut expect_config_file = p.root;
+            let config_file = Precious::config_file(&matches, &p.project_root)?;
+            let mut expect_config_file = p.project_root;
             expect_config_file.push(name);
             assert_eq!(config_file, expect_config_file);
         }
@@ -785,8 +793,8 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_ascii_flag() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?
-            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -801,8 +809,8 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_config_path() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?
-            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -819,8 +827,8 @@ lint_failure_exit_codes = [1]
 
         let p = Precious::new(&matches)?;
 
-        let config_file = Precious::config_file(&matches, &p.root)?;
-        let mut expect_config_file = p.root;
+        let config_file = Precious::config_file(&matches, &p.project_root)?;
+        let mut expect_config_file = p.project_root;
         expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
         assert_eq!(config_file, expect_config_file);
 
@@ -830,49 +838,145 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn set_root_prefers_config_file() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let helper = TestHelper::new()?.with_git_repo()?;
 
         let mut src_dir = helper.root();
         src_dir.push("src");
         let mut subdir_config = src_dir.clone();
         subdir_config.push(DEFAULT_CONFIG_FILE_NAME);
         helper.write_file(&subdir_config, SIMPLE_CONFIG)?;
-        let _pushd = testhelper::Pushd::new(src_dir.clone())?;
+        let _pushd = Pushd::new(src_dir.clone())?;
 
         let app = app();
         let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
 
         let p = Precious::new(&matches)?;
-        assert_eq!(p.root, src_dir);
+        assert_eq!(p.project_root, src_dir);
 
         Ok(())
     }
 
     #[test]
     #[serial]
-    fn basepaths_uses_cwd() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?
-            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
-            .with_git_repo()?;
+    fn basepaths_uses_project_root() -> Result<()> {
+        // It'd be more Rusty to make this a macro that generates multiple
+        // `#[test]` funcs, but that's kind of painful. Maybe I'll do this
+        // later.
+        struct OneTest {
+            flag: &'static str,
+            paths: &'static [&'static str],
+            #[allow(clippy::type_complexity)]
+            action: Box<dyn Fn(&TestHelper) -> Result<()>>,
+            expect: &'static [&'static [&'static str]],
+        }
+        let tests = &[
+            OneTest {
+                flag: "--all",
+                paths: &[],
+                action: Box::new(|_| Ok(())),
+                expect: &[
+                    &[
+                        ".",
+                        "README.md",
+                        "can_ignore.x",
+                        "merge-conflict-file",
+                        "precious.toml",
+                    ],
+                    &[
+                        "src",
+                        "src/bar.rs",
+                        "src/can_ignore.rs",
+                        "src/main.rs",
+                        "src/module.rs",
+                    ],
+                    &["src/sub", "src/sub/mod.rs"],
+                    &[
+                        "tests/data",
+                        "tests/data/bar.txt",
+                        "tests/data/foo.txt",
+                        "tests/data/generated.txt",
+                    ],
+                ],
+            },
+            OneTest {
+                flag: "--git",
+                paths: &[],
+                action: Box::new(|th| {
+                    th.modify_files()?;
+                    Ok(())
+                }),
+                expect: &[
+                    &["src", "src/module.rs"],
+                    &["tests/data", "tests/data/foo.txt"],
+                ],
+            },
+            OneTest {
+                flag: "--staged",
+                paths: &[],
+                action: Box::new(|th| {
+                    th.modify_files()?;
+                    th.stage_all()?;
+                    Ok(())
+                }),
+                expect: &[
+                    &["src", "src/module.rs"],
+                    &["tests/data", "tests/data/foo.txt"],
+                ],
+            },
+            OneTest {
+                flag: "",
+                paths: &["main.rs", "module.rs"],
+                action: Box::new(|_| Ok(())),
+                expect: &[&["src", "src/main.rs", "src/module.rs"]],
+            },
+            OneTest {
+                flag: "",
+                paths: &["."],
+                action: Box::new(|_| Ok(())),
+                expect: &[
+                    &[
+                        "src",
+                        "src/bar.rs",
+                        "src/can_ignore.rs",
+                        "src/main.rs",
+                        "src/module.rs",
+                    ],
+                    &["src/sub", "src/sub/mod.rs"],
+                ],
+            },
+        ];
+        for t in tests {
+            println!(
+                "  basepaths_uses_project_root: {} [{}]",
+                if t.flag.is_empty() { "<none>" } else { t.flag },
+                t.paths.join(" ")
+            );
+            let helper = TestHelper::new()?
+                .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
+                .with_git_repo()?;
+            (t.action)(&helper)?;
 
-        let mut src_dir = helper.root();
-        src_dir.push("src");
-        let _pushd = testhelper::Pushd::new(src_dir)?;
+            let mut src_dir = helper.root();
+            src_dir.push("src");
+            let _pushd = Pushd::new(src_dir)?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
+            let app = app();
+            let mut cmd = vec!["precious", "--quiet", "tidy"];
+            if !t.flag.is_empty() {
+                cmd.push(t.flag);
+            } else {
+                cmd.append(&mut t.paths.to_vec());
+            }
+            let matches = app.try_get_matches_from(&cmd)?;
 
-        let mut p = Precious::new(&matches)?;
-        let mut paths = p.basepaths()?;
+            let mut p = Precious::new(&matches)?;
+            let mut paths = p.basepaths()?;
 
-        let expect = vec![basepaths::Paths {
-            dir: PathBuf::from("."),
-            files: ["bar.rs", "can_ignore.rs", "main.rs", "module.rs"]
-                .iter()
-                .map(PathBuf::from)
-                .collect(),
-        }];
-        assert_eq!(paths.paths(vec![])?, Some(expect));
+            assert_eq!(
+                paths.paths(t.paths.iter().map(PathBuf::from).collect())?,
+                Some(t.expect.iter().map(|e| make_paths(e)).collect::<Vec<_>>())
+            );
+        }
 
         Ok(())
     }
@@ -887,8 +991,7 @@ include = "**/*"
 cmd     = ["true"]
 ok_exit_codes = [0]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -912,8 +1015,7 @@ include = "**/*"
 cmd     = ["false"]
 ok_exit_codes = [0]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -938,8 +1040,7 @@ cmd     = ["true"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -964,8 +1065,7 @@ cmd     = ["false"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -1013,10 +1113,9 @@ cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
-        helper.write_file(test_replace.as_ref(), "The letter A")?;
+        helper.write_file(&test_replace, "The letter A")?;
         let _pushd = helper.pushd_to_root()?;
 
         let app = app();
@@ -1083,6 +1182,13 @@ lint_failure_exit_codes = [1]
             let f = format_duration(k);
             let e = tests.get(k).unwrap().to_string();
             assert_eq!(f, e, "{}s {}ns", k.as_secs(), k.as_nanos());
+        }
+    }
+
+    fn make_paths(from: &[&str]) -> basepaths::Paths {
+        basepaths::Paths {
+            dir: PathBuf::from(from[0]),
+            files: from[1..].iter().map(PathBuf::from).collect(),
         }
     }
 }

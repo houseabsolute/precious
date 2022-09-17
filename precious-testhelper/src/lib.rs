@@ -1,9 +1,9 @@
-#[cfg(test)]
-use crate::command;
 use anyhow::{Context, Result};
 use std::{
     collections::HashMap,
-    env, fs,
+    env,
+    ffi::OsString,
+    fs,
     io::prelude::*,
     path::{Path, PathBuf},
 };
@@ -23,13 +23,14 @@ impl TestHelper {
     const PATHS: &'static [&'static str] = &[
         "README.md",
         "can_ignore.x",
-        "src/can_ignore.rs",
+        "merge-conflict-file",
         "src/bar.rs",
+        "src/can_ignore.rs",
         "src/main.rs",
         "src/module.rs",
-        "merge-conflict-file",
-        "tests/data/foo.txt",
+        "src/sub/mod.rs",
         "tests/data/bar.txt",
+        "tests/data/foo.txt",
         "tests/data/generated.txt",
     ];
 
@@ -66,7 +67,12 @@ impl TestHelper {
 
     fn create_git_repo(&self) -> Result<()> {
         for p in self.paths.iter() {
-            self.write_file(p, "some content")?;
+            let content = if is_rust_file(p) {
+                "fn foo() {}\n"
+            } else {
+                "some text"
+            };
+            self.write_file(p, content)?;
         }
 
         self.run_git(&["init", "--initial-branch", "master"])?;
@@ -184,15 +190,20 @@ generated.*
     pub fn modify_files(&self) -> Result<Vec<PathBuf>> {
         let mut paths: Vec<PathBuf> = vec![];
         for p in Self::TO_MODIFY.iter().map(PathBuf::from) {
-            self.write_file(&p, "new content")?;
+            let content = if is_rust_file(&p) {
+                "fn bar() {}\n"
+            } else {
+                "new text"
+            };
+            self.write_file(&p, content)?;
             paths.push(p.clone());
         }
         Ok(paths)
     }
 
-    pub fn write_file(&self, rel: &Path, content: &str) -> Result<()> {
+    pub fn write_file<P: AsRef<Path>>(&self, rel: P, content: &str) -> Result<()> {
         let mut full = self.root.clone();
-        full.push(rel);
+        full.push(rel.as_ref());
         fs::create_dir_all(full.parent().unwrap())
             .with_context(|| format!("Creating dir at {}", full.parent().unwrap().display(),))?;
         let mut file = fs::File::create(full.clone())
@@ -221,10 +232,10 @@ pub fn pushd_to(to: PathBuf) -> Result<Pushd> {
 pub struct Pushd(PathBuf);
 
 impl Pushd {
-    pub fn new(path: PathBuf) -> Result<Pushd> {
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Pushd> {
         let cwd = env::current_dir()?;
-        env::set_current_dir(&path)
-            .with_context(|| format!("setting current directory to {}", path.display()))?;
+        env::set_current_dir(path.as_ref())
+            .with_context(|| format!("setting current directory to {}", path.as_ref().display()))?;
         Ok(Pushd(cwd))
     }
 }
@@ -247,12 +258,19 @@ impl Drop for Pushd {
     }
 }
 
+fn is_rust_file(p: &Path) -> bool {
+    if let Some(e) = p.extension() {
+        let rs = OsString::from("rs");
+        return *e == rs;
+    }
+    false
+}
+
 // The temp directory on macOS in GitHub Actions appears to be a symlink, but
 // canonicalizing on Windows breaks tests for some reason.
 pub fn maybe_canonicalize(path: &Path) -> Result<PathBuf> {
     if cfg!(windows) {
         return Ok(path.to_owned());
     }
-
     Ok(fs::canonicalize(path)?)
 }

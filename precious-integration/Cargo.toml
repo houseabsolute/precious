@@ -1,0 +1,21 @@
+[package]
+name = "precious-integration"
+version = "0.2.0"
+authors = ["Dave Rolsky <autarch@urth.org>"]
+description = "Integration tests for precious"
+repository = "https://github.com/houseabsolute/precious"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[dev-dependencies]
+anyhow = "1.0.53"
+command = { path = "../precious-command" }
+precious-core = { path = "../precious-core" }
+serial_test = "0.5.1"
+testhelper = { path = "../precious-testhelper" }
+
+[[test]]
+name = "integration_tests"
+path = "tests/lib.rs"
+harness = true

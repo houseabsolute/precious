@@ -58,7 +58,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --locked --target=${{ matrix.platform.target }} --path .
+          args: --locked --target=${{ matrix.platform.target }} --path ./precious
         if: matrix.platform.os_name == 'Linux'
       - uses: actions/setup-node@v2
         if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
@@ -132,7 +132,7 @@ jobs:
         with:
           use-cross: ${{ matrix.platform.cross }}
           command: build
-          args: --locked --release --target ${{ matrix.platform.target }}
+          args: --package precious --locked --release --target ${{ matrix.platform.target }}
       - name: Package as archive
         shell: bash
         run: |

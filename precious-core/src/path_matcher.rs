@@ -7,6 +7,7 @@ pub struct MatcherBuilder {
     builder: GlobSetBuilder,
 }
 
+#[allow(clippy::new_without_default)]
 impl MatcherBuilder {
     pub fn new() -> Self {
         Self {

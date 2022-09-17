@@ -1,18 +1,7 @@
 #![recursion_limit = "1024"]
 
-#[cfg(test)]
-mod testhelper;
-
-mod basepaths;
-mod chars;
-mod command;
-mod config;
-mod filter;
-mod path_matcher;
-mod precious;
-mod vcs;
-
 use log::error;
+use precious_core::precious;
 
 fn main() {
     let matches = precious::app().get_matches();

@@ -1,3 +1,14 @@
+## 0.2.1
+
+- The way precious works when run in a subdirectory of the project root has
+  changed.
+  - When given the `--all`, `--git`, `--staged`, or `--staged-with-stash`
+    flags, it will look for all files in the project, regardless of what
+    directory you execute `precious` in.
+  - When given relative paths to files it will do the right thing. Previously
+    it would error out with "No such file or directory". Reported by Greg
+    Oschwald. Fixes #29.
+
 ## 0.2.0 2022-09-15
 
 - The `--staged` mode no longer tries to stash unstaged content before linting
