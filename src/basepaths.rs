@@ -16,6 +16,7 @@ pub enum Mode {
     All,
     GitModified,
     GitStaged,
+    GitStagedWithStash,
 }
 
 impl fmt::Display for Mode {
@@ -25,6 +26,10 @@ impl fmt::Display for Mode {
             Mode::All => write!(f, "all files in the project"),
             Mode::GitModified => write!(f, "modified files according to git"),
             Mode::GitStaged => write!(f, "files staged for a git commit"),
+            Mode::GitStagedWithStash => write!(
+                f,
+                "files staged for a git commit, stashing unstaged content"
+            ),
         }
     }
 }
@@ -84,7 +89,7 @@ impl BasePaths {
             Mode::All => self.all_files()?,
             Mode::FromCli => self.files_from_cli(cli_paths)?,
             Mode::GitModified => self.git_modified_files()?,
-            Mode::GitStaged => self.git_staged_files()?,
+            Mode::GitStaged | Mode::GitStagedWithStash => self.git_staged_files()?,
         };
 
         if files.is_none() {
@@ -96,16 +101,13 @@ impl BasePaths {
     }
 
     fn maybe_git_stash(&mut self) -> Result<()> {
-        if self.mode != Mode::GitStaged {
+        if self.mode != Mode::GitStagedWithStash {
             return Ok(());
         }
 
         let res = command::run_command(
-            String::from("git"),
-            ["rev-parse", "--show-toplevel"]
-                .iter()
-                .map(|a| (*a).to_string())
-                .collect(),
+            "git",
+            &["rev-parse", "--show-toplevel"],
             &HashMap::new(),
             &[0],
             false,
@@ -122,11 +124,8 @@ impl BasePaths {
 
         if !mm.exists() {
             command::run_command(
-                String::from("git"),
-                ["stash", "--keep-index"]
-                    .iter()
-                    .map(|a| (*a).to_string())
-                    .collect(),
+                "git",
+                &["stash", "--keep-index"],
                 &HashMap::new(),
                 &[0],
                 true,
@@ -210,14 +209,8 @@ impl BasePaths {
     }
 
     fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
-        let result = command::run_command(
-            String::from("git"),
-            args.iter().map(|a| String::from(*a)).collect(),
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(&self.root),
-        )?;
+        let result =
+            command::run_command("git", args, &HashMap::new(), &[0], false, Some(&self.root))?;
 
         let excluder = self.excluder()?;
         match result.stdout {
@@ -305,8 +298,8 @@ impl Drop for BasePaths {
         }
 
         let res = command::run_command(
-            String::from("git"),
-            ["stash", "pop"].iter().map(|a| (*a).to_string()).collect(),
+            "git",
+            &["stash", "pop"],
             &HashMap::new(),
             &[0],
             false,
@@ -553,7 +546,7 @@ mod tests {
         helper.write_file(&PathBuf::from(unstaged), "new content")?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
+            let mut bp = new_basepaths(Mode::GitStagedWithStash, helper.root())?;
             let expect = bp.files_to_paths(
                 modified
                     .iter()
@@ -577,11 +570,11 @@ mod tests {
     // This tests the issue reported in
     // https://github.com/houseabsolute/precious/issues/9. I had tried to test
     // for this earlier, but I thought it was a non-issue because I couldn't
-    // replicate the issue. Later, I realized that this only happens if a
-    // merge commit leads to a conflict. Otherwise, `git diff --cached` won't
-    // report any files at all for the commit. But if you've had a conflict
-    // and resolved it, any files that had a conflict will be reported as
-    // having a diff.
+    // replicate it. Later, I realized that this only happens if a merge
+    // commit leads to a conflict. Otherwise, `git diff --cached` won't report
+    // any files at all for the commit. But if you've had a conflict and
+    // resolved it, any files that had a conflict will be reported as having a
+    // diff.
     #[test]
     fn git_staged_mode_merge_stash() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;

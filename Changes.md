@@ -1,8 +1,15 @@
+## 0.2.0 2022-09-15
+
+- The `--staged` mode no longer tries to stash unstaged content before linting
+  or tidying files. This can cause a number of issues, and shouldn't be the
+  default. There is a new `--staged-with-stash` mode that provides the old
+  `--staged` behavior. Reported by Greg Oschwald. Fixe #30.
+
 ## 0.1.7 2022-09-03
 
 - If a command sent output to stdout, but not stderr, and exited with an
   unexpected error code, then the output to stdout would not be shown by
-  precious in the error message. Reported by Greg Oschwald. GH #28.
+  precious in the error message. Reported by Greg Oschwald. Fixes #28.
 
 ## 0.1.6 2022-09-02
 
