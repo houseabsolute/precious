@@ -152,6 +152,11 @@ fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a> {
                 .help("Run against file content that is staged for a git commit"),
         )
         .arg(
+            Arg::new("staged-with-stash")
+                .long("staged-with-stash")
+                .help("Run against file content that is staged for a git commit, stashing all unstaged content first")
+        )
+        .arg(
             Arg::new("paths")
                 .multiple_occurrences(true)
                 .takes_value(true)
@@ -159,7 +164,7 @@ fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a> {
         )
         .group(
             ArgGroup::new("operate-on")
-                .args(&["all", "git", "staged", "paths"])
+                .args(&["all", "git", "staged", "staged-with-stash", "paths"])
                 .required(true),
         )
 }
@@ -244,6 +249,8 @@ impl<'a> Precious<'a> {
                     return Ok(basepaths::Mode::GitModified);
                 } else if subc_matches.is_present("staged") {
                     return Ok(basepaths::Mode::GitStaged);
+                } else if subc_matches.is_present("staged-with-stash") {
+                    return Ok(basepaths::Mode::GitStagedWithStash);
                 }
 
                 if !subc_matches.is_present("paths") {
@@ -275,11 +282,9 @@ impl<'a> Precious<'a> {
             return Ok(cwd.into());
         }
 
-        let mut root = PathBuf::new();
         for anc in cwd.ancestors() {
             if Self::is_checkout_root(anc) {
-                root.push(anc);
-                return Ok(root);
+                return Ok(anc.to_owned());
             }
         }
 
