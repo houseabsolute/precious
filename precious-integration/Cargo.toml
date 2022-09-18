@@ -1,6 +1,6 @@
 [package]
 name = "precious-integration"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "Integration tests for precious"
 repository = "https://github.com/houseabsolute/precious"

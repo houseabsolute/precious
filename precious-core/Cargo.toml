@@ -1,6 +1,6 @@
 [package]
 name = "precious-core"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "The core of precious as a library - not for external use"
 repository = "https://github.com/houseabsolute/precious"

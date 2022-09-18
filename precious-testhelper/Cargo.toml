@@ -1,6 +1,6 @@
 [package]
 name = "testhelper"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "A helper library for precious tests - not for external use"
 repository = "https://github.com/houseabsolute/precious"
