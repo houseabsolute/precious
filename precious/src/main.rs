@@ -4,13 +4,13 @@ use log::error;
 use precious_core::precious;
 
 fn main() {
-    let matches = precious::app().get_matches();
-    let res = precious::init_logger(&matches);
+    let app = precious::app();
+    let res = precious::init_logger(&app);
     if let Err(e) = res {
         eprintln!("Error creating logger: {}", e);
         std::process::exit(1);
     }
-    let p = precious::Precious::new(&matches);
+    let p = precious::Precious::new(app);
     let status = match p {
         Ok(mut p) => p.run(),
         Err(e) => {
