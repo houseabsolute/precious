@@ -203,6 +203,7 @@ pub fn init_logger(matches: &ArgMatches) -> Result<(), log::SetLoggerError> {
             ));
         })
         .level(level)
+        .level_for("globset", log::LevelFilter::Info)
         .chain(std::io::stderr())
         .apply()
 }
