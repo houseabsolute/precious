@@ -1,4 +1,4 @@
-## 0.2.1
+## 0.2.1 2022-09-18
 
 - The way precious works when run in a subdirectory of the project root has
   changed.
