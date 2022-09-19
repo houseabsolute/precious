@@ -1,5 +1,5 @@
 [package]
-name = "command"
+name = "precious-command"
 version = "0.2.1"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "A command running library for precious - not for external use"

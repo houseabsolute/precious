@@ -10,10 +10,10 @@ edition = "2018"
 
 [dev-dependencies]
 anyhow = "1.0.53"
-command = { path = "../precious-command" }
-precious-core = { path = "../precious-core" }
+precious-command = { version = "0.2.1", path = "../precious-command" }
+precious-core = { version = "0.2.1", path = "../precious-core" }
+precious-testhelper = { version = "0.2.1", path = "../precious-testhelper" }
 serial_test = "0.5.1"
-testhelper = { path = "../precious-testhelper" }
 
 [[test]]
 name = "integration_tests"

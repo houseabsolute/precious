@@ -1,7 +1,7 @@
 use crate::path_matcher;
 use anyhow::Result;
-use command;
 use log::{debug, info};
+use precious_command as command;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -582,8 +582,8 @@ mod tests {
     use super::*;
     use crate::path_matcher;
     use anyhow::Result;
+    use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
-    use testhelper;
 
     type Mock = i8;
 

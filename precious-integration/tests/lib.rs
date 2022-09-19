@@ -1,7 +1,8 @@
 use anyhow::Result;
+use precious_command as command;
+use precious_testhelper::TestHelper;
 use serial_test::serial;
 use std::{collections::HashMap, env, path::PathBuf};
-use testhelper::TestHelper;
 
 const CONFIG: &str = r#"
 exclude = [

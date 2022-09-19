@@ -1,9 +1,9 @@
 use crate::{path_matcher, vcs};
 use anyhow::Result;
 use clean_path::Clean;
-use command;
 use itertools::Itertools;
 use log::{debug, error};
+use precious_command as command;
 use std::{
     collections::HashMap,
     fmt,
@@ -365,9 +365,9 @@ impl Drop for BasePaths {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
     use std::fs;
-    use testhelper;
 
     fn new_basepaths(mode: Mode, root: PathBuf) -> Result<BasePaths> {
         new_basepaths_with_excludes(mode, root.clone(), root, vec![])

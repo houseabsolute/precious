@@ -674,8 +674,8 @@ fn format_duration(d: &Duration) -> String {
 mod tests {
     use super::*;
     use itertools::Itertools;
+    use precious_testhelper::{Pushd, TestHelper};
     use pretty_assertions::assert_eq;
-    use testhelper::{Pushd, TestHelper};
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
     use std::path::PathBuf;
