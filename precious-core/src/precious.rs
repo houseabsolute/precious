@@ -133,43 +133,45 @@ pub struct Precious {
     paths: Vec<PathBuf>,
 }
 
-pub fn init_logger(app: &App) -> Result<(), log::SetLoggerError> {
-    let line_colors = ColoredLevelConfig::new()
-        .error(Color::Red)
-        .warn(Color::Yellow)
-        .info(Color::BrightBlack)
-        .debug(Color::BrightBlack)
-        .trace(Color::BrightBlack);
+impl App {
+    pub fn init_logger(&self) -> Result<(), log::SetLoggerError> {
+        let line_colors = ColoredLevelConfig::new()
+            .error(Color::Red)
+            .warn(Color::Yellow)
+            .info(Color::BrightBlack)
+            .debug(Color::BrightBlack)
+            .trace(Color::BrightBlack);
 
-    let level = if app.trace {
-        log::LevelFilter::Trace
-    } else if app.debug {
-        log::LevelFilter::Debug
-    } else if app.verbose {
-        log::LevelFilter::Info
-    } else {
-        log::LevelFilter::Warn
-    };
+        let level = if self.trace {
+            log::LevelFilter::Trace
+        } else if self.debug {
+            log::LevelFilter::Debug
+        } else if self.verbose {
+            log::LevelFilter::Info
+        } else {
+            log::LevelFilter::Warn
+        };
 
-    let level_colors = line_colors.info(Color::Green).debug(Color::Black);
+        let level_colors = line_colors.info(Color::Green).debug(Color::Black);
 
-    Dispatch::new()
-        .format(move |out, message, record| {
-            out.finish(format_args!(
-                "{color_line}[{target}][{level}{color_line}] {message}\x1B[0m",
-                color_line = format_args!(
-                    "\x1B[{}m",
-                    line_colors.get_color(&record.level()).to_fg_str()
-                ),
-                target = record.target(),
-                level = level_colors.color(record.level()),
-                message = message,
-            ));
-        })
-        .level(level)
-        .level_for("globset", log::LevelFilter::Info)
-        .chain(std::io::stderr())
-        .apply()
+        Dispatch::new()
+            .format(move |out, message, record| {
+                out.finish(format_args!(
+                    "{color_line}[{target}][{level}{color_line}] {message}\x1B[0m",
+                    color_line = format_args!(
+                        "\x1B[{}m",
+                        line_colors.get_color(&record.level()).to_fg_str()
+                    ),
+                    target = record.target(),
+                    level = level_colors.color(record.level()),
+                    message = message,
+                ));
+            })
+            .level(level)
+            .level_for("globset", log::LevelFilter::Info)
+            .chain(std::io::stderr())
+            .apply()
+    }
 }
 
 impl Precious {

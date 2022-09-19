@@ -5,8 +5,7 @@ use precious_core::precious;
 
 fn main() {
     let app = precious::app();
-    let res = precious::init_logger(&app);
-    if let Err(e) = res {
+    if let Err(e) = app.init_logger() {
         eprintln!("Error creating logger: {}", e);
         std::process::exit(1);
     }
