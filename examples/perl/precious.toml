@@ -47,6 +47,7 @@ include = [ "**/*.{pl,pm,t,psgi}" ]
 cmd = [ "perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc" ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 2
+expect_stderr = true
 
 # Add Perl::Tidy as a develop phase prereq
 [commands.perltidy]
