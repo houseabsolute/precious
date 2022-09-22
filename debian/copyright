@@ -5,17 +5,20 @@ Source: https://github.com/houseabsolute/precious
 
 Files: *
 Copyright:
-  Dave Rolsky <autarch@urth.org>
+  2002  Dave Rolsky <autarch@urth.org>
 License-Grant:
  license = "MIT OR Apache-2.0"
 License: Apache-2.0 or Expat
-Reference: Cargo.toml
+Reference:
+ Cargo.toml
+ LICENSE-APACHE
+ LICENSE-MIT
 
 Files: debian/*
 Copyright:
   2021-2022  Jonas Smedegaard <dr@jones.dk>
 License-Grant:
- This packaging is free software;
+ This packaging is free software:
  you can redistribute it and/or modify it
  under the terms of the GNU General Public License
  as published by the Free Software Foundation;
@@ -23,6 +26,21 @@ License-Grant:
  or (at your option) any later version.
 License: GPL-3+
 Reference: debian/copyright
+
+Files: debian/debcargo/bin/cargo
+Copyright:
+  2022       Jonas Smedegaard <dr@jones.dk>
+  2015-2016  Luca Bruno <lucab@debian.org>
+  2017-2019  Vasudeva Kamath <vasudev@copyninja.info>
+  2016-2019  Ximin Luo <infinity0@debian.org>
+License: Apache-2.0 or Expat
+
+Files: debian/debcargo/lib/*
+Copyright:
+  2022  Jonas Smedegaard <dr@jones.dk>
+  2016  Josh Triplett <josh@joshtriplett.org>
+  2018  Ximin Luo <infinity0@debian.org>
+License: Expat
 
 Files: debian/vendorlibs/clean-path-0.2.1/*
 Copyright:
