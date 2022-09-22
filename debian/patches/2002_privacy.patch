@@ -5,11 +5,21 @@ Last-Update: 2022-02-23
 This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 --- a/README.md
 +++ b/README.md
-@@ -299,7 +299,3 @@
+@@ -311,17 +311,3 @@
  
- As of version 0.1.2, filters are run in the same order as they appear in the
+ As of version 0.1.2, commands are run in the same order as they appear in the
  config file.
 -
 -## Build Status
 -
--[![Build Status](https://travis-ci.com/houseabsolute/precious.svg?branch=master)](https://travis-ci.com/houseabsolute/precious)
+-### Build and Test
+-
+-![Build Status](https://github.com/houseabsolute/precious/actions/workflows/ci.yml/badge.svg)
+-
+-### Cargo Audit Nightly
+-
+-![Cargo Audit Nightly](https://github.com/houseabsolute/precious/actions/workflows/audit-nightly.yml/badge.svg)
+-
+-### Cargo Audit On Push
+-
+-![Cargo Audit On Push](https://github.com/houseabsolute/precious/actions/workflows/audit-on-push.yml/badge.svg)
