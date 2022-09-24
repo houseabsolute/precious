@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "precious"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "log",
  "precious-core",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "precious-command"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "log",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "precious-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "precious-integration"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "precious-command",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "precious-testhelper"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "precious-command",
