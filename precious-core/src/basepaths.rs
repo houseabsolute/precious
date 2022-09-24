@@ -154,12 +154,10 @@ impl BasePaths {
             Some(all) => {
                 let excluder = self.excluder()?;
                 Ok(Some(
-                    self.relative_files(
-                        &self.project_root,
-                        all.into_iter()
-                            .filter(|p| !excluder.path_matches(p))
-                            .collect::<Vec<_>>(),
-                    )?,
+                    self.relative_files(&self.project_root, all)?
+                        .into_iter()
+                        .filter(|p| !excluder.path_matches(p))
+                        .collect::<Vec<_>>(),
                 ))
             }
             None => Ok(None),
@@ -489,6 +487,20 @@ mod tests {
 
         let mut bp = new_basepaths(Mode::All, helper.root())?;
         assert_eq!(bp.paths(vec![])?, bp.files_to_paths(expect)?);
+        Ok(())
+    }
+
+    #[test]
+    fn all_mode_with_excluded_files() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        let mut bp = new_basepaths_with_excludes(
+            Mode::All,
+            helper.root(),
+            helper.root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(bp.paths(vec![])?, bp.files_to_paths(helper.all_files())?);
         Ok(())
     }
 
