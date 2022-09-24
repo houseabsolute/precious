@@ -1,4 +1,4 @@
-## 0.2.2
+## 0.2.2 - 2022-09-24
 
 - Added a `--command` flag to the `lint` and `tidy` subcommands. If this is
   passed, then only the command with the given name will be run. This
