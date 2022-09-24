@@ -293,13 +293,23 @@ lint_failure_exit_codes = [1]
 ### You want to run Precious as a commit hook
 
 Simply run `precious lint -s` in your hook. It will exit with a non-zero
-status if any of the lint filters indicate a linting problem.
+status if any of the lint commands indicate a linting problem.
 
-### You want to run filters in a specific order
+### You want to run commands in a specific order
 
-As of version 0.1.2, filters are run in the same order as they appear in the
+As of version 0.1.2, commands are run in the same order as they appear in the
 config file.
 
 ## Build Status
 
-[![Build Status](https://travis-ci.com/houseabsolute/precious.svg?branch=master)](https://travis-ci.com/houseabsolute/precious)
+### Build and Test
+
+![Build Status](https://github.com/houseabsolute/precious/actions/workflows/ci.yml/badge.svg)
+
+### Cargo Audit Nightly
+
+![Cargo Audit Nightly](https://github.com/houseabsolute/precious/actions/workflows/audit-nightly.yml/badge.svg)
+
+### Cargo Audit On Push
+
+![Cargo Audit On Push](https://github.com/houseabsolute/precious/actions/workflows/audit-on-push.yml/badge.svg)
