@@ -45,12 +45,12 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --locked --target=${{ matrix.platform.target }}
+          args: --workspace --locked --target=${{ matrix.platform.target }}
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --locked --target=${{ matrix.platform.target }}
+          args: --workspace --locked --target=${{ matrix.platform.target }}
       # There's not much value in running self-check on multiple
       # platforms. Either we're lint-clean or not. We do run on each rust
       # target to catch warnings coming from clippy in future rust versions.
@@ -58,7 +58,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --locked --target=${{ matrix.platform.target }} --path ./precious
+          args: --path . --locked --target=${{ matrix.platform.target }}
         if: matrix.platform.os_name == 'Linux'
       - uses: actions/setup-node@v2
         if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'

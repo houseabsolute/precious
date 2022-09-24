@@ -1,6 +1,25 @@
+[package]
+name = "precious"
+version = "0.2.2"
+authors = ["Dave Rolsky <autarch@urth.org>"]
+description = "One code quality tool to rule them all"
+repository = "https://github.com/houseabsolute/precious"
+documentation = "https://github.com/houseabsolute/precious"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[[bin]]
+name = "precious"
+path = "precious/src/main.rs"
+doc = false
+
+[dependencies]
+log = "0.4.14"
+precious-core = { version = "0.2.2", path = "./precious-core" }
+
 [workspace]
 members = [
-        "precious",
         "precious-command",
         "precious-core",
         "precious-integration",
