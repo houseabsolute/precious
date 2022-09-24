@@ -183,15 +183,14 @@ impl BasePaths {
             }
 
             if full.is_dir() {
-                match self.walkdir_files(&full)? {
-                    Some(contents) => files.append(
+                if let Some(contents) = self.walkdir_files(&full)? {
+                    files.append(
                         contents
                             .into_iter()
                             .filter(|p| !excluder.path_matches(p))
                             .collect::<Vec<_>>()
                             .as_mut(),
-                    ),
-                    None => (),
+                    );
                 }
             } else {
                 files.push(rel_to_root);
