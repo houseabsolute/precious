@@ -23,8 +23,11 @@ enum PreciousError {
     #[error("Could not find a VCS checkout root starting from {cwd:}")]
     CannotFindRoot { cwd: String },
 
-    #[error("No {what:} filters defined in your config")]
+    #[error("No {what:} commands defined in your config")]
     NoFilters { what: String },
+
+    #[error("No {what:} commands match the given command name, {name:}")]
+    NoFiltersMatch { what: String, name: String },
 }
 
 #[derive(Debug)]
@@ -82,7 +85,7 @@ pub struct App {
     #[clap(long, short)]
     trace: bool,
     #[clap(subcommand)]
-    command: Subcommand,
+    subcommand: Subcommand,
 }
 
 #[derive(Debug, Parser)]
@@ -98,6 +101,10 @@ pub enum Subcommand {
         .args(&["all", "git", "staged", "staged-with-stash", "paths"]),
 ))]
 pub struct CommonArgs {
+    /// The command to run. If specified, only this command will be run. This
+    /// should match the command name in your config file.
+    #[clap(long)]
+    command: Option<String>,
     /// Run against all files in the current directory and below
     #[clap(long, short)]
     all: bool,
@@ -126,6 +133,7 @@ pub struct Precious {
     project_root: PathBuf,
     cwd: PathBuf,
     config: config::Config,
+    command: Option<String>,
     chars: chars::Chars,
     quiet: bool,
     thread_pool: ThreadPool,
@@ -195,16 +203,17 @@ impl Precious {
         let config = config::Config::new(config_file)?;
         let quiet = app.quiet;
         let jobs = app.jobs;
-        let (should_lint, paths) = match app.command {
-            Subcommand::Lint(a) => (true, a.paths),
-            Subcommand::Tidy(a) => (false, a.paths),
+        let (should_lint, paths, command) = match app.subcommand {
+            Subcommand::Lint(a) => (true, a.paths, a.command),
+            Subcommand::Tidy(a) => (false, a.paths, a.command),
         };
 
         Ok(Precious {
             mode,
-            config,
             project_root,
             cwd,
+            config,
+            command,
             chars: c,
             quiet,
             thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
@@ -214,7 +223,7 @@ impl Precious {
     }
 
     fn mode(app: &App) -> Result<basepaths::Mode> {
-        let common = match &app.command {
+        let common = match &app.subcommand {
             Subcommand::Lint(c) => c,
             Subcommand::Tidy(c) => c,
         };
@@ -320,14 +329,18 @@ impl Precious {
     fn tidy(&mut self) -> Result<Exit> {
         println!("{} Tidying {}", self.chars.ring, self.mode);
 
-        let tidiers = self.config.tidy_filters(&self.project_root)?;
+        let tidiers = self
+            .config
+            .tidy_filters(&self.project_root, self.command.as_deref())?;
         self.run_all_filters("tidying", tidiers, |s, p, t| s.run_one_tidier(p, t))
     }
 
     fn lint(&mut self) -> Result<Exit> {
         println!("{} Linting {}", self.chars.ring, self.mode);
 
-        let linters = self.config.lint_filters(&self.project_root)?;
+        let linters = self
+            .config
+            .lint_filters(&self.project_root, self.command.as_deref())?;
         self.run_all_filters("linting", linters, |s, p, l| s.run_one_linter(p, l))
     }
 
@@ -341,6 +354,13 @@ impl Precious {
         R: Fn(&mut Self, Vec<basepaths::Paths>, &filter::Filter) -> Option<Vec<ActionFailure>>,
     {
         if filters.is_empty() {
+            if let Some(c) = &self.command {
+                return Err(PreciousError::NoFiltersMatch {
+                    what: action.into(),
+                    name: c.into(),
+                }
+                .into());
+            }
             return Err(PreciousError::NoFilters {
                 what: action.into(),
             }
@@ -978,19 +998,43 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn lint_fails() -> Result<()> {
-        let config = r#"
-[commands.false]
-type    = "lint"
-include = "**/*"
-cmd     = ["false"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-"#;
-        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+    fn one_command_given() -> Result<()> {
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = App::try_parse_from(&["precious", "--quiet", "lint", "--all"])?;
+        let app = App::try_parse_from(&[
+            "precious",
+            "--quiet",
+            "lint",
+            "--command",
+            "rustfmt",
+            "--all",
+        ])?;
+
+        let mut p = Precious::new(app)?;
+        let status = p.run();
+
+        assert_eq!(status, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn one_command_given_which_does_not_exist() -> Result<()> {
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = App::try_parse_from(&[
+            "precious",
+            "--quiet",
+            "lint",
+            "--command",
+            "no-such-command",
+            "--all",
+        ])?;
 
         let mut p = Precious::new(app)?;
         let status = p.run();

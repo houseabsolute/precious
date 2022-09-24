@@ -246,30 +246,36 @@ impl Config {
         }
     }
 
-    pub fn tidy_filters(&self, root: &Path) -> Result<Vec<filter::Filter>> {
-        let mut tidiers: Vec<filter::Filter> = vec![];
-        for (name, c) in self.commands.iter() {
-            if let filter::FilterType::Lint = c.core.typ {
-                continue;
-            }
-
-            tidiers.push(self.make_command(root, name, c)?);
-        }
-
-        Ok(tidiers)
+    pub fn tidy_filters(&self, root: &Path, command: Option<&str>) -> Result<Vec<filter::Filter>> {
+        self.filters(root, command, filter::FilterType::Tidy)
     }
 
-    pub fn lint_filters(&self, root: &Path) -> Result<Vec<filter::Filter>> {
-        let mut linters: Vec<filter::Filter> = vec![];
+    pub fn lint_filters(&self, root: &Path, command: Option<&str>) -> Result<Vec<filter::Filter>> {
+        self.filters(root, command, filter::FilterType::Lint)
+    }
+
+    fn filters(
+        &self,
+        root: &Path,
+        command: Option<&str>,
+        typ: filter::FilterType,
+    ) -> Result<Vec<filter::Filter>> {
+        let mut filters: Vec<filter::Filter> = vec![];
         for (name, c) in self.commands.iter() {
-            if let filter::FilterType::Tidy = c.core.typ {
+            if c.core.typ != typ && c.core.typ != filter::FilterType::Both {
+                println!("{typ:?} != {:?}", c.core.typ);
                 continue;
             }
+            if let Some(c) = command {
+                if name != c {
+                    continue;
+                }
+            }
 
-            linters.push(self.make_command(root, name, c)?);
+            filters.push(self.make_command(root, name, c)?);
         }
 
-        Ok(linters)
+        Ok(filters)
     }
 
     fn make_command(&self, root: &Path, name: &str, command: &Command) -> Result<filter::Filter> {

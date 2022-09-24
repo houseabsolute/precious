@@ -1,3 +1,9 @@
+## 0.2.2
+
+- Added a `--command` flag to the `lint` and `tidy` subcommands. If this is
+  passed, then only the command with the given name will be run. This
+  addresses #31, requested by Olaf Alders.
+
 ## 0.2.1 - 2022-09-18
 
 - The way precious works when run in a subdirectory of the project root has

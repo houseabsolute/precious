@@ -11,7 +11,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum FilterType {
     #[serde(rename = "lint")]
     Lint,

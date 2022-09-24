@@ -16,6 +16,13 @@ cmd     = [ "rustfmt", "--edition", "2021" ]
 lint_flags = "--check"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
+
+[commands.true]
+type    = "lint"
+include = "**/*.rs"
+cmd     = [ "true" ]
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
 "#;
 
 const GOOD_RUST: &str = r#"
@@ -221,6 +228,45 @@ fn cli_paths_in_subdir() -> Result<()> {
         &["tidy", "module.rs", "../README.md", "../tests/data/foo.txt"],
         &env,
         &[0],
+        false,
+        Some(&cwd),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn one_command() -> Result<()> {
+    let helper = do_test_setup()?;
+    let content = r#"
+fn foo() -> u8   {
+    42
+}
+"#;
+    helper.write_file("src/module.rs", content)?;
+
+    let precious = precious_path()?;
+    let env = HashMap::new();
+
+    let mut cwd = helper.root();
+    cwd.push("src");
+
+    // This succeeds because we're not checking with rustfmt.
+    command::run_command(
+        &precious,
+        &["lint", "--command", "true", "module.rs"],
+        &env,
+        &[0],
+        false,
+        Some(&cwd),
+    )?;
+    // This fails now that we check with rustfmt.
+    command::run_command(
+        &precious,
+        &["lint", "module.rs"],
+        &env,
+        &[1],
         false,
         Some(&cwd),
     )?;
