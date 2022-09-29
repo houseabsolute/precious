@@ -32,6 +32,7 @@ Files: CODE_OF_CONDUCT.md
  debian/vendorlibs/clean-path-0.2.1/src/lib.rs
  debian/watch
  dev/bin/install-dev-tools.sh
+ do-release.sh
  examples/bin/install-dev-tools.sh
  examples/golang/helpers/check-go-mod.sh
  examples/golang/precious.toml
@@ -39,22 +40,29 @@ Files: CODE_OF_CONDUCT.md
  examples/rust/precious.toml
  git/hooks/pre-commit.sh
  git/setup.pl
+ precious-command/Cargo.toml
+ precious-command/src/lib.rs
+ precious-core/Cargo.toml
+ precious-core/src/basepaths.rs
+ precious-core/src/chars.rs
+ precious-core/src/config.rs
+ precious-core/src/filter.rs
+ precious-core/src/lib.rs
+ precious-core/src/path_matcher.rs
+ precious-core/src/precious.rs
+ precious-core/src/vcs.rs
+ precious-integration/Cargo.toml
+ precious-integration/tests/lib.rs
+ precious-testhelper/Cargo.toml
+ precious-testhelper/src/lib.rs
  precious.toml
- src/basepaths.rs
- src/chars.rs
- src/command.rs
- src/config.rs
- src/filter.rs
- src/main.rs
- src/path_matcher.rs
- src/precious.rs
- src/testhelper.rs
- src/vcs.rs
+ precious/src/main.rs
 Copyright: NONE
 License: UNKNOWN
  FIXME
 
-Files: debian/dh-cargo/lib/Debian/Debhelper/Buildsystem/cargo.pm
+Files: LICENSE-APACHE
+ debian/dh-cargo/bin/cargo
 Copyright: NONE
 License: Apache-2.0
  FIXME
@@ -64,8 +72,13 @@ Copyright: 2022, Frank de Jong
 License: Apache-2.0
  FIXME
 
-Files: debian/dh-cargo/bin/cargo
+Files: debian/dh-cargo/lib/Debian/Debhelper/Buildsystem/cargo.pm
 Copyright: NONE
+License: Expat
+ FIXME
+
+Files: LICENSE-MIT
+Copyright: 2022, David Rolsky
 License: Expat
  FIXME
 

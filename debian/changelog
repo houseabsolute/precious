@@ -1,3 +1,15 @@
+precious (0.2.2-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release(s)
+
+  [ Jonas Smedegaard ]
+  * update patches
+  * build-depend on librust-clap-3+cargo-dev librust-clap-3+derive-dev
+  * update copyright info: update coverage
+
+ -- Jonas Smedegaard <dr@jones.dk>  Thu, 29 Sep 2022 15:49:32 +0200
+
 precious (0.2.0-1) unstable; urgency=medium
 
   [ upstream ]
