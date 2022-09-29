@@ -1,27 +1,15 @@
 #![recursion_limit = "1024"]
 
-#[cfg(test)]
-mod testhelper;
-
-mod basepaths;
-mod chars;
-mod command;
-mod config;
-mod filter;
-mod path_matcher;
-mod precious;
-mod vcs;
-
 use log::error;
+use precious_core::precious;
 
 fn main() {
-    let matches = precious::app().get_matches();
-    let res = precious::init_logger(&matches);
-    if let Err(e) = res {
+    let app = precious::app();
+    if let Err(e) = app.init_logger() {
         eprintln!("Error creating logger: {}", e);
         std::process::exit(1);
     }
-    let p = precious::Precious::new(&matches);
+    let p = precious::Precious::new(app);
     let status = match p {
         Ok(mut p) => p.run(),
         Err(e) => {
