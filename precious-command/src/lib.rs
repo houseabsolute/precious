@@ -84,8 +84,8 @@ pub fn run_command(
     // We are canonicalizing this primarily for the benefit of our debugging
     // output, because otherwise we might see the current dir as just `.`,
     // which is not helpful.
-    let cwd = if let Some(id) = in_dir {
-        fs::canonicalize(id)?
+    let cwd = if let Some(d) = in_dir {
+        fs::canonicalize(d)?
     } else {
         fs::canonicalize(env::current_dir()?)?
     };
@@ -198,10 +198,13 @@ fn signal_from_status(_: process::ExitStatus) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::CommandError;
-    use crate::testhelper;
     use anyhow::{format_err, Result};
     use pretty_assertions::assert_eq;
-    use std::{collections::HashMap, env};
+    use std::{
+        collections::HashMap,
+        env, fs,
+        path::{Path, PathBuf},
+    };
     use tempfile::tempdir;
 
     #[test]
@@ -356,7 +359,7 @@ STDERR
                 assert_eq!(stdout, "", "stdout was empty");
                 assert_eq!(stderr, "STDERR\n", "stderr was captured");
             }
-            e => return Err(dbg!(e).into()),
+            e => return Err(e.into()),
         }
 
         Ok(())
@@ -395,7 +398,7 @@ STDERR
                 assert_eq!(stdout, "STDOUT\n", "stdout was captured");
                 assert_eq!(stderr, "STDERR\n", "stderr was captured");
             }
-            e => return Err(dbg!(e).into()),
+            e => return Err(e.into()),
         }
 
         Ok(())
@@ -417,16 +420,9 @@ STDERR
         }
 
         let td = tempdir()?;
-        let td_path = testhelper::maybe_canonicalize(td.path())?;
+        let td_path = maybe_canonicalize(td.path())?;
 
-        let res = super::run_command(
-            "pwd",
-            &[],
-            &HashMap::new(),
-            &[0],
-            false,
-            Some(td_path.as_ref()),
-        )?;
+        let res = super::run_command("pwd", &[], &HashMap::new(), &[0], false, Some(&td_path))?;
         assert_eq!(res.exit_code, 0, "command exits 0");
         assert!(res.stdout.is_some(), "command produced stdout output");
 
@@ -452,5 +448,14 @@ STDERR
                 r#"Could not find "I hope this binary does not exist on any system!" in your path"#,
             ));
         }
+    }
+
+    // The temp directory on macOS in GitHub Actions appears to be a symlink, but
+    // canonicalizing on Windows breaks tests for some reason.
+    pub fn maybe_canonicalize(path: &Path) -> Result<PathBuf> {
+        if cfg!(windows) {
+            return Ok(path.to_owned());
+        }
+        Ok(fs::canonicalize(path)?)
     }
 }

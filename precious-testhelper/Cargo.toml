@@ -1,0 +1,13 @@
+[package]
+name = "precious-testhelper"
+version = "0.2.2"
+authors = ["Dave Rolsky <autarch@urth.org>"]
+description = "A helper library for precious tests - not for external use"
+repository = "https://github.com/houseabsolute/precious"
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.53"
+precious-command = { version = "0.2.2", path = "../precious-command" }
+tempfile = "3.3.0"

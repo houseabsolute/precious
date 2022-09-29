@@ -1,24 +1,41 @@
-## 0.2.0 2022-09-15
+## 0.2.2 - 2022-09-24
+
+- Added a `--command` flag to the `lint` and `tidy` subcommands. If this is
+  passed, then only the command with the given name will be run. This
+  addresses #31, requested by Olaf Alders.
+
+## 0.2.1 - 2022-09-18
+
+- The way precious works when run in a subdirectory of the project root has
+  changed.
+  - When given the `--all`, `--git`, `--staged`, or `--staged-with-stash`
+    flags, it will look for all files in the project, regardless of what
+    directory you execute `precious` in.
+  - When given relative paths to files it will do the right thing. Previously
+    it would error out with "No such file or directory". Reported by Greg
+    Oschwald. Fixes #29.
+
+## 0.2.0 - 2022-09-15
 
 - The `--staged` mode no longer tries to stash unstaged content before linting
   or tidying files. This can cause a number of issues, and shouldn't be the
   default. There is a new `--staged-with-stash` mode that provides the old
-  `--staged` behavior. Reported by Greg Oschwald. Fixe #30.
+  `--staged` behavior. Reported by Greg Oschwald. Fixes #30.
 
-## 0.1.7 2022-09-03
+## 0.1.7 - 2022-09-03
 
 - If a command sent output to stdout, but not stderr, and exited with an
   unexpected error code, then the output to stdout would not be shown by
   precious in the error message. Reported by Greg Oschwald. Fixes #28.
 
-## 0.1.6 2022-09-02
+## 0.1.6 - 2022-09-02
 
 - All binaries now statically link musl instead of the system libc.
 
 - Added a number of new platforms for released binaries: Linux ARM 32-bit and
   64-bit, and macOS ARM 64-bit.
 
-## 0.1.5 2022-08-27
+## 0.1.5 - 2022-08-27
 
 - When a command unexpectedly prints to stderr the error message we print now
   includes both stdout and stderr from that command. Reported by Greg
@@ -28,7 +45,7 @@
   `true`, the paths passed to the command would still include parent
   directories. Reported by Greg Oschwald. Fixes #25.
 
-## 0.1.4 2022-08-14
+## 0.1.4 - 2022-08-14
 
 - Running precious with the `--staged` flag would exit with an error if a
   post-checkout hook wrote any output to stderr. It appears that any output

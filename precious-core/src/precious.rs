@@ -1,6 +1,6 @@
 use crate::{basepaths, chars, config, filter, vcs};
 use anyhow::{Error, Result};
-use clap::{App, Arg, ArgGroup, ArgMatches};
+use clap::{AppSettings, ArgGroup, Parser};
 use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
@@ -17,20 +17,17 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum PreciousError {
-    #[error("No subcommand (lint or tidy) was given in the command line args")]
-    NoSubcommandInCliArgs,
-
     #[error("No mode or paths were provided in the command line args")]
     NoModeOrPathsInCliArgs,
-
-    #[error(r#"Could not parse {arg:} argument, "{val:}", as an integer"#)]
-    InvalidIntegerArgument { arg: String, val: String },
 
     #[error("Could not find a VCS checkout root starting from {cwd:}")]
     CannotFindRoot { cwd: String },
 
-    #[error("No {what:} filters defined in your config")]
+    #[error("No {what:} commands defined in your config")]
     NoFilters { what: String },
+
+    #[error("No {what:} commands match the given command name, {name:}")]
+    NoFiltersMatch { what: String, name: String },
 }
 
 #[derive(Debug)]
@@ -57,227 +54,195 @@ struct ActionFailure {
     path: PathBuf,
 }
 
+const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
+
+#[derive(Debug, Parser)]
+#[clap(author, version)]
+#[clap(propagate_version = true)]
+#[clap(global_setting(AppSettings::DeriveDisplayOrder))]
+#[clap(subcommand_required = true, arg_required_else_help = true)]
+/// One code quality tool to rule them all
+pub struct App {
+    /// Path to config file
+    #[clap(long, short)]
+    config: Option<PathBuf>,
+    /// Number of parallel jobs (threads) to run (defaults to one per core)
+    #[clap(long, short, default_value_t = 0)]
+    jobs: usize,
+    /// Replace super-fun Unicode symbols with terribly boring ASCII
+    #[clap(long, short)]
+    ascii: bool,
+    /// Suppresses most output
+    #[clap(long, short)]
+    quiet: bool,
+    /// Enable verbose output
+    #[clap(long, short)]
+    verbose: bool,
+    /// Enable debugging output
+    #[clap(long, short)]
+    debug: bool,
+    /// Enable tracing output (maximum logging)
+    #[clap(long, short)]
+    trace: bool,
+    #[clap(subcommand)]
+    subcommand: Subcommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum Subcommand {
+    Lint(CommonArgs),
+    Tidy(CommonArgs),
+}
+
+#[derive(Debug, Parser)]
+#[clap(group(
+    ArgGroup::new("path-spec")
+        .required(true)
+        .args(&["all", "git", "staged", "staged-with-stash", "paths"]),
+))]
+pub struct CommonArgs {
+    /// The command to run. If specified, only this command will be run. This
+    /// should match the command name in your config file.
+    #[clap(long)]
+    command: Option<String>,
+    /// Run against all files in the current directory and below
+    #[clap(long, short)]
+    all: bool,
+    /// Run against files that have been modified according to git
+    #[clap(long, short)]
+    git: bool,
+    /// Run against files that are staged for a git commit
+    #[clap(long, short)]
+    staged: bool,
+    /// Run against file content that is staged for a git commit, stashing all
+    /// unstaged content first
+    #[clap(long)]
+    staged_with_stash: bool,
+    /// A list of paths on which to operate
+    #[clap(value_parser)]
+    paths: Vec<PathBuf>,
+}
+
+pub fn app() -> App {
+    App::parse()
+}
+
 #[derive(Debug)]
-pub struct Precious<'a> {
-    matches: &'a ArgMatches,
+pub struct Precious {
     mode: basepaths::Mode,
-    root: PathBuf,
+    project_root: PathBuf,
     cwd: PathBuf,
     config: config::Config,
+    command: Option<String>,
     chars: chars::Chars,
     quiet: bool,
     thread_pool: ThreadPool,
+    should_lint: bool,
+    paths: Vec<PathBuf>,
 }
 
-const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
+impl App {
+    pub fn init_logger(&self) -> Result<(), log::SetLoggerError> {
+        let line_colors = ColoredLevelConfig::new()
+            .error(Color::Red)
+            .warn(Color::Yellow)
+            .info(Color::BrightBlack)
+            .debug(Color::BrightBlack)
+            .trace(Color::BrightBlack);
 
-pub fn app<'a>() -> App<'a> {
-    App::new("precious")
-        .version(env!("CARGO_PKG_VERSION"))
-        .author("Dave Rolsky <autarch@urth.org>")
-        .about("One code quality tool to rule them all")
-        .arg(
-            Arg::new("config")
-                .short('c')
-                .long("config")
-                .takes_value(true)
-                .help("Path to config file"),
-        )
-        .arg(
-            Arg::new("jobs")
-                .short('j')
-                .long("jobs")
-                .takes_value(true)
-                .help("Number of parallel jobs (threads) to run (defaults to one per core)"),
-        )
-        .arg(
-            Arg::new("ascii")
-                .long("ascii")
-                .help("Replace super-fun Unicode symbols with terribly boring ASCII"),
-        )
-        .arg(
-            Arg::new("verbose")
-                .short('v')
-                .long("verbose")
-                .help("Enable verbose output"),
-        )
-        .arg(
-            Arg::new("debug")
-                .short('d')
-                .long("debug")
-                .help("Enable debugging output"),
-        )
-        .arg(
-            Arg::new("trace")
-                .short('t')
-                .long("trace")
-                .help("Enable tracing output (maximum logging)"),
-        )
-        .arg(
-            Arg::new("quiet")
-                .short('q')
-                .long("quiet")
-                .help("Suppresses most output"),
-        )
-        .group(ArgGroup::new("log-level").args(&["verbose", "debug", "trace", "quiet"]))
-        .subcommand(common_subcommand(
-            "tidy",
-            "Tidies the specified files and/or directories",
-        ))
-        .subcommand(common_subcommand(
-            "lint",
-            "Lints the specified files and/or directories",
-        ))
+        let level = if self.trace {
+            log::LevelFilter::Trace
+        } else if self.debug {
+            log::LevelFilter::Debug
+        } else if self.verbose {
+            log::LevelFilter::Info
+        } else {
+            log::LevelFilter::Warn
+        };
+
+        let level_colors = line_colors.info(Color::Green).debug(Color::Black);
+
+        Dispatch::new()
+            .format(move |out, message, record| {
+                out.finish(format_args!(
+                    "{color_line}[{target}][{level}{color_line}] {message}\x1B[0m",
+                    color_line = format_args!(
+                        "\x1B[{}m",
+                        line_colors.get_color(&record.level()).to_fg_str()
+                    ),
+                    target = record.target(),
+                    level = level_colors.color(record.level()),
+                    message = message,
+                ));
+            })
+            .level(level)
+            .level_for("globset", log::LevelFilter::Info)
+            .chain(std::io::stderr())
+            .apply()
+    }
 }
 
-fn common_subcommand<'a>(name: &'a str, about: &'a str) -> App<'a> {
-    App::new(name)
-        .about(about)
-        .arg(
-            Arg::new("all")
-                .short('a')
-                .long("all")
-                .help("Run against all files in the current directory and below"),
-        )
-        .arg(
-            Arg::new("git")
-                .short('g')
-                .long("git")
-                .help("Run against files that have been modified according to git"),
-        )
-        .arg(
-            Arg::new("staged")
-                .short('s')
-                .long("staged")
-                .help("Run against file content that is staged for a git commit"),
-        )
-        .arg(
-            Arg::new("staged-with-stash")
-                .long("staged-with-stash")
-                .help("Run against file content that is staged for a git commit, stashing all unstaged content first")
-        )
-        .arg(
-            Arg::new("paths")
-                .multiple_occurrences(true)
-                .takes_value(true)
-                .help("A list of paths on which to operate"),
-        )
-        .group(
-            ArgGroup::new("operate-on")
-                .args(&["all", "git", "staged", "staged-with-stash", "paths"])
-                .required(true),
-        )
-}
-
-pub fn init_logger(matches: &ArgMatches) -> Result<(), log::SetLoggerError> {
-    let line_colors = ColoredLevelConfig::new()
-        .error(Color::Red)
-        .warn(Color::Yellow)
-        .info(Color::BrightBlack)
-        .debug(Color::BrightBlack)
-        .trace(Color::BrightBlack);
-
-    let level = if matches.is_present("trace") {
-        log::LevelFilter::Trace
-    } else if matches.is_present("debug") {
-        log::LevelFilter::Debug
-    } else if matches.is_present("verbose") {
-        log::LevelFilter::Info
-    } else {
-        log::LevelFilter::Warn
-    };
-
-    let level_colors = line_colors.info(Color::Green).debug(Color::Black);
-
-    Dispatch::new()
-        .format(move |out, message, record| {
-            out.finish(format_args!(
-                "{color_line}[{target}][{level}{color_line}] {message}\x1B[0m",
-                color_line = format_args!(
-                    "\x1B[{}m",
-                    line_colors.get_color(&record.level()).to_fg_str()
-                ),
-                target = record.target(),
-                level = level_colors.color(record.level()),
-                message = message,
-            ));
-        })
-        .level(level)
-        .chain(std::io::stderr())
-        .apply()
-}
-
-impl<'a> Precious<'a> {
-    pub fn new(matches: &'a ArgMatches) -> Result<Precious<'a>> {
+impl Precious {
+    pub fn new(app: App) -> Result<Precious> {
         if log::log_enabled!(log::Level::Debug) {
             if let Some(path) = env::var_os("PATH") {
                 debug!("PATH = {}", path.to_string_lossy());
             }
         }
 
-        let c = if matches.is_present("ascii") {
+        let c = if app.ascii {
             chars::BORING_CHARS
         } else {
             chars::FUN_CHARS
         };
 
+        let mode = Self::mode(&app)?;
         let cwd = env::current_dir()?;
-        let root = Self::root(&cwd)?;
-        let config_file = Self::config_file(matches, &root)?;
+        let project_root = Self::project_root(&cwd)?;
+        let config_file = Self::config_file(app.config.as_ref(), &project_root);
         let config = config::Config::new(config_file)?;
+        let quiet = app.quiet;
+        let jobs = app.jobs;
+        let (should_lint, paths, command) = match app.subcommand {
+            Subcommand::Lint(a) => (true, a.paths, a.command),
+            Subcommand::Tidy(a) => (false, a.paths, a.command),
+        };
 
         Ok(Precious {
-            matches,
-            mode: Self::mode(matches)?,
-            config,
-            root,
+            mode,
+            project_root,
             cwd,
+            config,
+            command,
             chars: c,
-            quiet: matches.is_present("quiet"),
-            thread_pool: ThreadPoolBuilder::new()
-                .num_threads(Self::jobs(matches)?)
-                .build()?,
+            quiet,
+            thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
+            should_lint,
+            paths,
         })
     }
 
-    fn mode(matches: &'a ArgMatches) -> Result<basepaths::Mode> {
-        match matches.subcommand() {
-            Some((_, subc_matches)) => {
-                if subc_matches.is_present("all") {
-                    return Ok(basepaths::Mode::All);
-                } else if subc_matches.is_present("git") {
-                    return Ok(basepaths::Mode::GitModified);
-                } else if subc_matches.is_present("staged") {
-                    return Ok(basepaths::Mode::GitStaged);
-                } else if subc_matches.is_present("staged-with-stash") {
-                    return Ok(basepaths::Mode::GitStagedWithStash);
-                }
-
-                if !subc_matches.is_present("paths") {
-                    return Err(PreciousError::NoModeOrPathsInCliArgs.into());
-                }
-
-                Ok(basepaths::Mode::FromCli)
-            }
-            None => Err(PreciousError::NoSubcommandInCliArgs.into()),
+    fn mode(app: &App) -> Result<basepaths::Mode> {
+        let common = match &app.subcommand {
+            Subcommand::Lint(c) => c,
+            Subcommand::Tidy(c) => c,
+        };
+        if common.all {
+            return Ok(basepaths::Mode::All);
+        } else if common.git {
+            return Ok(basepaths::Mode::GitModified);
+        } else if common.staged {
+            return Ok(basepaths::Mode::GitStaged);
+        } else if common.staged_with_stash {
+            return Ok(basepaths::Mode::GitStagedWithStash);
         }
+        if common.paths.is_empty() {
+            return Err(PreciousError::NoModeOrPathsInCliArgs.into());
+        }
+        Ok(basepaths::Mode::FromCli)
     }
 
-    fn jobs(matches: &'a ArgMatches) -> Result<usize> {
-        match matches.value_of("jobs") {
-            Some(j) => match j.parse::<usize>() {
-                Ok(u) => Ok(u),
-                Err(_) => Err(PreciousError::InvalidIntegerArgument {
-                    arg: "--jobs".to_string(),
-                    val: j.to_string(),
-                }
-                .into()),
-            },
-            None => Ok(0),
-        }
-    }
-
-    fn root(cwd: &Path) -> Result<PathBuf> {
+    fn project_root(cwd: &Path) -> Result<PathBuf> {
         if Self::has_config_file(cwd) {
             return Ok(cwd.into());
         }
@@ -294,29 +259,27 @@ impl<'a> Precious<'a> {
         .into())
     }
 
-    fn config_file(matches: &'a ArgMatches, root: &Path) -> Result<PathBuf> {
-        if matches.is_present("config") {
-            let conf_file = matches.value_of("config").unwrap();
-            debug!("Loading config from {} (set via flag)", conf_file);
-            return Ok(PathBuf::from(conf_file));
+    fn config_file(file: Option<&PathBuf>, dir: &Path) -> PathBuf {
+        if let Some(cf) = file {
+            debug!("Loading config from {} (set via flag)", cf.display());
+            return cf.to_path_buf();
         }
 
-        let default = Self::default_config_file(root);
+        let default = Self::default_config_file(dir);
         debug!(
             "Loading config from {} (default location)",
             default.display()
         );
-        Ok(default)
+        default
     }
 
-    fn default_config_file(root: &Path) -> PathBuf {
-        let root_path = root.to_path_buf();
+    fn default_config_file(dir: &Path) -> PathBuf {
         // It'd be nicer to use the version of this provided by itertools, but
         // that requires itertools 0.10.1, and we want to keep the version at
         // 0.9.0 for the benefit of Debian.
         Self::find_or_first(
             CONFIG_FILE_NAMES.iter().map(|n| {
-                let mut path = root_path.clone();
+                let mut path = dir.to_path_buf();
                 path.push(n);
                 path
             }),
@@ -356,32 +319,28 @@ impl<'a> Precious<'a> {
     }
 
     fn run_subcommand(&mut self) -> Result<Exit> {
-        if self.matches.subcommand_matches("tidy").is_some() {
-            return self.tidy();
-        } else if self.matches.subcommand_matches("lint").is_some() {
-            return self.lint();
+        if self.should_lint {
+            self.lint()
+        } else {
+            self.tidy()
         }
-
-        Ok(Exit {
-            status: 1,
-            message: None,
-            error: Some(String::from(
-                "You must run either the tidy or lint subcommand",
-            )),
-        })
     }
 
     fn tidy(&mut self) -> Result<Exit> {
         println!("{} Tidying {}", self.chars.ring, self.mode);
 
-        let tidiers = self.config.tidy_filters(&self.root)?;
+        let tidiers = self
+            .config
+            .tidy_filters(&self.project_root, self.command.as_deref())?;
         self.run_all_filters("tidying", tidiers, |s, p, t| s.run_one_tidier(p, t))
     }
 
     fn lint(&mut self) -> Result<Exit> {
         println!("{} Linting {}", self.chars.ring, self.mode);
 
-        let linters = self.config.lint_filters(&self.root)?;
+        let linters = self
+            .config
+            .lint_filters(&self.project_root, self.command.as_deref())?;
         self.run_all_filters("linting", linters, |s, p, l| s.run_one_linter(p, l))
     }
 
@@ -395,6 +354,13 @@ impl<'a> Precious<'a> {
         R: Fn(&mut Self, Vec<basepaths::Paths>, &filter::Filter) -> Option<Vec<ActionFailure>>,
     {
         if filters.is_empty() {
+            if let Some(c) = &self.command {
+                return Err(PreciousError::NoFiltersMatch {
+                    what: action.into(),
+                    name: c.into(),
+                }
+                .into());
+            }
             return Err(PreciousError::NoFilters {
                 what: action.into(),
             }
@@ -402,12 +368,16 @@ impl<'a> Precious<'a> {
         }
 
         let cli_paths = match self.mode {
-            basepaths::Mode::FromCli => self.paths_from_args(),
+            basepaths::Mode::FromCli => self.paths.clone(),
             _ => vec![],
         };
+
         match self.basepaths()?.paths(cli_paths)? {
             None => Ok(self.no_files_exit()),
             Some(paths) => {
+                debug!("Setting current dir to {}", self.project_root.display());
+                env::set_current_dir(&self.project_root)?;
+
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for f in filters {
                     if let Some(mut failures) = run_filter(self, paths.clone(), &f) {
@@ -666,30 +636,18 @@ impl<'a> Precious<'a> {
     }
 
     fn basepaths(&mut self) -> Result<basepaths::BasePaths> {
-        basepaths::BasePaths::new(self.mode, self.cwd.clone(), self.config.exclude.clone())
+        basepaths::BasePaths::new(
+            self.mode,
+            self.project_root.clone(),
+            self.cwd.clone(),
+            self.config.exclude.clone(),
+        )
     }
 
-    fn paths_from_args(&self) -> Vec<PathBuf> {
-        let subc_matches = self.matched_subcommand();
-        subc_matches
-            .values_of("paths")
-            .unwrap()
-            .map(PathBuf::from)
-            .collect::<Vec<PathBuf>>()
-    }
-
-    fn matched_subcommand(&self) -> &ArgMatches {
-        match self.matches.subcommand() {
-            Some(("tidy", m)) => m,
-            Some(("lint", m)) => m,
-            _ => panic!("Somehow none of our subcommands matched and clap did not return an error"),
-        }
-    }
-
-    fn is_checkout_root(path: &Path) -> bool {
-        for dir in vcs::DIRS {
-            let mut poss = PathBuf::from(path);
-            poss.push(dir);
+    fn is_checkout_root(dir: &Path) -> bool {
+        for subdir in vcs::DIRS {
+            let mut poss = PathBuf::from(dir);
+            poss.push(subdir);
             if poss.exists() {
                 return true;
             }
@@ -697,8 +655,8 @@ impl<'a> Precious<'a> {
         false
     }
 
-    fn has_config_file(path: &Path) -> bool {
-        Self::default_config_file(path).exists()
+    fn has_config_file(dir: &Path) -> bool {
+        Self::default_config_file(dir).exists()
     }
 }
 
@@ -735,8 +693,8 @@ fn format_duration(d: &Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testhelper;
     use itertools::Itertools;
+    use precious_testhelper::{Pushd, TestHelper};
     use pretty_assertions::assert_eq;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
@@ -762,18 +720,18 @@ lint_failure_exit_codes = [1]
     #[serial]
     fn new() -> Result<()> {
         for name in super::CONFIG_FILE_NAMES {
-            let helper = testhelper::TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
+            let helper = TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
             let _pushd = helper.pushd_to_root()?;
 
-            let app = app();
-            let matches = app.try_get_matches_from(&["precious", "tidy", "--all"])?;
+            let app = App::try_parse_from(&["precious", "tidy", "--all"])?;
+            let config = app.config.clone();
 
-            let p = Precious::new(&matches)?;
+            let p = Precious::new(app)?;
             assert_eq!(p.chars, chars::FUN_CHARS);
             assert!(!p.quiet);
 
-            let config_file = Precious::config_file(&matches, &p.root)?;
-            let mut expect_config_file = p.root;
+            let config_file = Precious::config_file(config.as_ref(), &p.project_root);
+            let mut expect_config_file = p.project_root;
             expect_config_file.push(name);
             assert_eq!(config_file, expect_config_file);
         }
@@ -784,14 +742,13 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_ascii_flag() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?
-            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--ascii", "tidy", "--all"])?;
+        let app = App::try_parse_from(&["precious", "--ascii", "tidy", "--all"])?;
 
-        let p = Precious::new(&matches)?;
+        let p = Precious::new(app)?;
         assert_eq!(p.chars, chars::BORING_CHARS);
 
         Ok(())
@@ -800,12 +757,11 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn new_with_config_path() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?
-            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&[
+        let app = App::try_parse_from(&[
             "precious",
             "--config",
             helper
@@ -815,11 +771,11 @@ lint_failure_exit_codes = [1]
             "tidy",
             "--all",
         ])?;
+        let config = app.config.clone();
+        let p = Precious::new(app)?;
 
-        let p = Precious::new(&matches)?;
-
-        let config_file = Precious::config_file(&matches, &p.root)?;
-        let mut expect_config_file = p.root;
+        let config_file = Precious::config_file(config.as_ref(), &p.project_root);
+        let mut expect_config_file = p.project_root;
         expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
         assert_eq!(config_file, expect_config_file);
 
@@ -829,49 +785,143 @@ lint_failure_exit_codes = [1]
     #[test]
     #[serial]
     fn set_root_prefers_config_file() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let helper = TestHelper::new()?.with_git_repo()?;
 
         let mut src_dir = helper.root();
         src_dir.push("src");
         let mut subdir_config = src_dir.clone();
         subdir_config.push(DEFAULT_CONFIG_FILE_NAME);
         helper.write_file(&subdir_config, SIMPLE_CONFIG)?;
-        let _pushd = testhelper::Pushd::new(src_dir.clone())?;
+        let _pushd = Pushd::new(src_dir.clone())?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
+        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
 
-        let p = Precious::new(&matches)?;
-        assert_eq!(p.root, src_dir);
+        let p = Precious::new(app)?;
+        assert_eq!(p.project_root, src_dir);
 
         Ok(())
     }
 
     #[test]
     #[serial]
-    fn basepaths_uses_cwd() -> Result<()> {
-        let helper = testhelper::TestHelper::new()?
-            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
-            .with_git_repo()?;
+    fn basepaths_uses_project_root() -> Result<()> {
+        // It'd be more Rusty to make this a macro that generates multiple
+        // `#[test]` funcs, but that's kind of painful. Maybe I'll do this
+        // later.
+        struct OneTest {
+            flag: &'static str,
+            paths: &'static [&'static str],
+            #[allow(clippy::type_complexity)]
+            action: Box<dyn Fn(&TestHelper) -> Result<()>>,
+            expect: &'static [&'static [&'static str]],
+        }
+        let tests = &[
+            OneTest {
+                flag: "--all",
+                paths: &[],
+                action: Box::new(|_| Ok(())),
+                expect: &[
+                    &[
+                        ".",
+                        "README.md",
+                        "can_ignore.x",
+                        "merge-conflict-file",
+                        "precious.toml",
+                    ],
+                    &[
+                        "src",
+                        "src/bar.rs",
+                        "src/can_ignore.rs",
+                        "src/main.rs",
+                        "src/module.rs",
+                    ],
+                    &["src/sub", "src/sub/mod.rs"],
+                    &[
+                        "tests/data",
+                        "tests/data/bar.txt",
+                        "tests/data/foo.txt",
+                        "tests/data/generated.txt",
+                    ],
+                ],
+            },
+            OneTest {
+                flag: "--git",
+                paths: &[],
+                action: Box::new(|th| {
+                    th.modify_files()?;
+                    Ok(())
+                }),
+                expect: &[
+                    &["src", "src/module.rs"],
+                    &["tests/data", "tests/data/foo.txt"],
+                ],
+            },
+            OneTest {
+                flag: "--staged",
+                paths: &[],
+                action: Box::new(|th| {
+                    th.modify_files()?;
+                    th.stage_all()?;
+                    Ok(())
+                }),
+                expect: &[
+                    &["src", "src/module.rs"],
+                    &["tests/data", "tests/data/foo.txt"],
+                ],
+            },
+            OneTest {
+                flag: "",
+                paths: &["main.rs", "module.rs"],
+                action: Box::new(|_| Ok(())),
+                expect: &[&["src", "src/main.rs", "src/module.rs"]],
+            },
+            OneTest {
+                flag: "",
+                paths: &["."],
+                action: Box::new(|_| Ok(())),
+                expect: &[
+                    &[
+                        "src",
+                        "src/bar.rs",
+                        "src/can_ignore.rs",
+                        "src/main.rs",
+                        "src/module.rs",
+                    ],
+                    &["src/sub", "src/sub/mod.rs"],
+                ],
+            },
+        ];
+        for t in tests {
+            println!(
+                "  basepaths_uses_project_root: {} [{}]",
+                if t.flag.is_empty() { "<none>" } else { t.flag },
+                t.paths.join(" ")
+            );
+            let helper = TestHelper::new()?
+                .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
+                .with_git_repo()?;
+            (t.action)(&helper)?;
 
-        let mut src_dir = helper.root();
-        src_dir.push("src");
-        let _pushd = testhelper::Pushd::new(src_dir)?;
+            let mut src_dir = helper.root();
+            src_dir.push("src");
+            let _pushd = Pushd::new(src_dir)?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
+            let mut cmd = vec!["precious", "--quiet", "tidy"];
+            if !t.flag.is_empty() {
+                cmd.push(t.flag);
+            } else {
+                cmd.append(&mut t.paths.to_vec());
+            }
+            let app = App::try_parse_from(&cmd)?;
 
-        let mut p = Precious::new(&matches)?;
-        let mut paths = p.basepaths()?;
+            let mut p = Precious::new(app)?;
+            let mut paths = p.basepaths()?;
 
-        let expect = vec![basepaths::Paths {
-            dir: PathBuf::from("."),
-            files: ["bar.rs", "can_ignore.rs", "main.rs", "module.rs"]
-                .iter()
-                .map(PathBuf::from)
-                .collect(),
-        }];
-        assert_eq!(paths.paths(vec![])?, Some(expect));
+            assert_eq!(
+                paths.paths(t.paths.iter().map(PathBuf::from).collect())?,
+                Some(t.expect.iter().map(|e| make_paths(e)).collect::<Vec<_>>())
+            );
+        }
 
         Ok(())
     }
@@ -886,14 +936,12 @@ include = "**/*"
 cmd     = ["true"]
 ok_exit_codes = [0]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
+        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
 
-        let mut p = Precious::new(&matches)?;
+        let mut p = Precious::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 0);
@@ -911,14 +959,12 @@ include = "**/*"
 cmd     = ["false"]
 ok_exit_codes = [0]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "--all"])?;
+        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
 
-        let mut p = Precious::new(&matches)?;
+        let mut p = Precious::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 1);
@@ -937,14 +983,12 @@ cmd     = ["true"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
+        let app = App::try_parse_from(&["precious", "--quiet", "lint", "--all"])?;
 
-        let mut p = Precious::new(&matches)?;
+        let mut p = Precious::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 0);
@@ -954,23 +998,45 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn lint_fails() -> Result<()> {
-        let config = r#"
-[commands.false]
-type    = "lint"
-include = "**/*"
-cmd     = ["false"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-"#;
+    fn one_command_given() -> Result<()> {
         let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "lint", "--all"])?;
+        let app = App::try_parse_from(&[
+            "precious",
+            "--quiet",
+            "lint",
+            "--command",
+            "rustfmt",
+            "--all",
+        ])?;
 
-        let mut p = Precious::new(&matches)?;
+        let mut p = Precious::new(app)?;
+        let status = p.run();
+
+        assert_eq!(status, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn one_command_given_which_does_not_exist() -> Result<()> {
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
+        let _pushd = helper.pushd_to_root()?;
+
+        let app = App::try_parse_from(&[
+            "precious",
+            "--quiet",
+            "lint",
+            "--command",
+            "no-such-command",
+            "--all",
+        ])?;
+
+        let mut p = Precious::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 1);
@@ -1012,16 +1078,14 @@ cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
-        let helper =
-            testhelper::TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
-        helper.write_file(test_replace.as_ref(), "The letter A")?;
+        helper.write_file(&test_replace, "The letter A")?;
         let _pushd = helper.pushd_to_root()?;
 
-        let app = app();
-        let matches = app.try_get_matches_from(&["precious", "--quiet", "tidy", "-a"])?;
+        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "-a"])?;
 
-        let mut p = Precious::new(&matches)?;
+        let mut p = Precious::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 0);
@@ -1082,6 +1146,13 @@ lint_failure_exit_codes = [1]
             let f = format_duration(k);
             let e = tests.get(k).unwrap().to_string();
             assert_eq!(f, e, "{}s {}ns", k.as_secs(), k.as_nanos());
+        }
+    }
+
+    fn make_paths(from: &[&str]) -> basepaths::Paths {
+        basepaths::Paths {
+            dir: PathBuf::from(from[0]),
+            files: from[1..].iter().map(PathBuf::from).collect(),
         }
     }
 }

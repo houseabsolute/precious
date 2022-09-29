@@ -1,0 +1,32 @@
+[package]
+name = "precious-core"
+version = "0.2.2"
+authors = ["Dave Rolsky <autarch@urth.org>"]
+description = "The core of precious as a library - not for external use"
+repository = "https://github.com/houseabsolute/precious"
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.53"
+clap = { version = "3.2.22", features = [ "cargo", "derive" ] }
+clean-path = "0.2.1"
+fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }
+globset = "0.4.8"
+ignore = "0.4.18"
+indexmap = { version = "1.8.0", features = ["serde"] }
+itertools = ">= 0.9.0, < 0.11.0"
+log = "0.4.14"
+md5 = "0.7.0"
+precious-command = { version = "0.2.2", path = "../precious-command" }
+rayon = "1.5.1"
+serde = { version = "1.0.136", features = ["derive"] }
+tempfile = "3.3.0"
+thiserror = "1.0.30"
+toml = "0.5.8"
+which = ">= 3.0.0, < 5.0.0"
+
+[dev-dependencies]
+precious-testhelper = { version = "0.2.2", path = "../precious-testhelper" }
+pretty_assertions = "1.1.0"
+serial_test = "0.5.1"

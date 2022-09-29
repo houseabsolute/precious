@@ -1,7 +1,7 @@
-use crate::command;
 use crate::path_matcher;
 use anyhow::Result;
 use log::{debug, info};
+use precious_command as command;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -11,7 +11,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum FilterType {
     #[serde(rename = "lint")]
     Lint,
@@ -580,8 +580,9 @@ fn replace_root(cmd: Vec<String>, root: &Path) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{path_matcher, testhelper};
+    use crate::path_matcher;
     use anyhow::Result;
+    use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
 
     type Mock = i8;

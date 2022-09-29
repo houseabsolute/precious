@@ -1,34 +1,38 @@
 [package]
 name = "precious"
-version = "0.2.0"
+version = "0.2.2"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "One code quality tool to rule them all"
 repository = "https://github.com/houseabsolute/precious"
+documentation = "https://github.com/houseabsolute/precious"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 edition = "2018"
 
-[dependencies]
-anyhow = "1.0.53"
-clap = ">= 3.0.14, < 3.1.0"
-fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }
-globset = "0.4.8"
-ignore = "0.4.18"
-indexmap = { version = "1.8.0", features = ["serde"] }
-itertools = ">= 0.9.0, < 0.11.0"
-log = "0.4.14"
-md5 = "0.7.0"
-clean-path = "0.2.1"
-pretty_assertions = "1.1.0"
-rayon = "1.5.1"
-serde = { version = "1.0.136", features = ["derive"] }
-thiserror = "1.0.30"
-toml = "0.5.8"
-which = ">= 3.0.0, < 5.0.0"
+[[bin]]
+name = "precious"
+path = "precious/src/main.rs"
+doc = false
 
-[dev-dependencies]
-serial_test = "0.5.1"
-tempfile = "3.3.0"
+[dependencies]
+log = "0.4.14"
+precious-core = { version = "0.2.2", path = "./precious-core" }
+
+[package.metadata.release]
+tag-name = "v{{version}}"
+
+[workspace]
+members = [
+        "precious-command",
+        "precious-core",
+        "precious-integration",
+        "precious-testhelper",
+]
 
 [workspace.metadata.release]
 allow-branch = ["master"]
+consolidate-commits = true
+consolidate-pushes = true
+shared-version = true
+sign-commit = true
+sign-tag = true

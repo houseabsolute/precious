@@ -1,0 +1,19 @@
+[package]
+name = "precious-command"
+version = "0.2.2"
+authors = ["Dave Rolsky <autarch@urth.org>"]
+description = "A command running library for precious - not for external use"
+repository = "https://github.com/houseabsolute/precious"
+license = "MIT OR Apache-2.0"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.53"
+log = "0.4.14"
+thiserror = "1.0.30"
+which = ">= 3.0.0, < 5.0.0"
+
+[dev-dependencies]
+pretty_assertions = "1.1.0"
+serial_test = "0.5.1"
+tempfile = "3.3.0"
