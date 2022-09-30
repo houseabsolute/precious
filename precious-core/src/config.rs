@@ -262,14 +262,13 @@ impl Config {
     ) -> Result<Vec<filter::Filter>> {
         let mut filters: Vec<filter::Filter> = vec![];
         for (name, c) in self.commands.iter() {
-            if c.core.typ != typ && c.core.typ != filter::FilterType::Both {
-                println!("{typ:?} != {:?}", c.core.typ);
-                continue;
-            }
             if let Some(c) = command {
                 if name != c {
                     continue;
                 }
+            }
+            if c.core.typ != typ && c.core.typ != filter::FilterType::Both {
+                continue;
             }
 
             filters.push(self.make_command(root, name, c)?);
