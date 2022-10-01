@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## {{Unreleased}} - {{ReleaseDate}}
+
 ## 0.2.3 - 2022-10-01
 
 - When given the , `--git`, `--staged`, or `--staged-with-stash` flags,

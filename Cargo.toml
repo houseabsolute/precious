@@ -18,9 +18,6 @@ doc = false
 log = "0.4.14"
 precious-core = { version = "0.2.3", path = "./precious-core" }
 
-[package.metadata.release]
-tag-name = "v{{version}}"
-
 [workspace]
 members = [
         "precious-command",
@@ -37,18 +34,21 @@ shared-version = true
 sign-commit = true
 sign-tag = true
 
-[[workspace.metadata.release.pre-release-replacements]]
+[package.metadata.release]
+tag-name = "v{{version}}"
+
+[[package.metadata.release.pre-release-replacements]]
 file = "Changes.md"
 search = "<!-- next-header -->"
-replace = "<!-- next-header -->\n\n## {{Unreleased}} - {{ReleaseDate}}"
+replace = "<!-- next-header -->\n\n## {{Unreleased}} - {{ReleaseDate}}\n"
 exactly = 1
 
-[[workspace.metadata.release.pre-release-replacements]]
+[[package.metadata.release.pre-release-replacements]]
 file = "Changes.md"
 search = "{{Unreleased}}"
 replace = "{{version}}"
 
-[[workspace.metadata.release.pre-release-replacements]]
+[[package.metadata.release.pre-release-replacements]]
 file = "Changes.md"
 search = "{{ReleaseDate}}"
 replace = "{{date}}"
