@@ -284,7 +284,10 @@ impl BasePaths {
         }
 
         if entries.is_empty() {
-            return Err(BasePathsError::AllPathsWereExcluded { mode: self.mode }.into());
+            return match self.mode {
+                Mode::GitModified | Mode::GitStaged | Mode::GitStagedWithStash => Ok(None),
+                _ => Err(BasePathsError::AllPathsWereExcluded { mode: self.mode }.into()),
+            };
         }
 
         Ok(Some(
@@ -549,6 +552,22 @@ mod tests {
     }
 
     #[test]
+    fn git_modified_mode_with_changes_all_excluded() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
+
+        let mut bp = new_basepaths_with_excludes(
+            Mode::GitModified,
+            helper.root(),
+            helper.root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(bp.paths(vec![])?, None);
+        Ok(())
+    }
+
+    #[test]
     fn git_modified_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
@@ -666,6 +685,22 @@ mod tests {
             )?;
             assert_eq!(bp.paths(vec![])?, expect);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn git_staged_mode_with_changes_all_excluded() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
+
+        let mut bp = new_basepaths_with_excludes(
+            Mode::GitStaged,
+            helper.root(),
+            helper.root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(bp.paths(vec![])?, None);
         Ok(())
     }
 

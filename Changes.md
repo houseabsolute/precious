@@ -1,3 +1,11 @@
+## 0.2.3
+
+- When given the , `--git`, `--staged`, or `--staged-with-stash` flags,
+  precious would error out if all the relevant files were excluded. This is
+  likely to break commit hooks so this is no longer an error. However, if
+  given either the `--all` flag or an explicit list of files, it will still
+  error if all of them are excluded.
+
 ## 0.2.2 - 2022-09-24
 
 - Added a `--command` flag to the `lint` and `tidy` subcommands. If this is
