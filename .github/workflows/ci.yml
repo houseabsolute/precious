@@ -1,6 +1,10 @@
 name: Continuous integration
 
-on: [push, pull_request]
+on:
+  push:
+    tags-ignore:
+      - "precious-.*"
+  pull_request:
 
 env:
   CRATE_NAME: precious
