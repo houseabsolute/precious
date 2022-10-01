@@ -36,3 +36,19 @@ consolidate-pushes = true
 shared-version = true
 sign-commit = true
 sign-tag = true
+
+[[workspace.metadata.release.pre-release-replacements]]
+file = "Changes.md"
+search = "<!-- next-header -->"
+replace = "<!-- next-header -->\n\n## {{Unreleased}} - {{ReleaseDate}}"
+exactly = 1
+
+[[workspace.metadata.release.pre-release-replacements]]
+file = "Changes.md"
+search = "{{Unreleased}}"
+replace = "{{version}}"
+
+[[workspace.metadata.release.pre-release-replacements]]
+file = "Changes.md"
+search = "{{ReleaseDate}}"
+replace = "{{date}}"

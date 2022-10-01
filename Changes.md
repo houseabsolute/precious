@@ -1,4 +1,6 @@
-## 0.2.3
+<!-- next-header -->
+
+## {{Unreleased}} - {{ReleaseDate}}
 
 - When given the , `--git`, `--staged`, or `--staged-with-stash` flags,
   precious would error out if all the relevant files were excluded. This is
