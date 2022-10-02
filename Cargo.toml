@@ -26,29 +26,5 @@ members = [
         "precious-testhelper",
 ]
 
-[workspace.metadata.release]
-allow-branch = ["master"]
-consolidate-commits = true
-consolidate-pushes = true
-shared-version = true
-sign-commit = true
-sign-tag = true
-
 [package.metadata.release]
 tag-name = "v{{version}}"
-
-[[package.metadata.release.pre-release-replacements]]
-file = "Changes.md"
-search = "<!-- next-header -->"
-replace = "<!-- next-header -->\n\n## {{Unreleased}} - {{ReleaseDate}}\n"
-exactly = 1
-
-[[package.metadata.release.pre-release-replacements]]
-file = "Changes.md"
-search = "{{Unreleased}}"
-replace = "{{version}}"
-
-[[package.metadata.release.pre-release-replacements]]
-file = "Changes.md"
-search = "{{ReleaseDate}}"
-replace = "{{date}}"
