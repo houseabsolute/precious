@@ -1,6 +1,6 @@
 <!-- next-header -->
 
-## {{Unreleased}} - {{ReleaseDate}}
+## 0.3.0 - 2022-10-02
 
 - The `expect_stderr` config parameter has been replaced by
   `ignore_stderr`. This new parameter accepts one or more strings, which are
