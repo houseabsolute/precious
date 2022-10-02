@@ -11,7 +11,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]
-pub struct FilterCore {
+pub struct Command {
     #[serde(rename = "type")]
     typ: filter::FilterType,
     #[serde(deserialize_with = "string_or_seq_string")]
@@ -21,18 +21,12 @@ pub struct FilterCore {
     exclude: Vec<String>,
     #[serde(default = "default_run_mode")]
     run_mode: filter::RunMode,
+    #[serde(default)]
+    chdir: bool,
     #[serde(deserialize_with = "string_or_seq_string")]
     cmd: Vec<String>,
     #[serde(default)]
     env: HashMap<String, String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Command {
-    #[serde(flatten)]
-    core: FilterCore,
-    #[serde(default)]
-    chdir: bool,
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
     lint_flags: Vec<String>,
@@ -267,7 +261,7 @@ impl Config {
                     continue;
                 }
             }
-            if c.core.typ != typ && c.core.typ != filter::FilterType::Both {
+            if c.typ != typ && c.typ != filter::FilterType::Both {
                 continue;
             }
 
@@ -278,16 +272,16 @@ impl Config {
     }
 
     fn make_command(&self, root: &Path, name: &str, command: &Command) -> Result<filter::Filter> {
-        let n = filter::Command::build(filter::CommandParams {
+        let n = filter::Filter::build(filter::FilterParams {
             root: root.to_owned(),
             name: name.to_owned(),
-            typ: command.core.typ,
-            include: command.core.include.clone(),
-            exclude: command.core.exclude.clone(),
-            run_mode: command.core.run_mode,
+            typ: command.typ,
+            include: command.include.clone(),
+            exclude: command.exclude.clone(),
+            run_mode: command.run_mode,
             chdir: command.chdir,
-            cmd: command.core.cmd.clone(),
-            env: command.core.env.clone(),
+            cmd: command.cmd.clone(),
+            env: command.env.clone(),
             lint_flags: command.lint_flags.clone(),
             tidy_flags: command.tidy_flags.clone(),
             path_flag: command.path_flag.clone(),

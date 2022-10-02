@@ -5,7 +5,7 @@ use precious_command as command;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
-    fmt, fs,
+    fs,
     path::{Path, PathBuf},
     time::SystemTime,
 };
@@ -31,7 +31,7 @@ impl FilterType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum RunMode {
     #[serde(rename = "files")]
     Files,
@@ -71,6 +71,7 @@ enum FilterError {
     CannotComparePaths { path: String },
 }
 
+#[derive(Debug)]
 pub struct Filter {
     root: PathBuf,
     pub name: String,
@@ -78,23 +79,33 @@ pub struct Filter {
     includer: path_matcher::Matcher,
     excluder: path_matcher::Matcher,
     pub run_mode: RunMode,
-    implementation: Box<dyn FilterImplementation>,
+    chdir: bool,
+    cmd: Vec<String>,
+    env: HashMap<String, String>,
+    lint_flags: Option<Vec<String>>,
+    tidy_flags: Option<Vec<String>>,
+    path_flag: Option<String>,
+    ok_exit_codes: HashSet<i32>,
+    lint_failure_exit_codes: HashSet<i32>,
+    expect_stderr: bool,
 }
 
-// This should be safe because we never mutate the Filter struct in any of its
-// methods.
-unsafe impl Sync for Filter {}
-
-impl fmt::Debug for Filter {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // I'm not sure how to get any useful info for the implementation
-        // field so we'll just leave it out for now.
-        write!(
-            f,
-            "{{ root: {:?}, name: {:?}, typ: {:?}, includer: {:?}, excluder: {:?}, run_mode: {:?} }}",
-            self.root, self.name, self.typ, self.includer, self.excluder, self.run_mode,
-        )
-    }
+pub struct FilterParams {
+    pub root: PathBuf,
+    pub name: String,
+    pub typ: FilterType,
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    pub run_mode: RunMode,
+    pub chdir: bool,
+    pub cmd: Vec<String>,
+    pub env: HashMap<String, String>,
+    pub lint_flags: Vec<String>,
+    pub tidy_flags: Vec<String>,
+    pub path_flag: String,
+    pub ok_exit_codes: Vec<u8>,
+    pub lint_failure_exit_codes: Vec<u8>,
+    pub expect_stderr: bool,
 }
 
 #[derive(Debug)]
@@ -104,12 +115,6 @@ pub struct LintOutcome {
     pub stderr: Option<String>,
 }
 
-pub trait FilterImplementation {
-    fn tidy(&self, name: &str, path: &Path) -> Result<()>;
-    fn lint(&self, name: &str, path: &Path) -> Result<LintOutcome>;
-    fn filter_key(&self) -> &str;
-}
-
 #[derive(Debug)]
 struct PathInfo {
     mtime: SystemTime,
@@ -117,11 +122,60 @@ struct PathInfo {
     hash: md5::Digest,
 }
 
-fn run_mode_is(mode1: &RunMode, mode2: &RunMode) -> bool {
-    std::mem::discriminant(mode1) == std::mem::discriminant(mode2)
-}
+// This should be safe because we never mutate the Filter struct in any of its
+// methods.
+unsafe impl Sync for Filter {}
 
 impl Filter {
+    pub fn build(params: FilterParams) -> Result<Filter> {
+        if let FilterType::Both = params.typ {
+            if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
+                return Err(FilterError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
+            }
+        }
+
+        let cmd = replace_root(params.cmd, &params.root);
+        Ok(Filter {
+            root: params.root,
+            name: params.name,
+            typ: params.typ,
+            includer: path_matcher::MatcherBuilder::new()
+                .with(&params.include)?
+                .build()?,
+            excluder: path_matcher::MatcherBuilder::new()
+                .with(&params.exclude)?
+                .build()?,
+            run_mode: params.run_mode,
+            cmd,
+            env: params.env,
+            chdir: params.chdir,
+            lint_flags: if params.lint_flags.is_empty() {
+                None
+            } else {
+                Some(params.lint_flags)
+            },
+            tidy_flags: if params.tidy_flags.is_empty() {
+                None
+            } else {
+                Some(params.tidy_flags)
+            },
+            path_flag: if params.path_flag.is_empty() {
+                None
+            } else {
+                Some(params.path_flag)
+            },
+            ok_exit_codes: Self::exit_codes_hashset(
+                &params.ok_exit_codes,
+                Some(&params.lint_failure_exit_codes),
+            ),
+            lint_failure_exit_codes: Self::exit_codes_hashset(
+                &params.lint_failure_exit_codes,
+                None,
+            ),
+            expect_stderr: params.expect_stderr,
+        })
+    }
+
     pub fn tidy(&self, path: &Path, files: &[PathBuf]) -> Result<Option<bool>> {
         self.require_is_not_filter_type(FilterType::Lint)?;
 
@@ -135,7 +189,28 @@ impl Filter {
         }
 
         let info = Self::path_info_map_for(&full)?;
-        self.implementation.tidy(&self.name, path)?;
+        let mut cmd = self.command_for_path(path, &self.tidy_flags);
+
+        info!(
+            "Tidying {} with {} command: {}",
+            path.display(),
+            self.name,
+            cmd.join(" "),
+        );
+
+        let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
+        let bin = cmd.remove(0);
+        command::run_command(
+            &bin,
+            cmd.iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &self.env,
+            &ok_exit_codes,
+            self.expect_stderr,
+            self.in_dir(path),
+        )?;
         Ok(Some(Self::path_was_changed(&full, &info)?))
     }
 
@@ -151,8 +226,34 @@ impl Filter {
             return Ok(None);
         }
 
-        let r = self.implementation.lint(&self.name, path)?;
-        Ok(Some(r))
+        let mut cmd = self.command_for_path(path, &self.lint_flags);
+
+        info!(
+            "Linting {} with {} command: {}",
+            path.display(),
+            self.name,
+            cmd.join(" "),
+        );
+
+        let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
+        let bin = cmd.remove(0);
+        let result = command::run_command(
+            &bin,
+            cmd.iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &self.env,
+            &ok_exit_codes,
+            self.expect_stderr,
+            self.in_dir(path),
+        )?;
+
+        Ok(Some(LintOutcome {
+            ok: !self.lint_failure_exit_codes.contains(&result.exit_code),
+            stdout: result.stdout,
+            stderr: result.stderr,
+        }))
     }
 
     fn require_is_not_filter_type(&self, not_allowed: FilterType) -> Result<()> {
@@ -190,7 +291,7 @@ impl Filter {
     }
 
     pub fn run_mode_is(&self, mode: RunMode) -> bool {
-        run_mode_is(&self.run_mode, &mode)
+        self.run_mode == mode
     }
 
     fn should_process_path(&self, path: &Path, files: &[PathBuf]) -> bool {
@@ -327,11 +428,7 @@ impl Filter {
     }
 
     pub fn config_key(&self) -> String {
-        format!(
-            "{}.{}",
-            self.implementation.filter_key(),
-            Self::maybe_toml_quote(&self.name),
-        )
+        format!("commands.{}", Self::maybe_toml_quote(&self.name),)
     }
 
     fn maybe_toml_quote(name: &str) -> String {
@@ -339,92 +436,6 @@ impl Filter {
             return format!(r#""{}""#, name);
         }
         name.to_string()
-    }
-}
-
-#[derive(Debug)]
-pub struct Command {
-    cmd: Vec<String>,
-    env: HashMap<String, String>,
-    chdir: bool,
-    lint_flags: Option<Vec<String>>,
-    tidy_flags: Option<Vec<String>>,
-    path_flag: Option<String>,
-    ok_exit_codes: HashSet<i32>,
-    lint_failure_exit_codes: HashSet<i32>,
-    run_mode: RunMode,
-    expect_stderr: bool,
-}
-
-pub struct CommandParams {
-    pub root: PathBuf,
-    pub name: String,
-    pub typ: FilterType,
-    pub include: Vec<String>,
-    pub exclude: Vec<String>,
-    pub run_mode: RunMode,
-    pub chdir: bool,
-    pub cmd: Vec<String>,
-    pub env: HashMap<String, String>,
-    pub lint_flags: Vec<String>,
-    pub tidy_flags: Vec<String>,
-    pub path_flag: String,
-    pub ok_exit_codes: Vec<u8>,
-    pub lint_failure_exit_codes: Vec<u8>,
-    pub expect_stderr: bool,
-}
-
-impl Command {
-    pub fn build(params: CommandParams) -> Result<Filter> {
-        if let FilterType::Both = params.typ {
-            if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
-                return Err(FilterError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
-            }
-        }
-
-        let cmd = replace_root(params.cmd, &params.root);
-        Ok(Filter {
-            root: params.root,
-            name: params.name,
-            typ: params.typ,
-            includer: path_matcher::MatcherBuilder::new()
-                .with(&params.include)?
-                .build()?,
-            excluder: path_matcher::MatcherBuilder::new()
-                .with(&params.exclude)?
-                .build()?,
-            run_mode: params.run_mode,
-            implementation: Box::new(Command {
-                cmd,
-                env: params.env,
-                chdir: params.chdir,
-                lint_flags: if params.lint_flags.is_empty() {
-                    None
-                } else {
-                    Some(params.lint_flags)
-                },
-                tidy_flags: if params.tidy_flags.is_empty() {
-                    None
-                } else {
-                    Some(params.tidy_flags)
-                },
-                path_flag: if params.path_flag.is_empty() {
-                    None
-                } else {
-                    Some(params.path_flag)
-                },
-                ok_exit_codes: Self::exit_codes_hashset(
-                    &params.ok_exit_codes,
-                    Some(&params.lint_failure_exit_codes),
-                ),
-                lint_failure_exit_codes: Self::exit_codes_hashset(
-                    &params.lint_failure_exit_codes,
-                    None,
-                ),
-                run_mode: params.run_mode,
-                expect_stderr: params.expect_stderr,
-            }),
-        })
     }
 
     fn exit_codes_hashset(
@@ -459,10 +470,6 @@ impl Command {
         Some(path.parent().unwrap())
     }
 
-    fn run_mode_is(&self, mode: RunMode) -> bool {
-        run_mode_is(&self.run_mode, &mode)
-    }
-
     fn command_for_path(&self, path: &Path, flags: &Option<Vec<String>>) -> Vec<String> {
         let mut cmd = self.cmd.clone();
         if let Some(flags) = flags {
@@ -489,83 +496,6 @@ impl Command {
     }
 }
 
-impl FilterImplementation for Command {
-    fn tidy(&self, name: &str, path: &Path) -> Result<()> {
-        let mut cmd = self.command_for_path(path, &self.tidy_flags);
-
-        info!(
-            "Tidying {} with {} command: {}",
-            path.display(),
-            name,
-            cmd.join(" "),
-        );
-
-        let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
-        let bin = cmd.remove(0);
-        match command::run_command(
-            &bin,
-            cmd.iter()
-                .map(|c| c.as_str())
-                .collect::<Vec<_>>()
-                .as_slice(),
-            &self.env,
-            &ok_exit_codes,
-            self.expect_stderr,
-            self.in_dir(path),
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }
-    }
-
-    fn lint(&self, name: &str, path: &Path) -> Result<LintOutcome> {
-        let mut cmd = self.command_for_path(path, &self.lint_flags);
-
-        info!(
-            "Linting {} with {} command: {}",
-            path.display(),
-            name,
-            cmd.join(" "),
-        );
-
-        let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
-        let bin = cmd.remove(0);
-        match command::run_command(
-            &bin,
-            cmd.iter()
-                .map(|c| c.as_str())
-                .collect::<Vec<_>>()
-                .as_slice(),
-            &self.env,
-            &ok_exit_codes,
-            self.expect_stderr,
-            self.in_dir(path),
-        ) {
-            Ok(result) => Ok(LintOutcome {
-                ok: !self.lint_failure_exit_codes.contains(&result.exit_code),
-                stdout: result.stdout,
-                stderr: result.stderr,
-            }),
-            Err(e) => Err(e),
-        }
-    }
-
-    fn filter_key(&self) -> &str {
-        "commands"
-    }
-}
-
-// #[derive(Debug)]
-// pub struct Server {
-//     name: String,
-//     typ: FilterType,
-//     include: GlobSet,
-//     excluder: path_matcher::Matcher,
-//     cmd: Vec<String>,
-//     run_mode: RunMode,
-//     port: u16,
-// }
-
 fn replace_root(cmd: Vec<String>, root: &Path) -> Vec<String> {
     cmd.iter()
         .map(|c| {
@@ -585,32 +515,30 @@ mod tests {
     use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
 
-    type Mock = i8;
-
-    impl FilterImplementation for Mock {
-        fn tidy(&self, _: &str, _: &Path) -> Result<()> {
-            Ok(())
-        }
-
-        fn lint(&self, _: &str, _: &Path) -> Result<LintOutcome> {
-            Ok(LintOutcome {
-                ok: true,
-                stdout: None,
-                stderr: None,
-            })
-        }
-
-        fn filter_key(&self) -> &str {
-            "commands"
-        }
-    }
-
-    fn mock_filter() -> Box<dyn FilterImplementation> {
-        Box::new(1)
-    }
-
     fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher> {
         path_matcher::MatcherBuilder::new().with(globs)?.build()
+    }
+
+    fn default_filter_params() -> Result<Filter> {
+        Ok(Filter {
+            // These params will be ignored
+            root: PathBuf::new(),
+            name: String::new(),
+            typ: FilterType::Lint,
+            includer: matcher(&[])?,
+            excluder: matcher(&[])?,
+            run_mode: RunMode::Dirs,
+            // These will supply defaults,
+            chdir: false,
+            cmd: vec![],
+            env: HashMap::new(),
+            lint_flags: None,
+            tidy_flags: None,
+            path_flag: None,
+            ok_exit_codes: HashSet::new(),
+            lint_failure_exit_codes: HashSet::new(),
+            expect_stderr: false,
+        })
     }
 
     #[test]
@@ -622,7 +550,7 @@ mod tests {
             includer: matcher(&[])?,
             excluder: matcher(&[])?,
             run_mode: RunMode::Dirs,
-            implementation: mock_filter(),
+            ..default_filter_params()?
         };
 
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
@@ -652,7 +580,7 @@ mod tests {
             includer: matcher(&[])?,
             excluder: matcher(&[])?,
             run_mode: RunMode::Files,
-            implementation: mock_filter(),
+            ..default_filter_params()?
         };
 
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
@@ -682,7 +610,7 @@ mod tests {
             includer: matcher(&["**/*.go"])?,
             excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
             run_mode: RunMode::Files,
-            implementation: mock_filter(),
+            ..default_filter_params()?
         };
 
         let include = &["something.go", "dir/foo.go", ".foo.go", "bar/foo/x.go"];
@@ -722,7 +650,7 @@ mod tests {
             includer: matcher(&["**/*.go"])?,
             excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
             run_mode: RunMode::Dirs,
-            implementation: mock_filter(),
+            ..default_filter_params()?
         };
 
         let include = &[
@@ -772,7 +700,7 @@ mod tests {
             includer: matcher(&["**/*.go"])?,
             excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
             run_mode: RunMode::Root,
-            implementation: mock_filter(),
+            ..default_filter_params()?
         };
 
         let include = &[
@@ -814,9 +742,9 @@ mod tests {
     }
 
     #[test]
-    fn command_for_path() {
+    fn command_for_path() -> Result<()> {
         {
-            let command = Command {
+            let filter = Filter {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
@@ -827,16 +755,17 @@ mod tests {
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Root,
                 expect_stderr: false,
+                ..default_filter_params()?
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                filter.command_for_path(Path::new("foo.go"), &None),
                 vec!["test".to_string(), "foo.go".to_string()],
                 "root mode, no chdir",
             );
         }
 
         {
-            let command = Command {
+            let filter = Filter {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
@@ -846,10 +775,10 @@ mod tests {
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Root,
-                expect_stderr: false,
+                ..default_filter_params()?
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &Some(vec!["--flag".to_string()])),
+                filter.command_for_path(Path::new("foo.go"), &Some(vec!["--flag".to_string()])),
                 vec![
                     "test".to_string(),
                     "--flag".to_string(),
@@ -860,7 +789,7 @@ mod tests {
         }
 
         {
-            let command = Command {
+            let filter = Filter {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: true,
@@ -870,17 +799,17 @@ mod tests {
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Root,
-                expect_stderr: false,
+                ..default_filter_params()?
             };
             assert_eq!(
-                command.command_for_path(Path::new("foo.go"), &None),
+                filter.command_for_path(Path::new("foo.go"), &None),
                 vec!["test".to_string()],
                 "root mode, with chdir",
             );
         }
 
         {
-            let command = Command {
+            let filter = Filter {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: true,
@@ -890,17 +819,17 @@ mod tests {
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
-                expect_stderr: false,
+                ..default_filter_params()?
             };
             assert_eq!(
-                command.command_for_path(Path::new("some_dir/foo.go"), &None),
+                filter.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec!["test".to_string(), "foo.go".to_string()],
                 "files mode, with chdir",
             );
         }
 
         {
-            let command = Command {
+            let filter = Filter {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
@@ -910,17 +839,17 @@ mod tests {
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
-                expect_stderr: false,
+                ..default_filter_params()?
             };
             assert_eq!(
-                command.command_for_path(Path::new("some_dir/foo.go"), &None),
+                filter.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec!["test".to_string(), "some_dir/foo.go".to_string()],
                 "files mode, no chdir",
             );
         }
 
         {
-            let command = Command {
+            let filter = Filter {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: false,
@@ -930,10 +859,10 @@ mod tests {
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
-                expect_stderr: false,
+                ..default_filter_params()?
             };
             assert_eq!(
-                command.command_for_path(Path::new("some_dir/foo.go"), &None),
+                filter.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec![
                     "test".to_string(),
                     "--file".to_string(),
@@ -944,7 +873,7 @@ mod tests {
         }
 
         {
-            let command = Command {
+            let filter = Filter {
                 cmd: vec!["test".to_string()],
                 env: HashMap::new(),
                 chdir: true,
@@ -954,10 +883,10 @@ mod tests {
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Files,
-                expect_stderr: false,
+                ..default_filter_params()?
             };
             assert_eq!(
-                command.command_for_path(Path::new("some_dir/foo.go"), &None),
+                filter.command_for_path(Path::new("some_dir/foo.go"), &None),
                 vec![
                     "test".to_string(),
                     "--file".to_string(),
@@ -966,5 +895,6 @@ mod tests {
                 "files mode, with chdir, with path flag",
             );
         }
+        Ok(())
     }
 }
