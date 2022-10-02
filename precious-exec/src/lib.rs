@@ -11,13 +11,13 @@ use which::which;
 use std::os::unix::prelude::*;
 
 #[derive(Debug, Error)]
-pub enum CommandError {
+pub enum ExecError {
     #[error(r#"Could not find "{exe:}" in your path ({path:}"#)]
     ExecutableNotInPath { exe: String, path: String },
 
     #[error(
         "Got unexpected exit code {code:} from `{cmd:}`.{}",
-        command_output_summary(stdout, stderr)
+        exec_output_summary(stdout, stderr)
     )]
     UnexpectedExitCode {
         cmd: String,
@@ -33,7 +33,7 @@ pub enum CommandError {
     UnexpectedStderr { cmd: String, stderr: String },
 }
 
-fn command_output_summary(stdout: &str, stderr: &str) -> String {
+fn exec_output_summary(stdout: &str, stderr: &str) -> String {
     let mut output = if stdout.is_empty() {
         String::from("\nStdout was empty.")
     } else {
@@ -50,33 +50,33 @@ fn command_output_summary(stdout: &str, stderr: &str) -> String {
 }
 
 #[derive(Debug)]
-pub struct CommandOutput {
+pub struct ExecOutput {
     pub exit_code: i32,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
 }
 
-pub fn run_command(
-    cmd: &str,
+pub fn run(
+    exe: &str,
     args: &[&str],
     env: &HashMap<String, String>,
     ok_exit_codes: &[i32],
     expect_stderr: bool,
     in_dir: Option<&Path>,
-) -> Result<CommandOutput> {
-    if which(cmd).is_err() {
+) -> Result<ExecOutput> {
+    if which(exe).is_err() {
         let path = match env::var("PATH") {
             Ok(p) => p,
             Err(e) => format!("<could not get PATH environment variable: {e}>"),
         };
-        return Err(CommandError::ExecutableNotInPath {
-            exe: cmd.to_string(),
+        return Err(ExecError::ExecutableNotInPath {
+            exe: exe.to_string(),
             path,
         }
         .into());
     }
 
-    let mut c = process::Command::new(cmd);
+    let mut c = process::Command::new(exe);
     for a in args.iter() {
         c.arg(a);
     }
@@ -94,16 +94,15 @@ pub fn run_command(
     c.envs(env);
 
     if log_enabled!(Debug) {
-        let cstr = command_string(cmd, args);
-        debug!("Running command [{}] with cwd = {}", cstr, cwd.display());
+        debug!(
+            "Running command [{}] with cwd = {}",
+            exec_string(exe, args),
+            cwd.display()
+        );
     }
 
-    let output = output_from_command(c, ok_exit_codes, cmd, args).with_context(|| {
-        format!(
-            r#"Failed to execute command `{}`"#,
-            command_string(cmd, args)
-        )
-    })?;
+    let output = output_from_command(c, ok_exit_codes, exe, args)
+        .with_context(|| format!(r#"Failed to execute command `{}`"#, exec_string(exe, args)))?;
 
     if log_enabled!(Debug) && !output.stdout.is_empty() {
         debug!("Stdout was:\n{}", String::from_utf8(output.stdout.clone())?);
@@ -115,8 +114,8 @@ pub fn run_command(
         }
 
         if !expect_stderr {
-            return Err(CommandError::UnexpectedStderr {
-                cmd: command_string(cmd, args),
+            return Err(ExecError::UnexpectedStderr {
+                cmd: exec_string(exe, args),
                 stderr: String::from_utf8(output.stderr)?,
             }
             .into());
@@ -125,7 +124,7 @@ pub fn run_command(
 
     let code = output.status.code().unwrap_or(-1);
 
-    Ok(CommandOutput {
+    Ok(ExecOutput {
         exit_code: code,
         stdout: to_option_string(output.stdout),
         stderr: to_option_string(output.stderr),
@@ -135,17 +134,17 @@ pub fn run_command(
 fn output_from_command(
     mut c: process::Command,
     ok_exit_codes: &[i32],
-    cmd: &str,
+    exe: &str,
     args: &[&str],
 ) -> Result<process::Output> {
     let output = c.output()?;
     match output.status.code() {
         Some(code) => {
-            let cstr = command_string(cmd, args);
-            debug!("Ran {} and got exit code of {}", cstr, code);
+            let estr = exec_string(exe, args);
+            debug!("Ran {} and got exit code of {}", estr, code);
             if !ok_exit_codes.contains(&code) {
-                return Err(CommandError::UnexpectedExitCode {
-                    cmd: cstr,
+                return Err(ExecError::UnexpectedExitCode {
+                    cmd: estr,
                     code,
                     stdout: String::from_utf8(output.stdout)?,
                     stderr: String::from_utf8(output.stderr)?,
@@ -154,13 +153,13 @@ fn output_from_command(
             }
         }
         None => {
-            let cstr = command_string(cmd, args);
+            let estr = exec_string(exe, args);
             if output.status.success() {
-                error!("Ran {} successfully but it had no exit code", cstr);
+                error!("Ran {} successfully but it had no exit code", estr);
             } else {
                 let signal = signal_from_status(output.status);
-                debug!("Ran {} which exited because of signal {}", cstr, signal);
-                return Err(CommandError::ProcessKilledBySignal { cmd: cstr, signal }.into());
+                debug!("Ran {} which exited because of signal {}", estr, signal);
+                return Err(ExecError::ProcessKilledBySignal { cmd: estr, signal }.into());
             }
         }
     }
@@ -168,13 +167,13 @@ fn output_from_command(
     Ok(output)
 }
 
-fn command_string(cmd: &str, args: &[&str]) -> String {
-    let mut cstr = cmd.to_string();
+fn exec_string(exe: &str, args: &[&str]) -> String {
+    let mut estr = exe.to_string();
     if !args.is_empty() {
-        cstr.push(' ');
-        cstr.push_str(args.join(" ").as_str());
+        estr.push(' ');
+        estr.push_str(args.join(" ").as_str());
     }
-    cstr
+    estr
 }
 
 fn to_option_string(v: Vec<u8>) -> Option<String> {
@@ -197,7 +196,7 @@ fn signal_from_status(_: process::ExitStatus) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::CommandError;
+    use super::ExecError;
     use anyhow::{format_err, Result};
     use pretty_assertions::assert_eq;
     use std::{
@@ -208,38 +207,38 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn command_string() {
+    fn exec_string() {
         assert_eq!(
-            super::command_string("foo", &[]),
+            super::exec_string("foo", &[]),
             String::from("foo"),
             "command without args",
         );
         assert_eq!(
-            super::command_string("foo", &["bar"],),
+            super::exec_string("foo", &["bar"],),
             String::from("foo bar"),
             "command with one arg"
         );
         assert_eq!(
-            super::command_string("foo", &["--bar", "baz"],),
+            super::exec_string("foo", &["--bar", "baz"],),
             String::from("foo --bar baz"),
             "command with multiple args",
         );
     }
 
     #[test]
-    fn run_command_exit_0() -> Result<()> {
-        let res = super::run_command("echo", &["foo"], &HashMap::new(), &[0], false, None)?;
+    fn run_exit_0() -> Result<()> {
+        let res = super::run("echo", &["foo"], &HashMap::new(), &[0], false, None)?;
         assert_eq!(res.exit_code, 0, "command exits 0");
 
         Ok(())
     }
 
     #[test]
-    fn run_command_wth_env() -> Result<()> {
+    fn run_wth_env() -> Result<()> {
         let env_key = "PRECIOUS_ENV_TEST";
         let mut env = HashMap::new();
         env.insert(String::from(env_key), String::from("foo"));
-        let res = super::run_command(
+        let res = super::run(
             "sh",
             &["-c", &format!("echo ${env_key}")],
             &env,
@@ -247,19 +246,19 @@ mod tests {
             false,
             None,
         )?;
-        assert_eq!(res.exit_code, 0, "command exits 0");
-        assert!(res.stdout.is_some(), "command has stdout output");
+        assert_eq!(res.exit_code, 0, "process exits 0");
+        assert!(res.stdout.is_some(), "process has stdout output");
         assert_eq!(
             res.stdout.unwrap(),
             String::from("foo\n"),
-            "{} env var was set when command was run",
+            "{} env var was set when process was run",
             env_key,
         );
         let val = env::var(env_key);
         assert_eq!(
             val.err().unwrap(),
             std::env::VarError::NotPresent,
-            "{} env var is not set after command was run",
+            "{} env var is not set after process was run",
             env_key,
         );
 
@@ -267,19 +266,19 @@ mod tests {
     }
 
     #[test]
-    fn run_command_exit_32() -> Result<()> {
-        let res = super::run_command("sh", &["-c", "exit 32"], &HashMap::new(), &[0], false, None);
-        assert!(res.is_err(), "command exits non-zero");
-        match error_from_run_command(res)? {
-            CommandError::UnexpectedExitCode {
+    fn run_exit_32() -> Result<()> {
+        let res = super::run("sh", &["-c", "exit 32"], &HashMap::new(), &[0], false, None);
+        assert!(res.is_err(), "process exits non-zero");
+        match error_from_run(res)? {
+            ExecError::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
                 stderr,
             } => {
-                assert_eq!(code, 32, "command unexpectedly exits 32");
-                assert_eq!(stdout, "", "command had no stdout");
-                assert_eq!(stderr, "", "command had no stderr");
+                assert_eq!(code, 32, "process unexpectedly exits 32");
+                assert_eq!(stdout, "", "process had no stdout");
+                assert_eq!(stderr, "", "process had no stderr");
             }
             e => return Err(e.into()),
         }
@@ -288,8 +287,8 @@ mod tests {
     }
 
     #[test]
-    fn run_command_exit_32_with_stdout() -> Result<()> {
-        let res = super::run_command(
+    fn run_exit_32_with_stdout() -> Result<()> {
+        let res = super::run(
             "sh",
             &["-c", r#"echo "STDOUT" && exit 32"#],
             &HashMap::new(),
@@ -297,8 +296,8 @@ mod tests {
             false,
             None,
         );
-        assert!(res.is_err(), "command exits non-zero");
-        let e = error_from_run_command(res)?;
+        assert!(res.is_err(), "process exits non-zero");
+        let e = error_from_run(res)?;
         let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDOUT" && exit 32`.
 Stdout:
 STDOUT
@@ -308,13 +307,13 @@ Stderr was empty.
         assert_eq!(format!("{e}"), expect, "error display output");
 
         match e {
-            CommandError::UnexpectedExitCode {
+            ExecError::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
                 stderr,
             } => {
-                assert_eq!(code, 32, "command unexpectedly exits 32");
+                assert_eq!(code, 32, "process unexpectedly exits 32");
                 assert_eq!(stdout, "STDOUT\n", "stdout was captured");
                 assert_eq!(stderr, "", "stderr was empty");
             }
@@ -325,8 +324,8 @@ Stderr was empty.
     }
 
     #[test]
-    fn run_command_exit_32_with_stderr() -> Result<()> {
-        let res = super::run_command(
+    fn run_exit_32_with_stderr() -> Result<()> {
+        let res = super::run(
             "sh",
             &["-c", r#"echo "STDERR" 1>&2 && exit 32"#],
             &HashMap::new(),
@@ -334,8 +333,8 @@ Stderr was empty.
             false,
             None,
         );
-        assert!(res.is_err(), "command exits non-zero");
-        let e = error_from_run_command(res)?;
+        assert!(res.is_err(), "process exits non-zero");
+        let e = error_from_run(res)?;
         let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDERR" 1>&2 && exit 32`.
 Stdout was empty.
 Stderr:
@@ -345,7 +344,7 @@ STDERR
         assert_eq!(format!("{e}"), expect, "error display output");
 
         match e {
-            CommandError::UnexpectedExitCode {
+            ExecError::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
@@ -353,7 +352,7 @@ STDERR
             } => {
                 assert_eq!(
                     code, 32,
-                    "command unexpectedly
+                    "process unexpectedly
             exits 32"
                 );
                 assert_eq!(stdout, "", "stdout was empty");
@@ -366,8 +365,8 @@ STDERR
     }
 
     #[test]
-    fn run_command_exit_32_with_stdout_and_stderr() -> Result<()> {
-        let res = super::run_command(
+    fn run_exit_32_with_stdout_and_stderr() -> Result<()> {
+        let res = super::run(
             "sh",
             &["-c", r#"echo "STDOUT" && echo "STDERR" 1>&2 && exit 32"#],
             &HashMap::new(),
@@ -375,9 +374,9 @@ STDERR
             false,
             None,
         );
-        assert!(res.is_err(), "command exits non-zero");
+        assert!(res.is_err(), "process exits non-zero");
 
-        let e = error_from_run_command(res)?;
+        let e = error_from_run(res)?;
         let expect = r#"Got unexpected exit code 32 from `sh -c echo "STDOUT" && echo "STDERR" 1>&2 && exit 32`.
 Stdout:
 STDOUT
@@ -388,13 +387,13 @@ STDERR
 "#;
         assert_eq!(format!("{e}"), expect, "error display output");
         match e {
-            CommandError::UnexpectedExitCode {
+            ExecError::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
                 stderr,
             } => {
-                assert_eq!(code, 32, "command unexpectedly exits 32");
+                assert_eq!(code, 32, "process unexpectedly exits 32");
                 assert_eq!(stdout, "STDOUT\n", "stdout was captured");
                 assert_eq!(stderr, "STDERR\n", "stderr was captured");
             }
@@ -404,15 +403,15 @@ STDERR
         Ok(())
     }
 
-    fn error_from_run_command(result: Result<super::CommandOutput>) -> Result<CommandError> {
+    fn error_from_run(result: Result<super::ExecOutput>) -> Result<ExecError> {
         match result {
             Ok(_) => Err(format_err!("did not get an error in the returned Result")),
-            Err(e) => e.downcast::<super::CommandError>(),
+            Err(e) => e.downcast::<super::ExecError>(),
         }
     }
 
     #[test]
-    fn run_command_in_dir() -> Result<()> {
+    fn run_in_dir() -> Result<()> {
         // On windows the path we get from `pwd` is a Windows path (C:\...)
         // but `td.path()` contains a Unix path (/tmp/...). Very confusing.
         if cfg!(windows) {
@@ -422,16 +421,16 @@ STDERR
         let td = tempdir()?;
         let td_path = maybe_canonicalize(td.path())?;
 
-        let res = super::run_command("pwd", &[], &HashMap::new(), &[0], false, Some(&td_path))?;
-        assert_eq!(res.exit_code, 0, "command exits 0");
-        assert!(res.stdout.is_some(), "command produced stdout output");
+        let res = super::run("pwd", &[], &HashMap::new(), &[0], false, Some(&td_path))?;
+        assert_eq!(res.exit_code, 0, "process exits 0");
+        assert!(res.stdout.is_some(), "process produced stdout output");
 
         let stdout = res.stdout.unwrap();
         let stdout_trimmed = stdout.trim_end();
         assert_eq!(
             stdout_trimmed,
             td_path.to_string_lossy(),
-            "command runs in another dir",
+            "process runs in another dir",
         );
 
         Ok(())
@@ -441,7 +440,7 @@ STDERR
     fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
         let args = &["--arg", "42"];
-        let res = super::run_command(exe, args, &HashMap::new(), &[0], false, None);
+        let res = super::run(exe, args, &HashMap::new(), &[0], false, None);
         assert!(res.is_err());
         if let Err(e) = res {
             assert!(e.to_string().contains(

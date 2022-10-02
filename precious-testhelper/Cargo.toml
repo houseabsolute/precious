@@ -9,5 +9,5 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.53"
-precious-command = { version = "0.2.3", path = "../precious-command" }
+precious-exec = { version = "0.2.3", path = "../precious-exec" }
 tempfile = "3.3.0"

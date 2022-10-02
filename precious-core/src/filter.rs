@@ -1,7 +1,7 @@
 use crate::path_matcher;
 use anyhow::Result;
 use log::{debug, info};
-use precious_command as command;
+use precious_exec as exec;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -200,7 +200,7 @@ impl Filter {
 
         let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
         let bin = cmd.remove(0);
-        command::run_command(
+        exec::run(
             &bin,
             cmd.iter()
                 .map(|c| c.as_str())
@@ -237,7 +237,7 @@ impl Filter {
 
         let ok_exit_codes: Vec<i32> = self.ok_exit_codes.iter().cloned().collect();
         let bin = cmd.remove(0);
-        let result = command::run_command(
+        let result = exec::run(
             &bin,
             cmd.iter()
                 .map(|c| c.as_str())

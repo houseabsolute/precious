@@ -20,7 +20,7 @@ precious-core = { version = "0.2.3", path = "./precious-core" }
 
 [workspace]
 members = [
-        "precious-command",
+        "precious-exec",
         "precious-core",
         "precious-integration",
         "precious-testhelper",

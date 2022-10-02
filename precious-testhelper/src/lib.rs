@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use precious_command as command;
+use precious_exec as exec;
 use std::{
     collections::HashMap,
     env,
@@ -143,7 +143,7 @@ generated.*
             args.push("-b");
         }
         args.push(branch);
-        command::run_command(
+        exec::run(
             "git",
             &args,
             &HashMap::new(),
@@ -160,7 +160,7 @@ generated.*
             expect_codes.push(1);
         }
 
-        command::run_command(
+        exec::run(
             "git",
             &["merge", "--quiet", "--no-ff", "--no-commit", "master"],
             &HashMap::new(),
@@ -182,7 +182,7 @@ generated.*
     }
 
     fn run_git(&self, args: &[&str]) -> Result<()> {
-        command::run_command("git", args, &HashMap::new(), &[0], false, Some(&self.root))?;
+        exec::run("git", args, &HashMap::new(), &[0], false, Some(&self.root))?;
         Ok(())
     }
 

@@ -399,19 +399,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "precious-command"
-version = "0.2.3"
-dependencies = [
- "anyhow",
- "log",
- "pretty_assertions",
- "serial_test",
- "tempfile",
- "thiserror",
- "which",
-]
-
-[[package]]
 name = "precious-core"
 version = "0.2.3"
 dependencies = [
@@ -425,7 +412,7 @@ dependencies = [
  "itertools",
  "log",
  "md5",
- "precious-command",
+ "precious-exec",
  "precious-testhelper",
  "pretty_assertions",
  "rayon",
@@ -438,12 +425,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "precious-exec"
+version = "0.2.3"
+dependencies = [
+ "anyhow",
+ "log",
+ "pretty_assertions",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "which",
+]
+
+[[package]]
 name = "precious-integration"
 version = "0.2.3"
 dependencies = [
  "anyhow",
- "precious-command",
  "precious-core",
+ "precious-exec",
  "precious-testhelper",
  "serial_test",
 ]
@@ -453,7 +453,7 @@ name = "precious-testhelper"
 version = "0.2.3"
 dependencies = [
  "anyhow",
- "precious-command",
+ "precious-exec",
  "tempfile",
 ]
 

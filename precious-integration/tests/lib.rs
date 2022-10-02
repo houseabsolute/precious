@@ -1,5 +1,5 @@
 use anyhow::Result;
-use precious_command as command;
+use precious_exec as exec;
 use precious_testhelper::TestHelper;
 use serial_test::serial;
 use std::{collections::HashMap, env, path::PathBuf};
@@ -39,7 +39,7 @@ fn all() -> Result<()> {
 
     let precious = precious_path()?;
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--all"],
         &env,
@@ -47,7 +47,7 @@ fn all() -> Result<()> {
         false,
         Some(&helper.root()),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--all"],
         &env,
@@ -67,7 +67,7 @@ fn git() -> Result<()> {
 
     let precious = precious_path()?;
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--git"],
         &env,
@@ -75,7 +75,7 @@ fn git() -> Result<()> {
         false,
         Some(&helper.root()),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--git"],
         &env,
@@ -96,7 +96,7 @@ fn staged() -> Result<()> {
 
     let precious = precious_path()?;
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--staged"],
         &env,
@@ -104,7 +104,7 @@ fn staged() -> Result<()> {
         false,
         Some(&helper.root()),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--staged"],
         &env,
@@ -126,11 +126,11 @@ fn cli_paths() -> Result<()> {
     let env = HashMap::new();
     let mut args = vec!["lint"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    command::run_command(&precious, &args, &env, &[0], false, Some(&helper.root()))?;
+    exec::run(&precious, &args, &env, &[0], false, Some(&helper.root()))?;
 
     let mut args = vec!["tidy"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    command::run_command(&precious, &args, &env, &[0], false, Some(&helper.root()))?;
+    exec::run(&precious, &args, &env, &[0], false, Some(&helper.root()))?;
 
     Ok(())
 }
@@ -146,8 +146,8 @@ fn all_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(&precious, &["lint", "--all"], &env, &[0], false, Some(&cwd))?;
-    command::run_command(&precious, &["tidy", "--all"], &env, &[0], false, Some(&cwd))?;
+    exec::run(&precious, &["lint", "--all"], &env, &[0], false, Some(&cwd))?;
+    exec::run(&precious, &["tidy", "--all"], &env, &[0], false, Some(&cwd))?;
 
     Ok(())
 }
@@ -164,8 +164,8 @@ fn git_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(&precious, &["lint", "--git"], &env, &[0], false, Some(&cwd))?;
-    command::run_command(&precious, &["tidy", "--git"], &env, &[0], false, Some(&cwd))?;
+    exec::run(&precious, &["lint", "--git"], &env, &[0], false, Some(&cwd))?;
+    exec::run(&precious, &["tidy", "--git"], &env, &[0], false, Some(&cwd))?;
 
     Ok(())
 }
@@ -183,7 +183,7 @@ fn staged_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--staged"],
         &env,
@@ -191,7 +191,7 @@ fn staged_in_subdir() -> Result<()> {
         false,
         Some(&cwd),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--staged"],
         &env,
@@ -215,7 +215,7 @@ fn cli_paths_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "module.rs", "../README.md", "../tests/data/foo.txt"],
         &env,
@@ -223,7 +223,7 @@ fn cli_paths_in_subdir() -> Result<()> {
         false,
         Some(&cwd),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "module.rs", "../README.md", "../tests/data/foo.txt"],
         &env,
@@ -253,7 +253,7 @@ fn foo() -> u8   {
     cwd.push("src");
 
     // This succeeds because we're not checking with rustfmt.
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--command", "true", "module.rs"],
         &env,
@@ -262,7 +262,7 @@ fn foo() -> u8   {
         Some(&cwd),
     )?;
     // This fails now that we check with rustfmt.
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "module.rs"],
         &env,
@@ -285,7 +285,7 @@ fn precious_path() -> Result<String> {
 
 fn do_test_setup() -> Result<TestHelper> {
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         "cargo",
         &["build", "--package", "precious"],
         &env,

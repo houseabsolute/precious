@@ -3,7 +3,7 @@ use anyhow::Result;
 use clean_path::Clean;
 use itertools::Itertools;
 use log::{debug, error};
-use precious_command as command;
+use precious_exec as exec;
 use std::{
     collections::HashMap,
     fmt,
@@ -116,7 +116,7 @@ impl BasePaths {
             return Ok(());
         }
 
-        let res = command::run_command(
+        let res = exec::run(
             "git",
             &["rev-parse", "--show-toplevel"],
             &HashMap::new(),
@@ -134,7 +134,7 @@ impl BasePaths {
         mm.push("MERGE_MODE");
 
         if !mm.exists() {
-            command::run_command(
+            exec::run(
                 "git",
                 &["stash", "--keep-index"],
                 &HashMap::new(),
@@ -234,7 +234,7 @@ impl BasePaths {
     }
 
     fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
-        let result = command::run_command(
+        let result = exec::run(
             "git",
             args,
             &HashMap::new(),
@@ -344,7 +344,7 @@ impl Drop for BasePaths {
             return;
         }
 
-        let res = command::run_command(
+        let res = exec::run(
             "git",
             &["stash", "pop"],
             &HashMap::new(),
