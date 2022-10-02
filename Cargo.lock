@@ -412,10 +412,12 @@ dependencies = [
  "itertools",
  "log",
  "md5",
+ "once_cell",
  "precious-exec",
  "precious-testhelper",
  "pretty_assertions",
  "rayon",
+ "regex",
  "serde",
  "serial_test",
  "tempfile",
@@ -431,6 +433,7 @@ dependencies = [
  "anyhow",
  "log",
  "pretty_assertions",
+ "regex",
  "serial_test",
  "tempfile",
  "thiserror",
@@ -445,6 +448,7 @@ dependencies = [
  "precious-core",
  "precious-exec",
  "precious-testhelper",
+ "regex",
  "serial_test",
 ]
 
@@ -453,7 +457,9 @@ name = "precious-testhelper"
 version = "0.2.3"
 dependencies = [
  "anyhow",
+ "once_cell",
  "precious-exec",
+ "regex",
  "tempfile",
 ]
 

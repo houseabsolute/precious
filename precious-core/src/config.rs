@@ -42,6 +42,9 @@ pub struct Command {
     lint_failure_exit_codes: Vec<u8>,
     #[serde(default)]
     expect_stderr: bool,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
+    ignore_stderr: Vec<String>,
 }
 
 fn default_run_mode() -> filter::RunMode {
@@ -288,6 +291,7 @@ impl Config {
             ok_exit_codes: command.ok_exit_codes.clone(),
             lint_failure_exit_codes: command.lint_failure_exit_codes.clone(),
             expect_stderr: command.expect_stderr,
+            ignore_stderr: command.ignore_stderr.clone(),
         })?;
         Ok(n)
     }
@@ -317,7 +321,6 @@ mod tests {
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok_exit_codes = 0
             lint_failure_exit_codes = 101
-            expect_stderr = true
 
             [commands.omegasort-gitignore]
             type = "both"
@@ -327,7 +330,6 @@ mod tests {
             tidy_flags = "--in-place"
             ok_exit_codes = 0
             lint_failure_exit_codes = 1
-            expect_stderr = true
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
@@ -353,7 +355,6 @@ mod tests {
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok_exit_codes = 0
             lint_failure_exit_codes = 101
-            expect_stderr = true
 
             [commands.rustfmt]
             type    = "both"
@@ -371,7 +372,6 @@ mod tests {
             tidy_flags = "--in-place"
             ok_exit_codes = 0
             lint_failure_exit_codes = 1
-            expect_stderr = true
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
@@ -397,7 +397,6 @@ mod tests {
             tidy_flags = "--in-place"
             ok_exit_codes = 0
             lint_failure_exit_codes = 1
-            expect_stderr = true
 
             [commands.clippy]
             type     = "lint"
@@ -407,7 +406,6 @@ mod tests {
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok_exit_codes = 0
             lint_failure_exit_codes = 101
-            expect_stderr = true
 
             [commands.rustfmt]
             type    = "both"

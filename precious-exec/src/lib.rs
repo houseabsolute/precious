@@ -3,6 +3,7 @@ use log::{
     Level::Debug,
     {debug, error, log_enabled},
 };
+use regex::Regex;
 use std::{collections::HashMap, env, fs, path::Path, process};
 use thiserror::Error;
 use which::which;
@@ -29,8 +30,12 @@ pub enum ExecError {
     #[error("Ran `{cmd:}` and it was killed by signal {signal:}")]
     ProcessKilledBySignal { cmd: String, signal: i32 },
 
-    #[error("Got unexpected stderr output from `{cmd:}`:\n{stderr:}")]
-    UnexpectedStderr { cmd: String, stderr: String },
+    #[error("Got unexpected stderr output from `{cmd:}` with exit code {code:}:\n{stderr:}")]
+    UnexpectedStderr {
+        cmd: String,
+        code: i32,
+        stderr: String,
+    },
 }
 
 fn exec_output_summary(stdout: &str, stderr: &str) -> String {
@@ -61,7 +66,7 @@ pub fn run(
     args: &[&str],
     env: &HashMap<String, String>,
     ok_exit_codes: &[i32],
-    expect_stderr: bool,
+    ignore_stderr: Option<&[Regex]>,
     in_dir: Option<&Path>,
 ) -> Result<ExecOutput> {
     if which(exe).is_err() {
@@ -108,21 +113,27 @@ pub fn run(
         debug!("Stdout was:\n{}", String::from_utf8(output.stdout.clone())?);
     }
 
+    let code = output.status.code().unwrap_or(-1);
     if !output.stderr.is_empty() {
+        let stderr = String::from_utf8(output.stderr.clone())?;
         if log_enabled!(Debug) {
-            debug!("Stderr was:\n{}", String::from_utf8(output.stderr.clone())?);
+            debug!("Stderr was:\n{stderr}");
         }
 
-        if !expect_stderr {
+        let ok = if let Some(ignore) = ignore_stderr {
+            ignore.iter().any(|i| i.is_match(&stderr))
+        } else {
+            false
+        };
+        if !ok {
             return Err(ExecError::UnexpectedStderr {
                 cmd: exec_string(exe, args),
-                stderr: String::from_utf8(output.stderr)?,
+                code,
+                stderr,
             }
             .into());
         }
     }
-
-    let code = output.status.code().unwrap_or(-1);
 
     Ok(ExecOutput {
         exit_code: code,
@@ -199,6 +210,7 @@ mod tests {
     use super::ExecError;
     use anyhow::{format_err, Result};
     use pretty_assertions::assert_eq;
+    use regex::Regex;
     use std::{
         collections::HashMap,
         env, fs,
@@ -227,9 +239,104 @@ mod tests {
 
     #[test]
     fn run_exit_0() -> Result<()> {
-        let res = super::run("echo", &["foo"], &HashMap::new(), &[0], false, None)?;
-        assert_eq!(res.exit_code, 0, "command exits 0");
+        let res = super::run("echo", &["foo"], &HashMap::new(), &[0], None, None)?;
+        assert_eq!(res.exit_code, 0, "process exits 0");
 
+        Ok(())
+    }
+
+    #[test]
+    fn run_exit_0_with_unexpected_stderr() -> Result<()> {
+        let args = &["-c", "echo 'some stderr output' 1>&2"];
+        let res = super::run("sh", args, &HashMap::new(), &[0], None, None);
+        assert!(res.is_err(), "run returned Err");
+        match error_from_run(res)? {
+            ExecError::UnexpectedStderr {
+                cmd: _,
+                code,
+                stderr,
+            } => {
+                assert_eq!(code, 0, "process exited 0");
+                assert_eq!(stderr, "some stderr output\n", "process had no stderr");
+            }
+            e => return Err(e.into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn run_exit_0_with_matching_ignore_stderr() -> Result<()> {
+        let args = &["-c", "echo 'some stderr output' 1>&2"];
+        let res = super::run(
+            "sh",
+            args,
+            &HashMap::new(),
+            &[0],
+            Some(&[Regex::new("some.+output").unwrap()]),
+            None,
+        )?;
+        assert_eq!(res.exit_code, 0, "process exits 0");
+        assert!(res.stdout.is_none(), "process has no stdout output");
+        assert_eq!(
+            res.stderr.unwrap(),
+            "some stderr output\n",
+            "process has stderr output",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn run_exit_0_with_non_matching_ignore_stderr() -> Result<()> {
+        let args = &["-c", "echo 'some stderr output' 1>&2"];
+        let res = super::run(
+            "sh",
+            args,
+            &HashMap::new(),
+            &[0],
+            Some(&[Regex::new("some.+output is ok").unwrap()]),
+            None,
+        );
+        assert!(res.is_err(), "run returned Err");
+        match error_from_run(res)? {
+            ExecError::UnexpectedStderr {
+                cmd: _,
+                code,
+                stderr,
+            } => {
+                assert_eq!(code, 0, "process exited 0");
+                assert_eq!(stderr, "some stderr output\n", "process had no stderr");
+            }
+            e => return Err(e.into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn run_exit_0_with_multiple_ignore_stderr() -> Result<()> {
+        let args = &["-c", "echo 'some stderr output' 1>&2"];
+        let res = super::run(
+            "sh",
+            args,
+            &HashMap::new(),
+            &[0],
+            Some(&[
+                Regex::new("will not match").unwrap(),
+                Regex::new("some.+output is ok").unwrap(),
+            ]),
+            None,
+        );
+        assert!(res.is_err(), "run returned Err");
+        match error_from_run(res)? {
+            ExecError::UnexpectedStderr {
+                cmd: _,
+                code,
+                stderr,
+            } => {
+                assert_eq!(code, 0, "process exited 0");
+                assert_eq!(stderr, "some stderr output\n", "process had no stderr");
+            }
+            e => return Err(e.into()),
+        }
         Ok(())
     }
 
@@ -243,7 +350,7 @@ mod tests {
             &["-c", &format!("echo ${env_key}")],
             &env,
             &[0],
-            false,
+            None,
             None,
         )?;
         assert_eq!(res.exit_code, 0, "process exits 0");
@@ -267,7 +374,7 @@ mod tests {
 
     #[test]
     fn run_exit_32() -> Result<()> {
-        let res = super::run("sh", &["-c", "exit 32"], &HashMap::new(), &[0], false, None);
+        let res = super::run("sh", &["-c", "exit 32"], &HashMap::new(), &[0], None, None);
         assert!(res.is_err(), "process exits non-zero");
         match error_from_run(res)? {
             ExecError::UnexpectedExitCode {
@@ -293,7 +400,7 @@ mod tests {
             &["-c", r#"echo "STDOUT" && exit 32"#],
             &HashMap::new(),
             &[0],
-            false,
+            None,
             None,
         );
         assert!(res.is_err(), "process exits non-zero");
@@ -330,7 +437,7 @@ Stderr was empty.
             &["-c", r#"echo "STDERR" 1>&2 && exit 32"#],
             &HashMap::new(),
             &[0],
-            false,
+            None,
             None,
         );
         assert!(res.is_err(), "process exits non-zero");
@@ -371,7 +478,7 @@ STDERR
             &["-c", r#"echo "STDOUT" && echo "STDERR" 1>&2 && exit 32"#],
             &HashMap::new(),
             &[0],
-            false,
+            None,
             None,
         );
         assert!(res.is_err(), "process exits non-zero");
@@ -421,7 +528,7 @@ STDERR
         let td = tempdir()?;
         let td_path = maybe_canonicalize(td.path())?;
 
-        let res = super::run("pwd", &[], &HashMap::new(), &[0], false, Some(&td_path))?;
+        let res = super::run("pwd", &[], &HashMap::new(), &[0], None, Some(&td_path))?;
         assert_eq!(res.exit_code, 0, "process exits 0");
         assert!(res.stdout.is_some(), "process produced stdout output");
 
@@ -440,7 +547,7 @@ STDERR
     fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
         let args = &["--arg", "42"];
-        let res = super::run(exe, args, &HashMap::new(), &[0], false, None);
+        let res = super::run(exe, args, &HashMap::new(), &[0], None, None);
         assert!(res.is_err());
         if let Err(e) = res {
             assert!(e.to_string().contains(

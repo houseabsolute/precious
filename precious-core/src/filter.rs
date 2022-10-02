@@ -2,6 +2,7 @@ use crate::path_matcher;
 use anyhow::Result;
 use log::{debug, info};
 use precious_exec as exec;
+use regex::Regex;
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -87,7 +88,7 @@ pub struct Filter {
     path_flag: Option<String>,
     ok_exit_codes: HashSet<i32>,
     lint_failure_exit_codes: HashSet<i32>,
-    expect_stderr: bool,
+    ignore_stderr: Option<Vec<Regex>>,
 }
 
 pub struct FilterParams {
@@ -106,6 +107,7 @@ pub struct FilterParams {
     pub ok_exit_codes: Vec<u8>,
     pub lint_failure_exit_codes: Vec<u8>,
     pub expect_stderr: bool,
+    pub ignore_stderr: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -133,6 +135,20 @@ impl Filter {
                 return Err(FilterError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
             }
         }
+
+        let ignore_stderr = if params.expect_stderr {
+            Some(vec![Regex::new(".*").unwrap()])
+        } else if params.ignore_stderr.is_empty() {
+            None
+        } else {
+            Some(
+                params
+                    .ignore_stderr
+                    .into_iter()
+                    .map(|i| Regex::new(&i).map_err(|e| e.into()))
+                    .collect::<Result<Vec<_>>>()?,
+            )
+        };
 
         let cmd = replace_root(params.cmd, &params.root);
         Ok(Filter {
@@ -172,7 +188,7 @@ impl Filter {
                 &params.lint_failure_exit_codes,
                 None,
             ),
-            expect_stderr: params.expect_stderr,
+            ignore_stderr,
         })
     }
 
@@ -208,7 +224,7 @@ impl Filter {
                 .as_slice(),
             &self.env,
             &ok_exit_codes,
-            self.expect_stderr,
+            self.ignore_stderr.as_deref(),
             self.in_dir(path),
         )?;
         Ok(Some(Self::path_was_changed(&full, &info)?))
@@ -245,7 +261,7 @@ impl Filter {
                 .as_slice(),
             &self.env,
             &ok_exit_codes,
-            self.expect_stderr,
+            self.ignore_stderr.as_deref(),
             self.in_dir(path),
         )?;
 
@@ -537,7 +553,7 @@ mod tests {
             path_flag: None,
             ok_exit_codes: HashSet::new(),
             lint_failure_exit_codes: HashSet::new(),
-            expect_stderr: false,
+            ignore_stderr: None,
         })
     }
 
@@ -754,7 +770,6 @@ mod tests {
                 ok_exit_codes: HashSet::new(),
                 lint_failure_exit_codes: HashSet::new(),
                 run_mode: RunMode::Root,
-                expect_stderr: false,
                 ..default_filter_params()?
             };
             assert_eq!(

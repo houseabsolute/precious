@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
+use once_cell::sync::Lazy;
 use precious_exec as exec;
+use regex::Regex;
 use std::{
     collections::HashMap,
     env,
@@ -19,6 +21,8 @@ pub struct TestHelper {
     root_gitignore_file: PathBuf,
     tests_data_gitignore_file: PathBuf,
 }
+
+static RERERE_RE: Lazy<Regex> = Lazy::new(|| Regex::new("Recorded preimage").unwrap());
 
 impl TestHelper {
     const PATHS: &'static [&'static str] = &[
@@ -148,7 +152,7 @@ generated.*
             &args,
             &HashMap::new(),
             &[0],
-            false,
+            None,
             Some(&self.root()),
         )?;
         Ok(())
@@ -165,7 +169,8 @@ generated.*
             &["merge", "--quiet", "--no-ff", "--no-commit", "master"],
             &HashMap::new(),
             &expect_codes,
-            true,
+            // If rerere is enabled, it prints to stderr.
+            Some(&[RERERE_RE.clone()]),
             Some(&self.root()),
         )?;
         Ok(())
@@ -182,7 +187,7 @@ generated.*
     }
 
     fn run_git(&self, args: &[&str]) -> Result<()> {
-        exec::run("git", args, &HashMap::new(), &[0], false, Some(&self.root))?;
+        exec::run("git", args, &HashMap::new(), &[0], None, Some(&self.root))?;
         Ok(())
     }
 

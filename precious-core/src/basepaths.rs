@@ -3,7 +3,9 @@ use anyhow::Result;
 use clean_path::Clean;
 use itertools::Itertools;
 use log::{debug, error};
+use once_cell::sync::Lazy;
 use precious_exec as exec;
+use regex::Regex;
 use std::{
     collections::HashMap,
     fmt,
@@ -68,6 +70,8 @@ pub enum BasePathsError {
     PrefixNotFound { path: PathBuf, prefix: PathBuf },
 }
 
+static KEEP_INDEX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(".*").unwrap());
+
 impl BasePaths {
     pub fn new(
         mode: Mode,
@@ -121,7 +125,7 @@ impl BasePaths {
             &["rev-parse", "--show-toplevel"],
             &HashMap::new(),
             &[0],
-            false,
+            None,
             Some(&self.project_root),
         )?;
 
@@ -139,7 +143,9 @@ impl BasePaths {
                 &["stash", "--keep-index"],
                 &HashMap::new(),
                 &[0],
-                true,
+                // If there is a post-checkout hook, git will show any output
+                // it prints to stdout on stderr instead.
+                Some(&[KEEP_INDEX_RE.clone()]),
                 Some(&self.project_root),
             )?;
             self.stashed = true;
@@ -239,7 +245,7 @@ impl BasePaths {
             args,
             &HashMap::new(),
             &[0],
-            false,
+            None,
             Some(&self.project_root),
         )?;
 
@@ -349,7 +355,7 @@ impl Drop for BasePaths {
             &["stash", "pop"],
             &HashMap::new(),
             &[0],
-            false,
+            None,
             Some(&self.project_root),
         );
 
@@ -392,7 +398,7 @@ mod tests {
 
         let hook = r#"
             #!/bin/sh
-            echo "X"
+            echo "post checkout hook output"
         "#;
 
         let mut file_path = helper.root();

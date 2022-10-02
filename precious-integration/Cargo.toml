@@ -9,6 +9,7 @@ edition = "2018"
 
 [dev-dependencies]
 anyhow = "1.0.53"
+regex = "1.6.0"
 precious-core = { version = "0.2.3", path = "../precious-core" }
 precious-exec = { version = "0.2.3", path = "../precious-exec" }
 precious-testhelper = { version = "0.2.3", path = "../precious-testhelper" }

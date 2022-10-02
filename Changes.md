@@ -2,6 +2,13 @@
 
 ## {{Unreleased}} - {{ReleaseDate}}
 
+- The `expect_stderr` config parameter has been replaced by
+  `ignore_stderr`. This new parameter accepts one or more strings, which are
+  turned into regexes. If the command's `stderr` output matches _any_ of the
+  regexes then it is ignore. The old `expect_stderr` parameter will continue
+  to work for now, but it is no longer documented. To replicate the old
+  behavior simply set `ignore_stderr = ".*"`.
+
 ## 0.2.3 - 2022-10-01
 
 - When given the , `--git`, `--staged`, or `--staged-with-stash` flags,
