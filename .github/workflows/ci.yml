@@ -2,6 +2,8 @@ name: Continuous integration
 
 on:
   push:
+    branches:
+      - "**"
     tags-ignore:
       - "precious-*"
   pull_request:
