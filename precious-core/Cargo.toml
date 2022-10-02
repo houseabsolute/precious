@@ -1,6 +1,6 @@
 [package]
 name = "precious-core"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "The core of precious as a library - not for external use"
 repository = "https://github.com/houseabsolute/precious"
@@ -19,7 +19,7 @@ itertools = ">= 0.9.0, < 0.11.0"
 log = "0.4.14"
 md5 = "0.7.0"
 once_cell = "1.6.0"
-precious-exec = { version = "0.2.3", path = "../precious-exec" }
+precious-exec = { version = "0.3.0", path = "../precious-exec" }
 rayon = "1.5.1"
 regex = "1.6.0"
 serde = { version = "1.0.136", features = ["derive"] }
@@ -29,6 +29,6 @@ toml = "0.5.8"
 which = ">= 3.0.0, < 5.0.0"
 
 [dev-dependencies]
-precious-testhelper = { version = "0.2.3", path = "../precious-testhelper" }
+precious-testhelper = { version = "0.3.0", path = "../precious-testhelper" }
 pretty_assertions = "1.1.0"
 serial_test = "0.5.1"

@@ -1,6 +1,6 @@
 [package]
 name = "precious"
-version = "0.2.3"
+version = "0.3.0"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "One code quality tool to rule them all"
 repository = "https://github.com/houseabsolute/precious"
@@ -16,7 +16,7 @@ doc = false
 
 [dependencies]
 log = "0.4.14"
-precious-core = { version = "0.2.3", path = "./precious-core" }
+precious-core = { version = "0.3.0", path = "./precious-core" }
 
 [workspace]
 members = [
