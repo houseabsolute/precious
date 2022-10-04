@@ -22,23 +22,29 @@ exclude = [
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort=path" ]
+cmd = [ "omegasort", "--sort=path", "--unique" ]
 lint_flags = "--check"
 tidy_flags = "--in-place"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
-expect_stderr = true
+ignore_stderr = [
+    "The .+ file is not sorted",
+    "The .+ file is not unique",
+]
 
 # If you have an external stopwords file for use with Test::Spelling
 [commands.omegasort-stopwords]
 type = "both"
 include = ".stopwords"
-cmd = [ "omegasort", "--sort=text", "--case-insensitive" ]
+cmd = [ "omegasort", "--sort", "text", "--case-insensitive", "--unique" ]
 lint_flags = "--check"
 tidy_flags = "--in-place"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
-expect_stderr = true
+ignore_stderr = [
+    "The .+ file is not sorted",
+    "The .+ file is not unique",
+]
 
 # Add Perl::Critic as a develop phase prereq
 [commands.perlcritic]
@@ -57,7 +63,7 @@ lint_flags = [ "--assert-tidy", "--no-standard-output", "--outfile=/dev/null" ]
 tidy_flags = [ "--backup-and-modify-in-place", "--backup-file-extension=/" ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 2
-expect_stderr = true
+ignore_stderr = "Begin Error Output Stream"
 
 # Add Pod::Checker as a develop phase prereq
 [commands.podchecker]
@@ -66,7 +72,10 @@ include = [ "**/*.{pl,pm,pod}" ]
 cmd = [ "podchecker", "--warnings", "--warnings" ]
 ok_exit_codes = [ 0, 2 ]
 lint_failure_exit_codes = 1
-expect_stderr = true
+ignore_stderr = [
+    ".+ pod syntax OK",
+    ".+ does not contain any pod commands",
+]
 
 # Add Pod::Tidy as a develop phase prereq
 [commands.podtidy]

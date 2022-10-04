@@ -3,7 +3,9 @@ use anyhow::Result;
 use clean_path::Clean;
 use itertools::Itertools;
 use log::{debug, error};
-use precious_command as command;
+use once_cell::sync::Lazy;
+use precious_exec as exec;
+use regex::Regex;
 use std::{
     collections::HashMap,
     fmt,
@@ -68,6 +70,8 @@ pub enum BasePathsError {
     PrefixNotFound { path: PathBuf, prefix: PathBuf },
 }
 
+static KEEP_INDEX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(".*").unwrap());
+
 impl BasePaths {
     pub fn new(
         mode: Mode,
@@ -116,12 +120,12 @@ impl BasePaths {
             return Ok(());
         }
 
-        let res = command::run_command(
+        let res = exec::run(
             "git",
             &["rev-parse", "--show-toplevel"],
             &HashMap::new(),
             &[0],
-            false,
+            None,
             Some(&self.project_root),
         )?;
 
@@ -134,12 +138,14 @@ impl BasePaths {
         mm.push("MERGE_MODE");
 
         if !mm.exists() {
-            command::run_command(
+            exec::run(
                 "git",
                 &["stash", "--keep-index"],
                 &HashMap::new(),
                 &[0],
-                true,
+                // If there is a post-checkout hook, git will show any output
+                // it prints to stdout on stderr instead.
+                Some(&[KEEP_INDEX_RE.clone()]),
                 Some(&self.project_root),
             )?;
             self.stashed = true;
@@ -234,12 +240,12 @@ impl BasePaths {
     }
 
     fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
-        let result = command::run_command(
+        let result = exec::run(
             "git",
             args,
             &HashMap::new(),
             &[0],
-            false,
+            None,
             Some(&self.project_root),
         )?;
 
@@ -284,7 +290,10 @@ impl BasePaths {
         }
 
         if entries.is_empty() {
-            return Err(BasePathsError::AllPathsWereExcluded { mode: self.mode }.into());
+            return match self.mode {
+                Mode::GitModified | Mode::GitStaged | Mode::GitStagedWithStash => Ok(None),
+                _ => Err(BasePathsError::AllPathsWereExcluded { mode: self.mode }.into()),
+            };
         }
 
         Ok(Some(
@@ -341,12 +350,12 @@ impl Drop for BasePaths {
             return;
         }
 
-        let res = command::run_command(
+        let res = exec::run(
             "git",
             &["stash", "pop"],
             &HashMap::new(),
             &[0],
-            false,
+            None,
             Some(&self.project_root),
         );
 
@@ -389,7 +398,7 @@ mod tests {
 
         let hook = r#"
             #!/bin/sh
-            echo "X"
+            echo "post checkout hook output"
         "#;
 
         let mut file_path = helper.root();
@@ -549,6 +558,22 @@ mod tests {
     }
 
     #[test]
+    fn git_modified_mode_with_changes_all_excluded() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
+
+        let mut bp = new_basepaths_with_excludes(
+            Mode::GitModified,
+            helper.root(),
+            helper.root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(bp.paths(vec![])?, None);
+        Ok(())
+    }
+
+    #[test]
     fn git_modified_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
@@ -666,6 +691,22 @@ mod tests {
             )?;
             assert_eq!(bp.paths(vec![])?, expect);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn git_staged_mode_with_changes_all_excluded() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
+
+        let mut bp = new_basepaths_with_excludes(
+            Mode::GitStaged,
+            helper.root(),
+            helper.root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(bp.paths(vec![])?, None);
         Ok(())
     }
 

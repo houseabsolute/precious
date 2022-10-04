@@ -26,7 +26,14 @@ lint_failure_exit_codes = [1]
 [commands.goimports]
 type = "tidy"
 include = "**/*.go"
-cmd = ["goimports", "-w"]
+cmd = [
+    "golangci-lint",
+    "run",
+    "--fix",
+    "--disable-all",
+    "--enable", "goimports",
+    "--allow-parallel-runners",
+]
 ok_exit_codes = [0]
 
 # See check-go-mod.sh in helpers dir
@@ -36,16 +43,18 @@ include = "**/*.go"
 run_mode = "root"
 chdir = true
 cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
-expect_stderr = true
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort=path" ]
+cmd = [ "omegasort", "--sort", "path" ]
 lint_flags = "--check"
 tidy_flags = "--in-place"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
-expect_stderr = true
+ignore_stderr = [
+    "The .+ file is not sorted",
+    "The .+ file is not unique",
+]

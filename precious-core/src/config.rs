@@ -11,7 +11,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]
-pub struct FilterCore {
+pub struct Command {
     #[serde(rename = "type")]
     typ: filter::FilterType,
     #[serde(deserialize_with = "string_or_seq_string")]
@@ -21,18 +21,12 @@ pub struct FilterCore {
     exclude: Vec<String>,
     #[serde(default = "default_run_mode")]
     run_mode: filter::RunMode,
+    #[serde(default)]
+    chdir: bool,
     #[serde(deserialize_with = "string_or_seq_string")]
     cmd: Vec<String>,
     #[serde(default)]
     env: HashMap<String, String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Command {
-    #[serde(flatten)]
-    core: FilterCore,
-    #[serde(default)]
-    chdir: bool,
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
     lint_flags: Vec<String>,
@@ -48,6 +42,9 @@ pub struct Command {
     lint_failure_exit_codes: Vec<u8>,
     #[serde(default)]
     expect_stderr: bool,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
+    ignore_stderr: Vec<String>,
 }
 
 fn default_run_mode() -> filter::RunMode {
@@ -262,14 +259,13 @@ impl Config {
     ) -> Result<Vec<filter::Filter>> {
         let mut filters: Vec<filter::Filter> = vec![];
         for (name, c) in self.commands.iter() {
-            if c.core.typ != typ && c.core.typ != filter::FilterType::Both {
-                println!("{typ:?} != {:?}", c.core.typ);
-                continue;
-            }
             if let Some(c) = command {
                 if name != c {
                     continue;
                 }
+            }
+            if c.typ != typ && c.typ != filter::FilterType::Both {
+                continue;
             }
 
             filters.push(self.make_command(root, name, c)?);
@@ -279,22 +275,23 @@ impl Config {
     }
 
     fn make_command(&self, root: &Path, name: &str, command: &Command) -> Result<filter::Filter> {
-        let n = filter::Command::build(filter::CommandParams {
+        let n = filter::Filter::build(filter::FilterParams {
             root: root.to_owned(),
             name: name.to_owned(),
-            typ: command.core.typ,
-            include: command.core.include.clone(),
-            exclude: command.core.exclude.clone(),
-            run_mode: command.core.run_mode,
+            typ: command.typ,
+            include: command.include.clone(),
+            exclude: command.exclude.clone(),
+            run_mode: command.run_mode,
             chdir: command.chdir,
-            cmd: command.core.cmd.clone(),
-            env: command.core.env.clone(),
+            cmd: command.cmd.clone(),
+            env: command.env.clone(),
             lint_flags: command.lint_flags.clone(),
             tidy_flags: command.tidy_flags.clone(),
             path_flag: command.path_flag.clone(),
             ok_exit_codes: command.ok_exit_codes.clone(),
             lint_failure_exit_codes: command.lint_failure_exit_codes.clone(),
             expect_stderr: command.expect_stderr,
+            ignore_stderr: command.ignore_stderr.clone(),
         })?;
         Ok(n)
     }
@@ -324,7 +321,6 @@ mod tests {
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok_exit_codes = 0
             lint_failure_exit_codes = 101
-            expect_stderr = true
 
             [commands.omegasort-gitignore]
             type = "both"
@@ -334,7 +330,6 @@ mod tests {
             tidy_flags = "--in-place"
             ok_exit_codes = 0
             lint_failure_exit_codes = 1
-            expect_stderr = true
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
@@ -360,7 +355,6 @@ mod tests {
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok_exit_codes = 0
             lint_failure_exit_codes = 101
-            expect_stderr = true
 
             [commands.rustfmt]
             type    = "both"
@@ -378,7 +372,6 @@ mod tests {
             tidy_flags = "--in-place"
             ok_exit_codes = 0
             lint_failure_exit_codes = 1
-            expect_stderr = true
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
@@ -404,7 +397,6 @@ mod tests {
             tidy_flags = "--in-place"
             ok_exit_codes = 0
             lint_failure_exit_codes = 1
-            expect_stderr = true
 
             [commands.clippy]
             type     = "lint"
@@ -414,7 +406,6 @@ mod tests {
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok_exit_codes = 0
             lint_failure_exit_codes = 101
-            expect_stderr = true
 
             [commands.rustfmt]
             type    = "both"
