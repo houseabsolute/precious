@@ -17,6 +17,7 @@ Files: CODE_OF_CONDUCT.md
  debian/dh-cargo/README.md
  debian/gbp.conf
  debian/patches/2001_clap.patch
+ debian/patches/2001_regex.patch
  debian/patches/2002_privacy.patch
  debian/patches/README
  debian/patches/series
@@ -40,8 +41,6 @@ Files: CODE_OF_CONDUCT.md
  examples/rust/precious.toml
  git/hooks/pre-commit.sh
  git/setup.pl
- precious-command/Cargo.toml
- precious-command/src/lib.rs
  precious-core/Cargo.toml
  precious-core/src/basepaths.rs
  precious-core/src/chars.rs
@@ -51,6 +50,8 @@ Files: CODE_OF_CONDUCT.md
  precious-core/src/path_matcher.rs
  precious-core/src/precious.rs
  precious-core/src/vcs.rs
+ precious-exec/Cargo.toml
+ precious-exec/src/lib.rs
  precious-integration/Cargo.toml
  precious-integration/tests/lib.rs
  precious-testhelper/Cargo.toml
@@ -62,7 +63,7 @@ License: UNKNOWN
  FIXME
 
 Files: LICENSE-APACHE
- debian/dh-cargo/bin/cargo
+ debian/dh-cargo/lib/Debian/Debhelper/Buildsystem/cargo.pm
 Copyright: NONE
 License: Apache-2.0
  FIXME
@@ -72,7 +73,7 @@ Copyright: 2022, Frank de Jong
 License: Apache-2.0
  FIXME
 
-Files: debian/dh-cargo/lib/Debian/Debhelper/Buildsystem/cargo.pm
+Files: debian/dh-cargo/bin/cargo
 Copyright: NONE
 License: Expat
  FIXME

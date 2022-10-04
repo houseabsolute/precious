@@ -1,3 +1,15 @@
+precious (0.3.0-1) unstable; urgency=medium
+
+  [ upstream ]
+  * new release(s)
+
+  [ Jonas Smedegaard ]
+  * add patch 2001_regex to relax dependency on crate regex
+  * build-depend on
+    librust-once-cell-1+default-dev librust-regex-1+default-dev
+
+ -- Jonas Smedegaard <dr@jones.dk>  Tue, 04 Oct 2022 17:00:58 +0200
+
 precious (0.2.2-1) unstable; urgency=medium
 
   [ upstream ]
