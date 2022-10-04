@@ -1,6 +1,7 @@
 use anyhow::Result;
-use precious_command as command;
+use precious_exec as exec;
 use precious_testhelper::TestHelper;
+use regex::Regex;
 use serial_test::serial;
 use std::{collections::HashMap, env, path::PathBuf};
 
@@ -23,6 +24,14 @@ include = "**/*.rs"
 cmd     = [ "true" ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
+
+[commands.stderr]
+type    = "lint"
+include = "**/*.rs"
+cmd     = [ "sh", "-c", "echo 'some stderr output' 1>&2" ]
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+ignore_stderr = "some.+output"
 "#;
 
 const GOOD_RUST: &str = r#"
@@ -39,20 +48,20 @@ fn all() -> Result<()> {
 
     let precious = precious_path()?;
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--all"],
         &env,
         &[0],
-        false,
+        None,
         Some(&helper.root()),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--all"],
         &env,
         &[0],
-        false,
+        None,
         Some(&helper.root()),
     )?;
 
@@ -67,20 +76,20 @@ fn git() -> Result<()> {
 
     let precious = precious_path()?;
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--git"],
         &env,
         &[0],
-        false,
+        None,
         Some(&helper.root()),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--git"],
         &env,
         &[0],
-        false,
+        None,
         Some(&helper.root()),
     )?;
 
@@ -96,20 +105,20 @@ fn staged() -> Result<()> {
 
     let precious = precious_path()?;
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--staged"],
         &env,
         &[0],
-        false,
+        None,
         Some(&helper.root()),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--staged"],
         &env,
         &[0],
-        false,
+        None,
         Some(&helper.root()),
     )?;
 
@@ -126,11 +135,11 @@ fn cli_paths() -> Result<()> {
     let env = HashMap::new();
     let mut args = vec!["lint"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    command::run_command(&precious, &args, &env, &[0], false, Some(&helper.root()))?;
+    exec::run(&precious, &args, &env, &[0], None, Some(&helper.root()))?;
 
     let mut args = vec!["tidy"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    command::run_command(&precious, &args, &env, &[0], false, Some(&helper.root()))?;
+    exec::run(&precious, &args, &env, &[0], None, Some(&helper.root()))?;
 
     Ok(())
 }
@@ -146,8 +155,8 @@ fn all_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(&precious, &["lint", "--all"], &env, &[0], false, Some(&cwd))?;
-    command::run_command(&precious, &["tidy", "--all"], &env, &[0], false, Some(&cwd))?;
+    exec::run(&precious, &["lint", "--all"], &env, &[0], None, Some(&cwd))?;
+    exec::run(&precious, &["tidy", "--all"], &env, &[0], None, Some(&cwd))?;
 
     Ok(())
 }
@@ -164,8 +173,8 @@ fn git_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(&precious, &["lint", "--git"], &env, &[0], false, Some(&cwd))?;
-    command::run_command(&precious, &["tidy", "--git"], &env, &[0], false, Some(&cwd))?;
+    exec::run(&precious, &["lint", "--git"], &env, &[0], None, Some(&cwd))?;
+    exec::run(&precious, &["tidy", "--git"], &env, &[0], None, Some(&cwd))?;
 
     Ok(())
 }
@@ -183,20 +192,20 @@ fn staged_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--staged"],
         &env,
         &[0],
-        false,
+        None,
         Some(&cwd),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "--staged"],
         &env,
         &[0],
-        false,
+        None,
         Some(&cwd),
     )?;
 
@@ -215,20 +224,20 @@ fn cli_paths_in_subdir() -> Result<()> {
     let mut cwd = helper.root();
     cwd.push("src");
 
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "module.rs", "../README.md", "../tests/data/foo.txt"],
         &env,
         &[0],
-        false,
+        None,
         Some(&cwd),
     )?;
-    command::run_command(
+    exec::run(
         &precious,
         &["tidy", "module.rs", "../README.md", "../tests/data/foo.txt"],
         &env,
         &[0],
-        false,
+        None,
         Some(&cwd),
     )?;
 
@@ -253,21 +262,21 @@ fn foo() -> u8   {
     cwd.push("src");
 
     // This succeeds because we're not checking with rustfmt.
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "--command", "true", "module.rs"],
         &env,
         &[0],
-        false,
+        None,
         Some(&cwd),
     )?;
     // This fails now that we check with rustfmt.
-    command::run_command(
+    exec::run(
         &precious,
         &["lint", "module.rs"],
         &env,
         &[1],
-        false,
+        None,
         Some(&cwd),
     )?;
 
@@ -284,13 +293,14 @@ fn precious_path() -> Result<String> {
 }
 
 fn do_test_setup() -> Result<TestHelper> {
+    let cargo_build_re = Regex::new("Finished dev")?;
     let env = HashMap::new();
-    command::run_command(
+    exec::run(
         "cargo",
         &["build", "--package", "precious"],
         &env,
         &[0],
-        true,
+        Some(&[cargo_build_re]),
         Some(&PathBuf::from("..")),
     )?;
 

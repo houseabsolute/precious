@@ -1,6 +1,6 @@
 [package]
 name = "precious"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["Dave Rolsky <autarch@urth.org>"]
 description = "One code quality tool to rule them all"
 repository = "https://github.com/houseabsolute/precious"
@@ -16,14 +16,11 @@ doc = false
 
 [dependencies]
 log = "0.4.14"
-precious-core = { version = "0.2.2", path = "./precious-core" }
-
-[package.metadata.release]
-tag-name = "v{{version}}"
+precious-core = { version = "0.3.0", path = "./precious-core" }
 
 [workspace]
 members = [
-        "precious-command",
+        "precious-exec",
         "precious-core",
         "precious-integration",
         "precious-testhelper",
@@ -36,3 +33,22 @@ consolidate-pushes = true
 shared-version = true
 sign-commit = true
 sign-tag = true
+
+[package.metadata.release]
+tag-name = "v{{version}}"
+
+[[package.metadata.release.pre-release-replacements]]
+file = "Changes.md"
+search = "<!-- next-header -->"
+replace = "<!-- next-header -->\n\n## {{Unreleased}} - {{ReleaseDate}}\n"
+exactly = 1
+
+[[package.metadata.release.pre-release-replacements]]
+file = "Changes.md"
+search = "{{Unreleased}}"
+replace = "{{version}}"
+
+[[package.metadata.release.pre-release-replacements]]
+file = "Changes.md"
+search = "{{ReleaseDate}}"
+replace = "{{date}}"

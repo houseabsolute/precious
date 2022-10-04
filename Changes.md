@@ -1,3 +1,22 @@
+<!-- next-header -->
+
+## {{Unreleased}} - {{ReleaseDate}}
+
+- The `expect_stderr` config parameter has been replaced by
+  `ignore_stderr`. This new parameter accepts one or more strings, which are
+  turned into regexes. If the command's `stderr` output matches _any_ of the
+  regexes then it is ignore. The old `expect_stderr` parameter will continue
+  to work for now, but it is no longer documented. To replicate the old
+  behavior simply set `ignore_stderr = ".*"`.
+
+## 0.2.3 - 2022-10-01
+
+- When given the , `--git`, `--staged`, or `--staged-with-stash` flags,
+  precious would error out if all the relevant files were excluded. This is
+  likely to break commit hooks so this is no longer an error. However, if
+  given either the `--all` flag or an explicit list of files, it will still
+  error if all of them are excluded.
+
 ## 0.2.2 - 2022-09-24
 
 - Added a `--command` flag to the `lint` and `tidy` subcommands. If this is

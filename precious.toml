@@ -18,7 +18,7 @@ chdir    = true
 cmd      = [ "cargo", "clippy", "--locked", "--all-targets", "--all-features", "--", "-D", "clippy::all" ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 101
-expect_stderr = true
+ignore_stderr = "Finished dev"
 
 [commands.prettier]
 type    = "both"
@@ -32,9 +32,12 @@ lint_failure_exit_codes = 1
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort=path" ]
+cmd = [ "omegasort", "--sort", "path", "--unique" ]
 lint_flags = "--check"
 tidy_flags = "--in-place"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
-expect_stderr = true
+ignore_stderr = [
+    "The .+ file is not sorted",
+    "The .+ file is not unique",
+]
