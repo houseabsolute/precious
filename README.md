@@ -78,32 +78,129 @@ needed.
 
 Each command should be defined in a block named something like
 `[commands.command-name]`. Each name after the `commands.` prefix must be
-unique. Note that you **can** have multiple commands defined for the same
-executable as long as each one has a unique name.
+unique. You **can** have multiple commands defined for the same executable as
+long as each command has a unique name.
 
 Commands are run in the same order as they appear in the config file.
 
-The keys that are allowed for each command are as follows:
+### Command Invocation
 
-| Key                       | Type                       | Required? | Applies To               | Default | Description                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------- | -------------------------- | --------- | ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `type`                    | strings                    | **yes**   | all                      |         | This must be either `lint`, `tidy`, or `both`. This defines what type of command this is. Note that a command which is `both` **must** define `lint_flags` or `tidy_flags` as well.                                                                                                                                                                                                              |
-| `include`                 | array of strings           | **yes**   | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this command applies to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                                                                                                                       |
-| `exclude`                 | array of strings           | no        | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this command should not be applied to. However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                                                                                                         |
-| `cmd`                     | array of strings           | **yes**   | all                      |         | This is the executable to be run followed by any arguments that should always be passed.                                                                                                                                                                                                                                                                                                         |
-| `env`                     | table of strings->string   | no        | all                      |         | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings.                                                                                                                                                                                                                                   |
-| `path_flag`               | string                     | no        | all                      |         | By default, `precious` will pass each path being operated on to the command it executes as a final, positional, argument. However, if the command takes paths via a flag you need to specify that flag with this key.                                                                                                                                                                            |
-| `lint_flags`              | string or array of strings | no        | combined linter & tidier |         | If a command is both a linter and tidier than it may take extra flags to operate in linting mode. This is how you set that flag.                                                                                                                                                                                                                                                                 |
-| `tidy_flags`              | string or array of strings | no        | combined linter & tidier |         | If a command is both a linter and tidier than it may take extra flags to operate in tidying mode. This is how you set that flag.                                                                                                                                                                                                                                                                 |
-| `run_mode`                | "files", "dirs", "root"    | no        | all                      | "files" | This determines how the command is run. The default, "files", means that the command is run once per file that matches its include/exclude settings. If this is set to "dirs", then the command is run once per directory _containing_ files that matches its include/exclude settings. If it's set to "root", then it is run exactly once from the root of the project if it matches any files. |
-| `chdir`                   | boolean                    | no        | all                      | false   | If this is true, then the command will be run with a chdir to the relevant path. If the command operates on files, `precious` chdir's to the file's directory. If it operates on directories than it changes to each directory. Note that if `run_mode` is `dirs` and `chdir` is true then `precious` will not pass the path to the executable as an argument.                                   |
-| `ok_exit_codes`           | array of integers          | **yes**   | all                      |         | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit.                                                                                                                                                                                                                  |
-| `lint_failure_exit_codes` | array of integers          | no        | linters                  |         | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue.                                                                                                                                                             |
-| `ignore_stderr`           | string or array of strings | all       | all                      |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. This parameter can specify one or more strings. These strings are treated as regexes and matched against the command's stderr output. If _any_ of the regexes match, the stderr output is ignored.                                                                         |
+There three configuration keys for command invocation. All of them are
+optional. If none are specified, `precious` defaults to this:
+
+```toml
+invoke      = "per-file"
+working-dir = "root"
+path-args   = "file"
+```
+
+This runs the command once per file, passing the file as a single argument to
+the command. The working directory for the command will be the project root.
+
+#### `invoke`
+
+The `invoke` key tells `precious` how the command should be invoked.
+
+| Value        | Description                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `"per-file"` | Run this command once for each matching file. **This is the default.**                                                   |
+| `"per-dir"`  | Run this command once for each matching directory.                                                                       |
+| `"once"`     | Run this command either once for the project or once per sub-root. See the `working-dir` documentation below for details |
+
+#### `working-dir`
+
+The `working-dir` key tells precious what the working directory should be when the
+command is run.
+
+| Value                   | Description                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"root"`                | The working directory is the project root. **This is the default.**                                                                                                       |
+| `"dir"`                 | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
+| `{ sub-roots = [...] }` | See below                                                                                                                                                                 |
+
+##### `working-dir = { sub-roots = [ ... ] }`
+
+The final option is to pass a table (aka map) for the `working-dir` key instead of
+`"root"` or `"dir"` as a string. In that case, the table should have one key
+of its own, `sub-roots`. The value of that key can either be a single string
+or an array of strings. Each of these strings should be a _relative_ path to a
+directory under your project root.
+
+When this options is used, `precious` will do the following based on other
+aspects of your config.
+
+- If `invoke = "once"`, then the command will be run _once per root_ instead
+  of just once from the project root.
+- The working directory will be set to each root in turn.
+- Relative paths will be relative to each root, rather than the project root.
+
+#### `path-args`
+
+The `path-args` key tells precious how paths should be passed when the command
+is run.
+
+| Value             | Description                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> If using `sub-roots`, then the path is relative to the current working directory, per-root. |
+| `"dir"`           | Passes the path to the directory containing the matching file relative to the root. <br> If using `sub-roots`, then the path is relative to the current working directory, per-root  |
+| `"none"`          | No file args are passed to the command at all.                                                                                                                                       |
+| `"dot"`           | Always pass `.` as the path. This is useful when `working-dir = "dir"` and the command still requires a path to be passed.                                                           |
+| `"absolute-file"` | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                       |
+| `"absolute-dir"`  | Passes the path to the directory containing the matching file as an absolute path from the filesystem's root directory.                                                              |
+
+#### Nonsensical Combinations
+
+Most combinations of these configuration keys are allowed, but there are some
+nonsensical combinations that will cause `precious` to exit with an error.
+
+```
+invoke = "per-file"
+path-args = "dir", "none", "dot", or "absolute-dir"
+```
+
+You cannot invoke a command once per file without passing the filename.
+
+```
+invoke = "per-dir"
+working-dir = "root"
+# ... or ...
+working-dir = { sub-roots = [ "whatever" ] }
+path-args = "file", "none", "dot", or "absolute-file"
+```
+
+You cannot invoke a command once per dir from a root without passing the
+directory name. If you want to run a command once per directory with no path
+arguments or using `.` as the path then you _must_ set `working-dir = "dir"`.
+
+```
+invoke = "once"
+working-dir = "dir"
+```
+
+You cannot invoke a command once if the working directory is set to each
+matching directory in turn. This does not make sense.
+
+### Other Per-Command Configuration Keys
+
+The other keys allowed for each command are as follows:
+
+| Key                       | Type                       | Required? | Applies To               | Default | Description                                                                                                                                                                                                                                                                                                              |
+| ------------------------- | -------------------------- | --------- | ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `type`                    | string                     | **yes**   | all                      |         | This must be either `lint`, `tidy`, or `both`. This defines what type of command this is. A command which is `both` **must** define `lint_flags` or `tidy_flags` as well.                                                                                                                                                |
+| `include`                 | array of strings           | **yes**   | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this command applies to. <br> However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                                          |
+| `exclude`                 | array of strings           | no        | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this command should not be applied to. <br> However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                            |
+| `cmd`                     | array of strings           | **yes**   | all                      |         | This is the executable to be run followed by any arguments that should always be passed.                                                                                                                                                                                                                                 |
+| `env`                     | table - values are strings | no        | all                      |         | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings.                                                                                                                                                           |
+| `path_flag`               | string                     | no        | all                      |         | By default, `precious` will pass each path being operated on to the command it executes as a final, positional, argument. If the command takes paths via a flag you need to specify that flag with this key.                                                                                                             |
+| `lint_flags`              | string or array of strings | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in linting mode. This is how you set that flag.                                                                                                                                                                                         |
+| `tidy_flags`              | string or array of strings | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in tidying mode. This is how you set that flag.                                                                                                                                                                                         |
+| `ok_exit_codes`           | array of integers          | **yes**   | all                      |         | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit.                                                                                                                                          |
+| `lint_failure_exit_codes` | array of integers          | no        | linters                  |         | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue.                                                                                     |
+| `ignore_stderr`           | string or array of strings | all       | all                      |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. This parameter can specify one or more strings. These strings are treated as regexes and matched against the command's stderr output. If _any_ of the regexes match, the stderr output is ignored. |
 
 ### Referencing the Project Root
 
-For tools that can be run from a subdirectory, you may need to specify config
+For commands that are run in a subdirectory, you may need to specify config
 files in terms of the project root. You can do this by using the string
 `$PRECIOUS_ROOT` in any element of the `cmd` configuration key. So for example
 you might write something like this:
@@ -305,7 +402,7 @@ lint_failure_exit_codes = [1]
 ### You want to run Precious as a commit hook
 
 Simply run `precious lint -s` in your hook. It will exit with a non-zero
-status if any of the lint commands indicate a linting problem.
+status if any of the lint commands fail.
 
 ### You want to run commands in a specific order
 
