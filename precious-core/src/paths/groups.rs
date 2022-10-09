@@ -1,4 +1,7 @@
-use crate::{path_matcher, vcs};
+use crate::{
+    paths::{matcher, mode::Mode},
+    vcs,
+};
 use anyhow::Result;
 use clean_path::Clean;
 use itertools::Itertools;
@@ -8,37 +11,12 @@ use precious_exec as exec;
 use regex::Regex;
 use std::{
     collections::HashMap,
-    fmt,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Mode {
-    FromCli,
-    All,
-    GitModified,
-    GitStaged,
-    GitStagedWithStash,
-}
-
-impl fmt::Display for Mode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Mode::FromCli => write!(f, "paths passed on the command line (recursively)"),
-            Mode::All => write!(f, "all files in the project"),
-            Mode::GitModified => write!(f, "modified files according to git"),
-            Mode::GitStaged => write!(f, "files staged for a git commit"),
-            Mode::GitStagedWithStash => write!(
-                f,
-                "files staged for a git commit, stashing unstaged content"
-            ),
-        }
-    }
-}
-
 #[derive(Debug)]
-pub struct BasePaths {
+pub struct GroupMaker {
     mode: Mode,
     project_root: PathBuf,
     cwd: PathBuf,
@@ -47,13 +25,13 @@ pub struct BasePaths {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Paths {
+pub struct Group {
     pub dir: PathBuf,
     pub files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
-pub enum BasePathsError {
+pub enum GroupMakerError {
     #[error("You cannot pass an explicit list of files when looking for {mode:}")]
     GotPathsFromCliWithWrongMode { mode: Mode },
 
@@ -72,14 +50,14 @@ pub enum BasePathsError {
 
 static KEEP_INDEX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(".*").unwrap());
 
-impl BasePaths {
+impl GroupMaker {
     pub fn new(
         mode: Mode,
         project_root: PathBuf,
         cwd: PathBuf,
         exclude_globs: Vec<String>,
-    ) -> Result<BasePaths> {
-        Ok(BasePaths {
+    ) -> Result<GroupMaker> {
+        Ok(GroupMaker {
             mode,
             project_root,
             cwd,
@@ -88,13 +66,13 @@ impl BasePaths {
         })
     }
 
-    pub fn paths(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec<Paths>>> {
+    pub fn groups(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec<Group>>> {
         match self.mode {
             Mode::FromCli => (),
             _ => {
                 if !cli_paths.is_empty() {
                     return Err(
-                        BasePathsError::GotPathsFromCliWithWrongMode { mode: self.mode }.into(),
+                        GroupMakerError::GotPathsFromCliWithWrongMode { mode: self.mode }.into(),
                     );
                 }
             }
@@ -112,7 +90,7 @@ impl BasePaths {
         }
 
         self.maybe_git_stash()?;
-        self.files_to_paths(files.unwrap())
+        self.files_to_groups(files.unwrap())
     }
 
     fn maybe_git_stash(&mut self) -> Result<()> {
@@ -131,7 +109,7 @@ impl BasePaths {
 
         let stdout = res
             .stdout
-            .ok_or(BasePathsError::CouldNotDetermineRepoRoot)?;
+            .ok_or(GroupMakerError::CouldNotDetermineRepoRoot)?;
         let repo_root = stdout.trim();
         let mut mm = PathBuf::from(repo_root);
         mm.push(".git");
@@ -178,7 +156,7 @@ impl BasePaths {
         for rel in self.relative_files(&self.cwd, cli_paths)? {
             let full = self.project_root.clone().join(rel.clone());
             if !full.exists() {
-                return Err(BasePathsError::NonExistentPathOnCli { path: rel }.into());
+                return Err(GroupMakerError::NonExistentPathOnCli { path: rel }.into());
             }
 
             let rel_to_root = self.relative_to_project_root(&full)?;
@@ -271,14 +249,14 @@ impl BasePaths {
         }
     }
 
-    fn excluder(&self) -> Result<path_matcher::Matcher> {
-        path_matcher::MatcherBuilder::new()
+    fn excluder(&self) -> Result<matcher::Matcher> {
+        matcher::MatcherBuilder::new()
             .with(&self.exclude_globs)?
             .with(vcs::DIRS)?
             .build()
     }
 
-    fn files_to_paths(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Paths>>> {
+    fn files_to_groups(&self, files: Vec<PathBuf>) -> Result<Option<Vec<Group>>> {
         let mut entries: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
 
         for f in files {
@@ -292,7 +270,7 @@ impl BasePaths {
         if entries.is_empty() {
             return match self.mode {
                 Mode::GitModified | Mode::GitStaged | Mode::GitStagedWithStash => Ok(None),
-                _ => Err(BasePathsError::AllPathsWereExcluded { mode: self.mode }.into()),
+                _ => Err(GroupMakerError::AllPathsWereExcluded { mode: self.mode }.into()),
             };
         }
 
@@ -303,7 +281,7 @@ impl BasePaths {
                 .map(|k| {
                     let mut files = entries.get(k).unwrap().to_vec();
                     files.sort();
-                    Paths {
+                    Group {
                         dir: k.to_path_buf().clean(),
                         files,
                     }
@@ -335,7 +313,7 @@ impl BasePaths {
         Ok(file
             .clean()
             .strip_prefix(&self.project_root)
-            .map_err(|_| BasePathsError::PrefixNotFound {
+            .map_err(|_| GroupMakerError::PrefixNotFound {
                 path: file.to_path_buf(),
                 prefix: self.project_root.clone(),
             })?
@@ -344,7 +322,7 @@ impl BasePaths {
     }
 }
 
-impl Drop for BasePaths {
+impl Drop for GroupMaker {
     fn drop(&mut self) {
         if !self.stashed {
             return;
@@ -375,21 +353,21 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::fs;
 
-    fn new_basepaths(mode: Mode, root: PathBuf) -> Result<BasePaths> {
-        new_basepaths_with_excludes(mode, root.clone(), root, vec![])
+    fn new_group_maker(mode: Mode, root: PathBuf) -> Result<GroupMaker> {
+        new_group_maker_with_excludes(mode, root.clone(), root, vec![])
     }
 
-    fn new_basepaths_with_cwd(mode: Mode, root: PathBuf, cwd: PathBuf) -> Result<BasePaths> {
-        new_basepaths_with_excludes(mode, root, cwd, vec![])
+    fn new_group_maker_with_cwd(mode: Mode, root: PathBuf, cwd: PathBuf) -> Result<GroupMaker> {
+        new_group_maker_with_excludes(mode, root, cwd, vec![])
     }
 
-    fn new_basepaths_with_excludes(
+    fn new_group_maker_with_excludes(
         mode: Mode,
         root: PathBuf,
         cwd: PathBuf,
         exclude: Vec<String>,
-    ) -> Result<BasePaths> {
-        BasePaths::new(mode, root, cwd, exclude)
+    ) -> Result<GroupMaker> {
+        GroupMaker::new(mode, root, cwd, exclude)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -417,12 +395,12 @@ mod tests {
     fn files_to_paths() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
-        let bp = new_basepaths(Mode::All, helper.root())?;
-        let paths = bp.files_to_paths(helper.all_files())?.unwrap();
+        let bp = new_group_maker(Mode::All, helper.root())?;
+        let paths = bp.files_to_groups(helper.all_files())?.unwrap();
         assert_eq!(paths.len(), 4, "got three paths entries");
         assert_eq!(
             paths[0],
-            Paths {
+            Group {
                 dir: PathBuf::from("."),
                 files: ["README.md", "can_ignore.x", "merge-conflict-file"]
                     .iter()
@@ -432,7 +410,7 @@ mod tests {
         );
         assert_eq!(
             paths[1],
-            Paths {
+            Group {
                 dir: PathBuf::from("src"),
                 files: [
                     "src/bar.rs",
@@ -447,14 +425,14 @@ mod tests {
         );
         assert_eq!(
             paths[2],
-            Paths {
+            Group {
                 dir: PathBuf::from("src/sub"),
                 files: ["src/sub/mod.rs",].iter().map(PathBuf::from).collect(),
             }
         );
         assert_eq!(
             paths[3],
-            Paths {
+            Group {
                 dir: PathBuf::from("tests/data"),
                 files: [
                     "tests/data/bar.txt",
@@ -472,8 +450,8 @@ mod tests {
     #[test]
     fn all_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::All, helper.root())?;
-        assert_eq!(bp.paths(vec![])?, bp.files_to_paths(helper.all_files())?);
+        let mut bp = new_group_maker(Mode::All, helper.root())?;
+        assert_eq!(bp.groups(vec![])?, bp.files_to_groups(helper.all_files())?);
         Ok(())
     }
 
@@ -482,8 +460,8 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_cwd(Mode::All, helper.root(), cwd)?;
-        assert_eq!(bp.paths(vec![])?, bp.files_to_paths(helper.all_files())?);
+        let mut bp = new_group_maker_with_cwd(Mode::All, helper.root(), cwd)?;
+        assert_eq!(bp.groups(vec![])?, bp.files_to_groups(helper.all_files())?);
         Ok(())
     }
 
@@ -494,8 +472,8 @@ mod tests {
         let mut expect = testhelper::TestHelper::non_ignored_files();
         expect.append(&mut gitignores);
 
-        let mut bp = new_basepaths(Mode::All, helper.root())?;
-        assert_eq!(bp.paths(vec![])?, bp.files_to_paths(expect)?);
+        let mut bp = new_group_maker(Mode::All, helper.root())?;
+        assert_eq!(bp.groups(vec![])?, bp.files_to_groups(expect)?);
         Ok(())
     }
 
@@ -503,21 +481,21 @@ mod tests {
     fn all_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::All,
             helper.root(),
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(bp.paths(vec![])?, bp.files_to_paths(helper.all_files())?);
+        assert_eq!(bp.groups(vec![])?, bp.files_to_groups(helper.all_files())?);
         Ok(())
     }
 
     #[test]
     fn git_modified_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::GitModified, helper.root())?;
-        let res = bp.paths(vec![]);
+        let mut bp = new_group_maker(Mode::GitModified, helper.root())?;
+        let res = bp.groups(vec![]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
         Ok(())
@@ -527,15 +505,15 @@ mod tests {
     fn git_modified_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
-        let mut bp = new_basepaths(Mode::GitModified, helper.root())?;
-        let expect = bp.files_to_paths(
+        let mut bp = new_group_maker(Mode::GitModified, helper.root())?;
+        let expect = bp.files_to_groups(
             modified
                 .iter()
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![])?, expect);
+        assert_eq!(bp.groups(vec![])?, expect);
         Ok(())
     }
 
@@ -545,15 +523,15 @@ mod tests {
         let modified = helper.modify_files()?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_cwd(Mode::GitModified, helper.root(), cwd)?;
-        let expect = bp.files_to_paths(
+        let mut bp = new_group_maker_with_cwd(Mode::GitModified, helper.root(), cwd)?;
+        let expect = bp.files_to_groups(
             modified
                 .iter()
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![])?, expect);
+        assert_eq!(bp.groups(vec![])?, expect);
         Ok(())
     }
 
@@ -563,13 +541,13 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
 
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::GitModified,
             helper.root(),
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(bp.paths(vec![])?, None);
+        assert_eq!(bp.groups(vec![])?, None);
         Ok(())
     }
 
@@ -582,20 +560,20 @@ mod tests {
 
         let modified = helper.modify_files()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::GitModified,
             helper.root(),
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = bp.files_to_paths(
+        let expect = bp.files_to_groups(
             modified
                 .iter()
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![])?, expect);
+        assert_eq!(bp.groups(vec![])?, expect);
         Ok(())
     }
 
@@ -610,28 +588,28 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::GitModified,
             helper.root(),
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = bp.files_to_paths(
+        let expect = bp.files_to_groups(
             modified
                 .iter()
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![])?, expect);
+        assert_eq!(bp.groups(vec![])?, expect);
         Ok(())
     }
 
     #[test]
     fn git_staged_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
-        let res = bp.paths(vec![]);
+        let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
+        let res = bp.groups(vec![]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
         Ok(())
@@ -643,23 +621,23 @@ mod tests {
         let modified = helper.modify_files()?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
-            let res = bp.paths(vec![]);
+            let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
+            let res = bp.groups(vec![]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
 
         {
-            let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
+            let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
             helper.stage_all()?;
-            let expect = bp.files_to_paths(
+            let expect = bp.files_to_groups(
                 modified
                     .iter()
                     .sorted_by(|a, b| a.cmp(b))
                     .map(PathBuf::from)
                     .collect::<Vec<PathBuf>>(),
             )?;
-            assert_eq!(bp.paths(vec![])?, expect);
+            assert_eq!(bp.groups(vec![])?, expect);
         }
         Ok(())
     }
@@ -673,23 +651,23 @@ mod tests {
         cwd.push("src");
 
         {
-            let mut bp = new_basepaths_with_cwd(Mode::GitStaged, helper.root(), cwd.clone())?;
-            let res = bp.paths(vec![]);
+            let mut bp = new_group_maker_with_cwd(Mode::GitStaged, helper.root(), cwd.clone())?;
+            let res = bp.groups(vec![]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
 
         {
-            let mut bp = new_basepaths_with_cwd(Mode::GitStaged, helper.root(), cwd)?;
+            let mut bp = new_group_maker_with_cwd(Mode::GitStaged, helper.root(), cwd)?;
             helper.stage_all()?;
-            let expect = bp.files_to_paths(
+            let expect = bp.files_to_groups(
                 modified
                     .iter()
                     .sorted_by(|a, b| a.cmp(b))
                     .map(PathBuf::from)
                     .collect::<Vec<PathBuf>>(),
             )?;
-            assert_eq!(bp.paths(vec![])?, expect);
+            assert_eq!(bp.groups(vec![])?, expect);
         }
         Ok(())
     }
@@ -700,13 +678,13 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
 
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::GitStaged,
             helper.root(),
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(bp.paths(vec![])?, None);
+        assert_eq!(bp.groups(vec![])?, None);
         Ok(())
     }
 
@@ -716,20 +694,20 @@ mod tests {
         let modified = helper.modify_files()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::GitStaged,
             helper.root(),
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = bp.files_to_paths(
+        let expect = bp.files_to_groups(
             modified
                 .iter()
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![])?, expect);
+        assert_eq!(bp.groups(vec![])?, expect);
         Ok(())
     }
 
@@ -741,20 +719,20 @@ mod tests {
         helper.stage_all()?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::GitStaged,
             helper.root(),
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = bp.files_to_paths(
+        let expect = bp.files_to_groups(
             modified
                 .iter()
                 .sorted_by(|a, b| a.cmp(b))
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![])?, expect);
+        assert_eq!(bp.groups(vec![])?, expect);
         Ok(())
     }
 
@@ -770,15 +748,15 @@ mod tests {
         set_up_post_checkout_hook(&helper)?;
 
         {
-            let mut bp = new_basepaths(Mode::GitStagedWithStash, helper.root())?;
-            let expect = bp.files_to_paths(
+            let mut bp = new_group_maker(Mode::GitStagedWithStash, helper.root())?;
+            let expect = bp.files_to_groups(
                 modified
                     .iter()
                     .sorted_by(|a, b| a.cmp(b))
                     .map(PathBuf::from)
                     .collect::<Vec<PathBuf>>(),
             )?;
-            assert_eq!(bp.paths(vec![])?, expect);
+            assert_eq!(bp.groups(vec![])?, expect);
             assert_eq!(
                 String::from_utf8(fs::read(helper.root().join(unstaged))?)?,
                 String::from("some text"),
@@ -821,10 +799,10 @@ mod tests {
         helper.write_file(file, "line 1\nline 1.7\nline 2\n")?;
         helper.stage_all()?;
 
-        let mut bp = new_basepaths(Mode::GitStaged, helper.root())?;
-        let expect = bp.files_to_paths(vec![PathBuf::from("merge-conflict-here")])?;
+        let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
+        let expect = bp.files_to_groups(vec![PathBuf::from("merge-conflict-here")])?;
 
-        assert_eq!(bp.paths(vec![])?, expect);
+        assert_eq!(bp.groups(vec![])?, expect);
         assert!(!bp.stashed);
         Ok(())
     }
@@ -832,8 +810,8 @@ mod tests {
     #[test]
     fn cli_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::FromCli, helper.root())?;
-        let expect = bp.files_to_paths(
+        let mut bp = new_group_maker(Mode::FromCli, helper.root())?;
+        let expect = bp.files_to_groups(
             helper
                 .all_files()
                 .iter()
@@ -842,7 +820,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![PathBuf::from("tests")])?, expect);
+        assert_eq!(bp.groups(vec![PathBuf::from("tests")])?, expect);
         Ok(())
     }
 
@@ -851,8 +829,8 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_cwd(Mode::FromCli, helper.root(), cwd)?;
-        let expect = bp.files_to_paths(
+        let mut bp = new_group_maker_with_cwd(Mode::FromCli, helper.root(), cwd)?;
+        let expect = bp.files_to_groups(
             helper
                 .all_files()
                 .iter()
@@ -861,7 +839,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![PathBuf::from(".")])?, expect);
+        assert_eq!(bp.groups(vec![PathBuf::from(".")])?, expect);
         Ok(())
     }
 
@@ -870,15 +848,15 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_cwd(Mode::FromCli, helper.root(), cwd)?;
-        let expect = bp.files_to_paths(
+        let mut bp = new_group_maker_with_cwd(Mode::FromCli, helper.root(), cwd)?;
+        let expect = bp.files_to_groups(
             ["src/main.rs", "src/module.rs"]
                 .iter()
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
         assert_eq!(
-            bp.paths(vec![PathBuf::from("main.rs"), PathBuf::from("module.rs")])?,
+            bp.groups(vec![PathBuf::from("main.rs"), PathBuf::from("module.rs")])?,
             expect,
         );
         Ok(())
@@ -888,13 +866,13 @@ mod tests {
     fn cli_mode_given_dir_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
             helper.root(),
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = bp.files_to_paths(
+        let expect = bp.files_to_groups(
             helper
                 .all_files()
                 .iter()
@@ -902,7 +880,7 @@ mod tests {
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>(),
         )?;
-        assert_eq!(bp.paths(vec![PathBuf::from(".")])?, expect);
+        assert_eq!(bp.groups(vec![PathBuf::from(".")])?, expect);
         Ok(())
     }
 
@@ -912,13 +890,13 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
             helper.root(),
             cwd,
             vec!["src/main.rs".to_string()],
         )?;
-        let expect = bp.files_to_paths(
+        let expect = bp.files_to_groups(
             [
                 "src/bar.rs",
                 "src/can_ignore.rs",
@@ -929,7 +907,7 @@ mod tests {
             .map(PathBuf::from)
             .collect(),
         )?;
-        assert_eq!(bp.paths(vec![PathBuf::from(".")])?, expect);
+        assert_eq!(bp.groups(vec![PathBuf::from(".")])?, expect);
         Ok(())
     }
 
@@ -937,18 +915,18 @@ mod tests {
     fn cli_mode_given_files_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
             helper.root(),
             helper.root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = bp.files_to_paths(vec![helper.all_files()[0].clone()])?;
+        let expect = bp.files_to_groups(vec![helper.all_files()[0].clone()])?;
         let cli_paths = vec![
             helper.all_files()[0].clone(),
             PathBuf::from("vendor/foo/bar.txt"),
         ];
-        assert_eq!(bp.paths(cli_paths)?, expect);
+        assert_eq!(bp.groups(cli_paths)?, expect);
         Ok(())
     }
 
@@ -958,31 +936,31 @@ mod tests {
         helper.write_file(&PathBuf::from("src/main.rs"), "initial content")?;
         let mut cwd = helper.root();
         cwd.push("src");
-        let mut bp = new_basepaths_with_excludes(
+        let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
             helper.root(),
             cwd,
             vec!["src/main.rs".to_string()],
         )?;
-        let expect = bp.files_to_paths(["src/module.rs"].iter().map(PathBuf::from).collect())?;
+        let expect = bp.files_to_groups(["src/module.rs"].iter().map(PathBuf::from).collect())?;
         let cli_paths = ["main.rs", "module.rs"].iter().map(PathBuf::from).collect();
-        assert_eq!(bp.paths(cli_paths)?, expect);
+        assert_eq!(bp.groups(cli_paths)?, expect);
         Ok(())
     }
 
     #[test]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_basepaths(Mode::FromCli, helper.root())?;
+        let mut bp = new_group_maker(Mode::FromCli, helper.root())?;
         let cli_paths = vec![
             helper.all_files()[0].clone(),
             PathBuf::from("does/not/exist"),
         ];
-        let res = bp.paths(cli_paths);
+        let res = bp.groups(cli_paths);
         assert!(res.is_err());
         assert_eq!(
             std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
-            std::mem::discriminant(&BasePathsError::NonExistentPathOnCli {
+            std::mem::discriminant(&GroupMakerError::NonExistentPathOnCli {
                 path: PathBuf::from("does/not/exist"),
             }),
         );

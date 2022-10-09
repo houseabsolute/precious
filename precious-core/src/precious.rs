@@ -1,4 +1,4 @@
-use crate::{basepaths, chars, config, filter, vcs};
+use crate::{chars, config, filter, paths, vcs};
 use anyhow::{Error, Result};
 use clap::{AppSettings, ArgGroup, Parser};
 use fern::{
@@ -129,7 +129,7 @@ pub fn app() -> App {
 
 #[derive(Debug)]
 pub struct Precious {
-    mode: basepaths::Mode,
+    mode: paths::mode::Mode,
     project_root: PathBuf,
     cwd: PathBuf,
     config: config::Config,
@@ -222,24 +222,24 @@ impl Precious {
         })
     }
 
-    fn mode(app: &App) -> Result<basepaths::Mode> {
+    fn mode(app: &App) -> Result<paths::mode::Mode> {
         let common = match &app.subcommand {
             Subcommand::Lint(c) => c,
             Subcommand::Tidy(c) => c,
         };
         if common.all {
-            return Ok(basepaths::Mode::All);
+            return Ok(paths::mode::Mode::All);
         } else if common.git {
-            return Ok(basepaths::Mode::GitModified);
+            return Ok(paths::mode::Mode::GitModified);
         } else if common.staged {
-            return Ok(basepaths::Mode::GitStaged);
+            return Ok(paths::mode::Mode::GitStaged);
         } else if common.staged_with_stash {
-            return Ok(basepaths::Mode::GitStagedWithStash);
+            return Ok(paths::mode::Mode::GitStagedWithStash);
         }
         if common.paths.is_empty() {
             return Err(PreciousError::NoModeOrPathsInCliArgs.into());
         }
-        Ok(basepaths::Mode::FromCli)
+        Ok(paths::mode::Mode::FromCli)
     }
 
     fn project_root(cwd: &Path) -> Result<PathBuf> {
@@ -335,7 +335,7 @@ impl Precious {
         self.run_all_filters(
             "tidying",
             tidiers,
-            |self_: &mut Self, paths: Vec<basepaths::Paths>, tidier: &filter::Filter| {
+            |self_: &mut Self, paths: Vec<paths::groups::Group>, tidier: &filter::Filter| {
                 self_.run_one_tidier(paths, tidier)
             },
         )
@@ -350,7 +350,7 @@ impl Precious {
         self.run_all_filters(
             "linting",
             linters,
-            |self_: &mut Self, paths: Vec<basepaths::Paths>, linter: &filter::Filter| {
+            |self_: &mut Self, paths: Vec<paths::groups::Group>, linter: &filter::Filter| {
                 self_.run_one_linter(paths, linter)
             },
         )
@@ -363,7 +363,7 @@ impl Precious {
         run_filter: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, Vec<basepaths::Paths>, &filter::Filter) -> Option<Vec<ActionFailure>>,
+        R: Fn(&mut Self, Vec<paths::groups::Group>, &filter::Filter) -> Option<Vec<ActionFailure>>,
     {
         if filters.is_empty() {
             if let Some(c) = &self.command {
@@ -380,11 +380,11 @@ impl Precious {
         }
 
         let cli_paths = match self.mode {
-            basepaths::Mode::FromCli => self.paths.clone(),
+            paths::mode::Mode::FromCli => self.paths.clone(),
             _ => vec![],
         };
 
-        match self.basepaths()?.paths(cli_paths)? {
+        match self.group_maker()?.groups(cli_paths)? {
             None => Ok(self.no_files_exit()),
             Some(paths) => {
                 debug!("Setting current dir to {}", self.project_root.display());
@@ -439,62 +439,64 @@ impl Precious {
 
     fn run_one_tidier(
         &mut self,
-        all_paths: Vec<basepaths::Paths>,
+        all_paths: Vec<paths::groups::Group>,
         t: &filter::Filter,
     ) -> Option<Vec<ActionFailure>> {
-        let runner =
-            |s: &Self, p: &Path, paths: &basepaths::Paths| -> Option<Result<(), ActionFailure>> {
-                match t.tidy(p, &paths.files) {
-                    Ok(Some(true)) => {
-                        if !s.quiet {
-                            println!(
-                                "{} Tidied by {}:    {}",
-                                s.chars.tidied,
-                                t.name,
-                                p.display()
-                            );
-                        }
-                        Some(Ok(()))
-                    }
-                    Ok(Some(false)) => {
-                        if !s.quiet {
-                            println!(
-                                "{} Unchanged by {}: {}",
-                                s.chars.unchanged,
-                                t.name,
-                                p.display()
-                            );
-                        }
-                        Some(Ok(()))
-                    }
-                    Ok(None) => None,
-                    Err(e) => {
+        let runner = |s: &Self,
+                      p: &Path,
+                      paths: &paths::groups::Group|
+         -> Option<Result<(), ActionFailure>> {
+            match t.tidy(p, &paths.files) {
+                Ok(Some(true)) => {
+                    if !s.quiet {
                         println!(
-                            "{} error {}: {}",
-                            s.chars.execution_error,
+                            "{} Tidied by {}:    {}",
+                            s.chars.tidied,
                             t.name,
                             p.display()
                         );
-                        Some(Err(ActionFailure {
-                            error: format!("{:#}", e),
-                            config_key: t.config_key(),
-                            path: p.to_owned(),
-                        }))
                     }
+                    Some(Ok(()))
                 }
-            };
+                Ok(Some(false)) => {
+                    if !s.quiet {
+                        println!(
+                            "{} Unchanged by {}: {}",
+                            s.chars.unchanged,
+                            t.name,
+                            p.display()
+                        );
+                    }
+                    Some(Ok(()))
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    println!(
+                        "{} error {}: {}",
+                        s.chars.execution_error,
+                        t.name,
+                        p.display()
+                    );
+                    Some(Err(ActionFailure {
+                        error: format!("{:#}", e),
+                        config_key: t.config_key(),
+                        path: p.to_owned(),
+                    }))
+                }
+            }
+        };
 
         self.run_parallel("Tidying", all_paths, t, runner)
     }
 
     fn run_one_linter(
         &mut self,
-        all_paths: Vec<basepaths::Paths>,
+        all_paths: Vec<paths::groups::Group>,
         l: &filter::Filter,
     ) -> Option<Vec<ActionFailure>> {
         let runner = |s: &Self,
                       p: &Path,
-                      paths: &basepaths::Paths|
+                      paths: &paths::groups::Group|
          -> Option<Result<(), ActionFailure>> {
             match l.lint(p, &paths.files) {
                 Ok(Some(lo)) => {
@@ -542,12 +544,12 @@ impl Precious {
     fn run_parallel<R>(
         &mut self,
         what: &str,
-        all_paths: Vec<basepaths::Paths>,
+        all_paths: Vec<paths::groups::Group>,
         f: &filter::Filter,
         runner: R,
     ) -> Option<Vec<ActionFailure>>
     where
-        R: Fn(&Self, &Path, &basepaths::Paths) -> Option<Result<(), ActionFailure>> + Sync,
+        R: Fn(&Self, &Path, &paths::groups::Group) -> Option<Result<(), ActionFailure>> + Sync,
     {
         let map = self.path_map(all_paths, f);
 
@@ -597,9 +599,9 @@ impl Precious {
 
     fn path_map(
         &mut self,
-        all_paths: Vec<basepaths::Paths>,
+        all_paths: Vec<paths::groups::Group>,
         f: &filter::Filter,
-    ) -> HashMap<PathBuf, basepaths::Paths> {
+    ) -> HashMap<PathBuf, paths::groups::Group> {
         if f.run_mode_is(filter::RunMode::Root) {
             return self.root_as_paths(all_paths);
         } else if f.run_mode_is(filter::RunMode::Dirs) {
@@ -610,8 +612,8 @@ impl Precious {
 
     fn root_as_paths(
         &mut self,
-        mut all_paths: Vec<basepaths::Paths>,
-    ) -> HashMap<PathBuf, basepaths::Paths> {
+        mut all_paths: Vec<paths::groups::Group>,
+    ) -> HashMap<PathBuf, paths::groups::Group> {
         let mut root_map = HashMap::new();
 
         let mut all: Vec<PathBuf> = vec![];
@@ -619,7 +621,7 @@ impl Precious {
             all.append(&mut p.files);
         }
 
-        let root_paths = basepaths::Paths {
+        let root_paths = paths::groups::Group {
             dir: PathBuf::from("."),
             files: all,
         };
@@ -627,7 +629,10 @@ impl Precious {
         root_map
     }
 
-    fn dirs(&mut self, all_paths: Vec<basepaths::Paths>) -> HashMap<PathBuf, basepaths::Paths> {
+    fn dirs(
+        &mut self,
+        all_paths: Vec<paths::groups::Group>,
+    ) -> HashMap<PathBuf, paths::groups::Group> {
         let mut map = HashMap::new();
 
         for p in all_paths {
@@ -636,7 +641,10 @@ impl Precious {
         map
     }
 
-    fn files(&mut self, all_paths: Vec<basepaths::Paths>) -> HashMap<PathBuf, basepaths::Paths> {
+    fn files(
+        &mut self,
+        all_paths: Vec<paths::groups::Group>,
+    ) -> HashMap<PathBuf, paths::groups::Group> {
         let mut map = HashMap::new();
 
         for p in all_paths {
@@ -647,8 +655,8 @@ impl Precious {
         map
     }
 
-    fn basepaths(&mut self) -> Result<basepaths::BasePaths> {
-        basepaths::BasePaths::new(
+    fn group_maker(&mut self) -> Result<paths::groups::GroupMaker> {
+        paths::groups::GroupMaker::new(
             self.mode,
             self.project_root.clone(),
             self.cwd.clone(),
@@ -816,7 +824,7 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn basepaths_uses_project_root() -> Result<()> {
+    fn group_maker_uses_project_root() -> Result<()> {
         // It'd be more Rusty to make this a macro that generates multiple
         // `#[test]` funcs, but that's kind of painful. Maybe I'll do this
         // later.
@@ -905,7 +913,7 @@ lint_failure_exit_codes = [1]
         ];
         for t in tests {
             println!(
-                "  basepaths_uses_project_root: {} [{}]",
+                "  group_maker_uses_project_root: {} [{}]",
                 if t.flag.is_empty() { "<none>" } else { t.flag },
                 t.paths.join(" ")
             );
@@ -927,10 +935,10 @@ lint_failure_exit_codes = [1]
             let app = App::try_parse_from(&cmd)?;
 
             let mut p = Precious::new(app)?;
-            let mut paths = p.basepaths()?;
+            let mut paths = p.group_maker()?;
 
             assert_eq!(
-                paths.paths(t.paths.iter().map(PathBuf::from).collect())?,
+                paths.groups(t.paths.iter().map(PathBuf::from).collect())?,
                 Some(t.expect.iter().map(|e| make_paths(e)).collect::<Vec<_>>())
             );
         }
@@ -1161,8 +1169,8 @@ lint_failure_exit_codes = [1]
         }
     }
 
-    fn make_paths(from: &[&str]) -> basepaths::Paths {
-        basepaths::Paths {
+    fn make_paths(from: &[&str]) -> paths::groups::Group {
+        paths::groups::Group {
             dir: PathBuf::from(from[0]),
             files: from[1..].iter().map(PathBuf::from).collect(),
         }

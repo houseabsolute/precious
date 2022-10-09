@@ -1,4 +1,4 @@
-use crate::path_matcher;
+use crate::paths::matcher;
 use anyhow::Result;
 use log::{debug, info};
 use precious_exec as exec;
@@ -77,8 +77,8 @@ pub struct Filter {
     root: PathBuf,
     pub name: String,
     typ: FilterType,
-    includer: path_matcher::Matcher,
-    excluder: path_matcher::Matcher,
+    includer: matcher::Matcher,
+    excluder: matcher::Matcher,
     pub run_mode: RunMode,
     chdir: bool,
     cmd: Vec<String>,
@@ -155,10 +155,10 @@ impl Filter {
             root: params.root,
             name: params.name,
             typ: params.typ,
-            includer: path_matcher::MatcherBuilder::new()
+            includer: matcher::MatcherBuilder::new()
                 .with(&params.include)?
                 .build()?,
-            excluder: path_matcher::MatcherBuilder::new()
+            excluder: matcher::MatcherBuilder::new()
                 .with(&params.exclude)?
                 .build()?,
             run_mode: params.run_mode,
@@ -526,13 +526,13 @@ fn replace_root(cmd: Vec<String>, root: &Path) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::path_matcher;
+    use crate::paths::matcher;
     use anyhow::Result;
     use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
 
-    fn matcher(globs: &[&str]) -> Result<path_matcher::Matcher> {
-        path_matcher::MatcherBuilder::new().with(globs)?.build()
+    fn matcher(globs: &[&str]) -> Result<matcher::Matcher> {
+        matcher::MatcherBuilder::new().with(globs)?.build()
     }
 
     fn default_filter_params() -> Result<Filter> {
