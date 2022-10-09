@@ -332,7 +332,13 @@ impl Precious {
         let tidiers = self
             .config
             .tidy_filters(&self.project_root, self.command.as_deref())?;
-        self.run_all_filters("tidying", tidiers, |s, p, t| s.run_one_tidier(p, t))
+        self.run_all_filters(
+            "tidying",
+            tidiers,
+            |self_: &mut Self, paths: Vec<basepaths::Paths>, tidier: &filter::Filter| {
+                self_.run_one_tidier(paths, tidier)
+            },
+        )
     }
 
     fn lint(&mut self) -> Result<Exit> {
@@ -341,7 +347,13 @@ impl Precious {
         let linters = self
             .config
             .lint_filters(&self.project_root, self.command.as_deref())?;
-        self.run_all_filters("linting", linters, |s, p, l| s.run_one_linter(p, l))
+        self.run_all_filters(
+            "linting",
+            linters,
+            |self_: &mut Self, paths: Vec<basepaths::Paths>, linter: &filter::Filter| {
+                self_.run_one_linter(paths, linter)
+            },
+        )
     }
 
     fn run_all_filters<R>(
