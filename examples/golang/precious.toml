@@ -15,8 +15,8 @@ cmd = [
     # the structure of your repo, you may get a better result by using the
     # `--allow-serial-runners` flag instead. However, you must use one of
     # these, as by default golangci-lint can simply timeout and fail when
-    # multiple instances of the executable as invoked at the same time for the
-    # same project.
+    # multiple instances of the executable are invoked at the same time for
+    # the same project.
     "--allow-parallel-runners",
 ]
 env = { "FAIL_ON_WARNINGS" = "1" }
