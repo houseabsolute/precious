@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use once_cell::sync::Lazy;
+use log::debug;
+use once_cell::sync::{Lazy, OnceCell};
 use precious_exec as exec;
 use regex::Regex;
 use std::{
@@ -40,6 +41,12 @@ impl TestHelper {
     ];
 
     pub fn new() -> Result<Self> {
+        static LOGGER_INIT: OnceCell<bool> = OnceCell::new();
+        LOGGER_INIT.get_or_init(|| {
+            env_logger::builder().is_test(true).init();
+            true
+        });
+
         let temp = tempdir()?;
         let root = maybe_canonicalize(temp.path())?;
         let helper = TestHelper {
