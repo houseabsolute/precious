@@ -17,7 +17,8 @@ pub struct TestHelper {
     // While we never access this field we need to hold onto the tempdir or
     // else the directory it references will be deleted.
     _tempdir: TempDir,
-    root: PathBuf,
+    git_root: PathBuf,
+    precious_root: PathBuf,
     paths: Vec<PathBuf>,
     root_gitignore_file: PathBuf,
     tests_data_gitignore_file: PathBuf,
@@ -51,7 +52,8 @@ impl TestHelper {
         let root = maybe_canonicalize(temp.path())?;
         let helper = TestHelper {
             _tempdir: temp,
-            root,
+            git_root: root.clone(),
+            precious_root: root,
             paths: Self::PATHS.iter().map(PathBuf::from).collect(),
             root_gitignore_file: PathBuf::from(".gitignore"),
             tests_data_gitignore_file: PathBuf::from("tests/data/.gitignore"),
@@ -59,32 +61,25 @@ impl TestHelper {
         Ok(helper)
     }
 
+    pub fn with_precious_root_in_subdir<P: AsRef<Path>>(mut self, subdir: P) -> Self {
+        self.precious_root.push(subdir);
+        self
+    }
+
     pub fn with_git_repo(self) -> Result<Self> {
         self.create_git_repo()?;
         Ok(self)
     }
 
-    pub fn with_config_file(self, file_name: &str, content: &str) -> Result<Self> {
-        if cfg!(windows) {
-            self.write_file(&self.config_file(file_name), &content.replace('\n', "\r\n"))?;
-        } else {
-            self.write_file(&self.config_file(file_name), content)?;
-        }
-        Ok(self)
-    }
-
-    pub fn pushd_to_root(&self) -> Result<Pushd> {
-        pushd_to(self.root.clone())
-    }
-
     fn create_git_repo(&self) -> Result<()> {
+        debug!("Creating git repo in {}", self.git_root.display());
         for p in self.paths.iter() {
-            let content = if is_rust_file(p) {
+            let content = if is_rust_file(&p) {
                 "fn foo() {}\n"
             } else {
                 "some text"
             };
-            self.write_file(p, content)?;
+            self.write_file(&p, content)?;
         }
 
         self.run_git(&["init", "--initial-branch", "master"])?;
@@ -104,12 +99,29 @@ impl TestHelper {
         Ok(())
     }
 
-    pub fn root(&self) -> PathBuf {
-        self.root.clone()
+    pub fn with_config_file(self, file_name: &str, content: &str) -> Result<Self> {
+        if cfg!(windows) {
+            self.write_file(&self.config_file(file_name), &content.replace('\n', "\r\n"))?;
+        } else {
+            self.write_file(&self.config_file(file_name), content)?;
+        }
+        Ok(self)
+    }
+
+    pub fn pushd_to_git_root(&self) -> Result<Pushd> {
+        pushd_to(self.git_root.clone())
+    }
+
+    pub fn git_root(&self) -> PathBuf {
+        self.git_root.clone()
+    }
+
+    pub fn precious_root(&self) -> PathBuf {
+        self.precious_root.clone()
     }
 
     pub fn config_file(&self, file_name: &str) -> PathBuf {
-        let mut path = self.root.clone();
+        let mut path = self.precious_root.clone();
         path.push(file_name);
         path
     }
@@ -160,7 +172,7 @@ generated.*
             &HashMap::new(),
             &[0],
             None,
-            Some(&self.root()),
+            Some(&self.git_root),
         )?;
         Ok(())
     }
@@ -178,7 +190,7 @@ generated.*
             &expect_codes,
             // If rerere is enabled, it prints to stderr.
             Some(&[RERERE_RE.clone()]),
-            Some(&self.root()),
+            Some(&self.git_root),
         )?;
         Ok(())
     }
@@ -194,7 +206,14 @@ generated.*
     }
 
     fn run_git(&self, args: &[&str]) -> Result<()> {
-        exec::run("git", args, &HashMap::new(), &[0], None, Some(&self.root))?;
+        exec::run(
+            "git",
+            args,
+            &HashMap::new(),
+            &[0],
+            None,
+            Some(&self.git_root),
+        )?;
         Ok(())
     }
 
@@ -215,10 +234,13 @@ generated.*
     }
 
     pub fn write_file<P: AsRef<Path>>(&self, rel: P, content: &str) -> Result<()> {
-        let mut full = self.root.clone();
+        let mut full = self.precious_root.clone();
         full.push(rel.as_ref());
-        fs::create_dir_all(full.parent().unwrap())
-            .with_context(|| format!("Creating dir at {}", full.parent().unwrap().display(),))?;
+        let parent = full.parent().unwrap();
+        debug!("creating dir at {}", parent.display());
+        fs::create_dir_all(&parent)
+            .with_context(|| format!("Creating dir at {}", parent.display(),))?;
+        debug!("writing file at {}", full.display());
         let mut file = fs::File::create(full.clone())
             .context(format!("Creating file at {}", full.display()))?;
         file.write_all(content.as_bytes())
@@ -229,7 +251,7 @@ generated.*
 
     #[cfg(not(target_os = "windows"))]
     pub fn read_file(&self, rel: &Path) -> Result<String> {
-        let mut full = self.root.clone();
+        let mut full = self.precious_root.clone();
         full.push(rel);
         let content = fs::read_to_string(full.clone())
             .context(format!("Reading file at {}", full.display()))?;

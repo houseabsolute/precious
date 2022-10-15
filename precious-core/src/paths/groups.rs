@@ -19,6 +19,7 @@ use thiserror::Error;
 pub struct GroupMaker {
     mode: Mode,
     project_root: PathBuf,
+    git_root: Option<PathBuf>,
     cwd: PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
@@ -60,6 +61,7 @@ impl GroupMaker {
         Ok(GroupMaker {
             mode,
             project_root,
+            git_root: None,
             cwd,
             exclude_globs,
             stashed: false,
@@ -98,20 +100,8 @@ impl GroupMaker {
             return Ok(());
         }
 
-        let res = exec::run(
-            "git",
-            &["rev-parse", "--show-toplevel"],
-            &HashMap::new(),
-            &[0],
-            None,
-            Some(&self.project_root),
-        )?;
-
-        let stdout = res
-            .stdout
-            .ok_or(GroupMakerError::CouldNotDetermineRepoRoot)?;
-        let repo_root = stdout.trim();
-        let mut mm = PathBuf::from(repo_root);
+        let git_root = self.git_root()?;
+        let mut mm = git_root.clone();
         mm.push(".git");
         mm.push("MERGE_MODE");
 
@@ -124,12 +114,33 @@ impl GroupMaker {
                 // If there is a post-checkout hook, git will show any output
                 // it prints to stdout on stderr instead.
                 Some(&[KEEP_INDEX_RE.clone()]),
-                Some(&self.project_root),
+                Some(&git_root),
             )?;
             self.stashed = true;
         }
 
         Ok(())
+    }
+
+    fn git_root(&mut self) -> Result<PathBuf> {
+        if let Some(r) = &self.git_root {
+            return Ok(r.to_path_buf());
+        }
+
+        let res = exec::run(
+            "git",
+            &["rev-parse", "--show-toplevel"],
+            &HashMap::new(),
+            &[0],
+            None,
+            Some(&self.project_root),
+        )?;
+
+        let stdout = res
+            .stdout
+            .ok_or(GroupMakerError::CouldNotDetermineRepoRoot)?;
+        self.git_root = Some(PathBuf::from(stdout.trim()));
+        Ok(self.git_root.clone().unwrap())
     }
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>> {
@@ -164,12 +175,12 @@ impl GroupMaker {
         Ok(Some(files))
     }
 
-    fn git_modified_files(&self) -> Result<Option<Vec<PathBuf>>> {
+    fn git_modified_files(&mut self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Getting modified files according to git");
         self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM"])
     }
 
-    fn git_staged_files(&self) -> Result<Option<Vec<PathBuf>>> {
+    fn git_staged_files(&mut self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Getting staged files according to git");
         self.files_from_git(&["diff", "--cached", "--name-only", "--diff-filter=ACM"])
     }
@@ -206,7 +217,8 @@ impl GroupMaker {
         ))
     }
 
-    fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
+    fn files_from_git(&mut self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
+        let git_root = self.git_root()?;
         let result = exec::run(
             "git",
             args,
@@ -215,20 +227,26 @@ impl GroupMaker {
             None,
             Some(&self.project_root),
         )?;
-
         let excluder = self.excluder()?;
+
         match result.stdout {
             Some(s) => Ok(Some(
+                // In the common case where the git repo root and project root
+                // are the same, this isn't necessary, because git will give
+                // us paths relative to the project root. But if the precious
+                // root _isn't_ the git root, we need to get the path relative
+                // to the project root, not the repo root.
                 self.relative_files(
-                    &self.project_root,
+                    &git_root,
                     s.lines()
                         .filter_map(|rel| {
-                            if excluder.path_matches(&PathBuf::from(rel)) {
+                            let pb = PathBuf::from(rel);
+                            if excluder.path_matches(&pb) {
                                 return None;
                             }
 
-                            let mut f = self.project_root.clone();
-                            f.push(rel);
+                            let mut f = git_root.clone();
+                            f.push(&pb);
                             Some(f)
                         })
                         .collect(),
@@ -368,7 +386,7 @@ mod tests {
             echo "post checkout hook output"
         "#;
 
-        let mut file_path = helper.root();
+        let mut file_path = helper.precious_root();
         file_path.push(".git/hooks/post-checkout");
         helper.write_file(&file_path, hook)?;
 
@@ -384,7 +402,7 @@ mod tests {
     fn files_to_paths() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
-        let bp = new_group_maker(Mode::All, helper.root())?;
+        let bp = new_group_maker(Mode::All, helper.precious_root())?;
         let paths = bp.files_to_groups(helper.all_files())?.unwrap();
         assert_eq!(paths.len(), 4, "got three paths entries");
         assert_eq!(
@@ -439,7 +457,7 @@ mod tests {
     #[test]
     fn all_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_group_maker(Mode::All, helper.root())?;
+        let mut bp = new_group_maker(Mode::All, helper.precious_root())?;
         assert_eq!(bp.groups(vec![])?, bp.files_to_groups(helper.all_files())?);
         Ok(())
     }
@@ -447,9 +465,9 @@ mod tests {
     #[test]
     fn all_mode_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
-        let mut bp = new_group_maker_with_cwd(Mode::All, helper.root(), cwd)?;
+        let mut bp = new_group_maker_with_cwd(Mode::All, helper.precious_root(), cwd)?;
         assert_eq!(bp.groups(vec![])?, bp.files_to_groups(helper.all_files())?);
         Ok(())
     }
@@ -461,7 +479,7 @@ mod tests {
         let mut expect = testhelper::TestHelper::non_ignored_files();
         expect.append(&mut gitignores);
 
-        let mut bp = new_group_maker(Mode::All, helper.root())?;
+        let mut bp = new_group_maker(Mode::All, helper.precious_root())?;
         assert_eq!(bp.groups(vec![])?, bp.files_to_groups(expect)?);
         Ok(())
     }
@@ -472,8 +490,8 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut bp = new_group_maker_with_excludes(
             Mode::All,
-            helper.root(),
-            helper.root(),
+            helper.precious_root(),
+            helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
         assert_eq!(bp.groups(vec![])?, bp.files_to_groups(helper.all_files())?);
@@ -483,7 +501,7 @@ mod tests {
     #[test]
     fn git_modified_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_group_maker(Mode::GitModified, helper.root())?;
+        let mut bp = new_group_maker(Mode::GitModified, helper.precious_root())?;
         let res = bp.groups(vec![]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
@@ -494,7 +512,7 @@ mod tests {
     fn git_modified_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
-        let mut bp = new_group_maker(Mode::GitModified, helper.root())?;
+        let mut bp = new_group_maker(Mode::GitModified, helper.precious_root())?;
         let expect = bp.files_to_groups(
             modified
                 .iter()
@@ -510,9 +528,9 @@ mod tests {
     fn git_modified_mode_with_changes_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
-        let mut bp = new_group_maker_with_cwd(Mode::GitModified, helper.root(), cwd)?;
+        let mut bp = new_group_maker_with_cwd(Mode::GitModified, helper.precious_root(), cwd)?;
         let expect = bp.files_to_groups(
             modified
                 .iter()
@@ -532,8 +550,8 @@ mod tests {
 
         let mut bp = new_group_maker_with_excludes(
             Mode::GitModified,
-            helper.root(),
-            helper.root(),
+            helper.precious_root(),
+            helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
         assert_eq!(bp.groups(vec![])?, None);
@@ -551,8 +569,8 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut bp = new_group_maker_with_excludes(
             Mode::GitModified,
-            helper.root(),
-            helper.root(),
+            helper.precious_root(),
+            helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_groups(
@@ -575,11 +593,11 @@ mod tests {
 
         let modified = helper.modify_files()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut bp = new_group_maker_with_excludes(
             Mode::GitModified,
-            helper.root(),
+            helper.precious_root(),
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
@@ -595,9 +613,29 @@ mod tests {
     }
 
     #[test]
+    fn git_modified_mode_when_repo_root_ne_precious_root() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?
+            .with_precious_root_in_subdir("subdir")
+            .with_git_repo()?;
+        let modified = helper.modify_files()?;
+        let mut project_root = helper.git_root();
+        project_root.push("subdir");
+        let mut bp = new_group_maker(Mode::GitModified, project_root)?;
+        let expect = bp.files_to_groups(
+            modified
+                .iter()
+                .sorted_by(|a, b| a.cmp(b))
+                .map(PathBuf::from)
+                .collect::<Vec<PathBuf>>(),
+        )?;
+        assert_eq!(bp.groups(vec![])?, expect);
+        Ok(())
+    }
+
+    #[test]
     fn git_staged_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
+        let mut bp = new_group_maker(Mode::GitStaged, helper.precious_root())?;
         let res = bp.groups(vec![]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
@@ -610,14 +648,14 @@ mod tests {
         let modified = helper.modify_files()?;
 
         {
-            let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
+            let mut bp = new_group_maker(Mode::GitStaged, helper.precious_root())?;
             let res = bp.groups(vec![]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
 
         {
-            let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
+            let mut bp = new_group_maker(Mode::GitStaged, helper.precious_root())?;
             helper.stage_all()?;
             let expect = bp.files_to_groups(
                 modified
@@ -636,18 +674,19 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
 
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
 
         {
-            let mut bp = new_group_maker_with_cwd(Mode::GitStaged, helper.root(), cwd.clone())?;
+            let mut bp =
+                new_group_maker_with_cwd(Mode::GitStaged, helper.precious_root(), cwd.clone())?;
             let res = bp.groups(vec![]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
 
         {
-            let mut bp = new_group_maker_with_cwd(Mode::GitStaged, helper.root(), cwd)?;
+            let mut bp = new_group_maker_with_cwd(Mode::GitStaged, helper.precious_root(), cwd)?;
             helper.stage_all()?;
             let expect = bp.files_to_groups(
                 modified
@@ -669,8 +708,8 @@ mod tests {
 
         let mut bp = new_group_maker_with_excludes(
             Mode::GitStaged,
-            helper.root(),
-            helper.root(),
+            helper.precious_root(),
+            helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
         assert_eq!(bp.groups(vec![])?, None);
@@ -685,8 +724,8 @@ mod tests {
         helper.stage_all()?;
         let mut bp = new_group_maker_with_excludes(
             Mode::GitStaged,
-            helper.root(),
-            helper.root(),
+            helper.precious_root(),
+            helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_groups(
@@ -706,11 +745,11 @@ mod tests {
         let modified = helper.modify_files()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut bp = new_group_maker_with_excludes(
             Mode::GitStaged,
-            helper.root(),
+            helper.precious_root(),
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
@@ -737,7 +776,7 @@ mod tests {
         set_up_post_checkout_hook(&helper)?;
 
         {
-            let mut bp = new_group_maker(Mode::GitStagedWithStash, helper.root())?;
+            let mut bp = new_group_maker(Mode::GitStagedWithStash, helper.precious_root())?;
             let expect = bp.files_to_groups(
                 modified
                     .iter()
@@ -747,12 +786,12 @@ mod tests {
             )?;
             assert_eq!(bp.groups(vec![])?, expect);
             assert_eq!(
-                String::from_utf8(fs::read(helper.root().join(unstaged))?)?,
+                String::from_utf8(fs::read(helper.precious_root().join(unstaged))?)?,
                 String::from("some text"),
             );
         }
         assert_eq!(
-            String::from_utf8(fs::read(helper.root().join(unstaged))?)?,
+            String::from_utf8(fs::read(helper.precious_root().join(unstaged))?)?,
             String::from("new content"),
         );
         Ok(())
@@ -788,7 +827,7 @@ mod tests {
         helper.write_file(file, "line 1\nline 1.7\nline 2\n")?;
         helper.stage_all()?;
 
-        let mut bp = new_group_maker(Mode::GitStaged, helper.root())?;
+        let mut bp = new_group_maker(Mode::GitStaged, helper.precious_root())?;
         let expect = bp.files_to_groups(vec![PathBuf::from("merge-conflict-here")])?;
 
         assert_eq!(bp.groups(vec![])?, expect);
@@ -799,7 +838,7 @@ mod tests {
     #[test]
     fn cli_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_group_maker(Mode::FromCli, helper.root())?;
+        let mut bp = new_group_maker(Mode::FromCli, helper.precious_root())?;
         let expect = bp.files_to_groups(
             helper
                 .all_files()
@@ -816,9 +855,9 @@ mod tests {
     #[test]
     fn cli_mode_given_dir_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
-        let mut bp = new_group_maker_with_cwd(Mode::FromCli, helper.root(), cwd)?;
+        let mut bp = new_group_maker_with_cwd(Mode::FromCli, helper.precious_root(), cwd)?;
         let expect = bp.files_to_groups(
             helper
                 .all_files()
@@ -835,9 +874,9 @@ mod tests {
     #[test]
     fn cli_mode_given_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
-        let mut bp = new_group_maker_with_cwd(Mode::FromCli, helper.root(), cwd)?;
+        let mut bp = new_group_maker_with_cwd(Mode::FromCli, helper.precious_root(), cwd)?;
         let expect = bp.files_to_groups(
             ["src/main.rs", "src/module.rs"]
                 .iter()
@@ -857,8 +896,8 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
-            helper.root(),
-            helper.root(),
+            helper.precious_root(),
+            helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_groups(
@@ -877,11 +916,11 @@ mod tests {
     fn cli_mode_given_dir_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
-            helper.root(),
+            helper.precious_root(),
             cwd,
             vec!["src/main.rs".to_string()],
         )?;
@@ -906,8 +945,8 @@ mod tests {
         helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
-            helper.root(),
-            helper.root(),
+            helper.precious_root(),
+            helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
         let expect = bp.files_to_groups(vec![helper.all_files()[0].clone()])?;
@@ -923,11 +962,11 @@ mod tests {
     fn cli_mode_given_files_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         helper.write_file(&PathBuf::from("src/main.rs"), "initial content")?;
-        let mut cwd = helper.root();
+        let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut bp = new_group_maker_with_excludes(
             Mode::FromCli,
-            helper.root(),
+            helper.precious_root(),
             cwd,
             vec!["src/main.rs".to_string()],
         )?;
@@ -940,7 +979,7 @@ mod tests {
     #[test]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut bp = new_group_maker(Mode::FromCli, helper.root())?;
+        let mut bp = new_group_maker(Mode::FromCli, helper.precious_root())?;
         let cli_paths = vec![
             helper.all_files()[0].clone(),
             PathBuf::from("does/not/exist"),

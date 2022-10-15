@@ -741,7 +741,7 @@ lint_failure_exit_codes = [1]
     fn new() -> Result<()> {
         for name in super::CONFIG_FILE_NAMES {
             let helper = TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
-            let _pushd = helper.pushd_to_root()?;
+            let _pushd = helper.pushd_to_git_root()?;
 
             let app = App::try_parse_from(&["precious", "tidy", "--all"])?;
             let config = app.config.clone();
@@ -764,7 +764,7 @@ lint_failure_exit_codes = [1]
     fn new_with_ascii_flag() -> Result<()> {
         let helper =
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&["precious", "--ascii", "tidy", "--all"])?;
 
@@ -779,7 +779,7 @@ lint_failure_exit_codes = [1]
     fn new_with_config_path() -> Result<()> {
         let helper =
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&[
             "precious",
@@ -807,7 +807,7 @@ lint_failure_exit_codes = [1]
     fn set_root_prefers_config_file() -> Result<()> {
         let helper = TestHelper::new()?.with_git_repo()?;
 
-        let mut src_dir = helper.root();
+        let mut src_dir = helper.precious_root();
         src_dir.push("src");
         let mut subdir_config = src_dir.clone();
         subdir_config.push(DEFAULT_CONFIG_FILE_NAME);
@@ -922,7 +922,7 @@ lint_failure_exit_codes = [1]
                 .with_git_repo()?;
             (t.action)(&helper)?;
 
-            let mut src_dir = helper.root();
+            let mut src_dir = helper.precious_root();
             src_dir.push("src");
             let _pushd = Pushd::new(src_dir)?;
 
@@ -958,7 +958,7 @@ cmd     = ["true"]
 ok_exit_codes = [0]
 "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
 
@@ -982,7 +982,7 @@ cmd     = ["false"]
 ok_exit_codes = [0]
 "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
 
@@ -1007,7 +1007,7 @@ ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&["precious", "--quiet", "lint", "--all"])?;
 
@@ -1024,7 +1024,7 @@ lint_failure_exit_codes = [1]
     fn one_command_given() -> Result<()> {
         let helper =
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&[
             "precious",
@@ -1048,7 +1048,7 @@ lint_failure_exit_codes = [1]
     fn one_command_given_which_does_not_exist() -> Result<()> {
         let helper =
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&[
             "precious",
@@ -1104,7 +1104,7 @@ lint_failure_exit_codes = [1]
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
         helper.write_file(&test_replace, "The letter A")?;
-        let _pushd = helper.pushd_to_root()?;
+        let _pushd = helper.pushd_to_git_root()?;
 
         let app = App::try_parse_from(&["precious", "--quiet", "tidy", "-a"])?;
 

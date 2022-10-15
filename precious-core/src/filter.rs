@@ -570,9 +570,11 @@ mod tests {
         };
 
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        assert!(filter.require_path_type("tidy", &helper.root()).is_ok());
+        assert!(filter
+            .require_path_type("tidy", &helper.precious_root())
+            .is_ok());
 
-        let mut file = helper.root();
+        let mut file = helper.precious_root();
         file.push(helper.all_files()[0].clone());
         let res = filter.require_path_type("tidy", &file);
         assert!(res.is_err());
@@ -600,17 +602,17 @@ mod tests {
         };
 
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let res = filter.require_path_type("tidy", &helper.root());
+        let res = filter.require_path_type("tidy", &helper.precious_root());
         assert!(res.is_err());
         assert_eq!(
             std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap()),
             std::mem::discriminant(&FilterError::CanOnlyOperateOnFiles {
                 method: "tidy",
-                path: helper.root().to_string_lossy().to_string(),
+                path: helper.precious_root().to_string_lossy().to_string(),
             }),
         );
 
-        let mut file = helper.root();
+        let mut file = helper.precious_root();
         file.push(helper.all_files()[0].clone());
         assert!(filter.require_path_type("tidy", &file).is_ok());
 

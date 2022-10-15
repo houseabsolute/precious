@@ -1,5 +1,10 @@
 <!-- next-header -->
 
+- Fixed path handling for `--git` and `--staged` when the project root (the
+  directory containing the precious config file) is a subdirectory of the git
+  repo root. Previously this would just attempt to run against incorrect
+  paths.
+
 ## 0.3.0 - 2022-10-02
 
 - The `expect_stderr` config parameter has been replaced by

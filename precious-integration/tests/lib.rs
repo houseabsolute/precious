@@ -54,7 +54,7 @@ fn all() -> Result<()> {
         &env,
         &[0],
         None,
-        Some(&helper.root()),
+        Some(&helper.precious_root()),
     )?;
     exec::run(
         &precious,
@@ -62,7 +62,7 @@ fn all() -> Result<()> {
         &env,
         &[0],
         None,
-        Some(&helper.root()),
+        Some(&helper.precious_root()),
     )?;
 
     Ok(())
@@ -82,7 +82,7 @@ fn git() -> Result<()> {
         &env,
         &[0],
         None,
-        Some(&helper.root()),
+        Some(&helper.precious_root()),
     )?;
     exec::run(
         &precious,
@@ -90,7 +90,7 @@ fn git() -> Result<()> {
         &env,
         &[0],
         None,
-        Some(&helper.root()),
+        Some(&helper.precious_root()),
     )?;
 
     Ok(())
@@ -111,7 +111,7 @@ fn staged() -> Result<()> {
         &env,
         &[0],
         None,
-        Some(&helper.root()),
+        Some(&helper.precious_root()),
     )?;
     exec::run(
         &precious,
@@ -119,7 +119,7 @@ fn staged() -> Result<()> {
         &env,
         &[0],
         None,
-        Some(&helper.root()),
+        Some(&helper.precious_root()),
     )?;
 
     Ok(())
@@ -135,11 +135,25 @@ fn cli_paths() -> Result<()> {
     let env = HashMap::new();
     let mut args = vec!["lint"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    exec::run(&precious, &args, &env, &[0], None, Some(&helper.root()))?;
+    exec::run(
+        &precious,
+        &args,
+        &env,
+        &[0],
+        None,
+        Some(&helper.precious_root()),
+    )?;
 
     let mut args = vec!["tidy"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    exec::run(&precious, &args, &env, &[0], None, Some(&helper.root()))?;
+    exec::run(
+        &precious,
+        &args,
+        &env,
+        &[0],
+        None,
+        Some(&helper.precious_root()),
+    )?;
 
     Ok(())
 }
@@ -152,7 +166,7 @@ fn all_in_subdir() -> Result<()> {
     let precious = precious_path()?;
     let env = HashMap::new();
 
-    let mut cwd = helper.root();
+    let mut cwd = helper.precious_root();
     cwd.push("src");
 
     exec::run(&precious, &["lint", "--all"], &env, &[0], None, Some(&cwd))?;
@@ -170,7 +184,7 @@ fn git_in_subdir() -> Result<()> {
     let precious = precious_path()?;
     let env = HashMap::new();
 
-    let mut cwd = helper.root();
+    let mut cwd = helper.precious_root();
     cwd.push("src");
 
     exec::run(&precious, &["lint", "--git"], &env, &[0], None, Some(&cwd))?;
@@ -189,7 +203,7 @@ fn staged_in_subdir() -> Result<()> {
     let precious = precious_path()?;
     let env = HashMap::new();
 
-    let mut cwd = helper.root();
+    let mut cwd = helper.precious_root();
     cwd.push("src");
 
     exec::run(
@@ -221,7 +235,7 @@ fn cli_paths_in_subdir() -> Result<()> {
     let precious = precious_path()?;
     let env = HashMap::new();
 
-    let mut cwd = helper.root();
+    let mut cwd = helper.precious_root();
     cwd.push("src");
 
     exec::run(
@@ -258,7 +272,7 @@ fn foo() -> u8   {
     let precious = precious_path()?;
     let env = HashMap::new();
 
-    let mut cwd = helper.root();
+    let mut cwd = helper.precious_root();
     cwd.push("src");
 
     // This succeeds because we're not checking with rustfmt.
