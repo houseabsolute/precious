@@ -134,18 +134,7 @@ impl GroupMaker {
 
     fn all_files(&self) -> Result<Option<Vec<PathBuf>>> {
         debug!("Getting all files under {}", self.project_root.display());
-        match self.walkdir_files(self.project_root.as_path())? {
-            Some(all) => {
-                let excluder = self.excluder()?;
-                Ok(Some(
-                    self.relative_files(&self.project_root, all)?
-                        .into_iter()
-                        .filter(|p| !excluder.path_matches(p))
-                        .collect::<Vec<_>>(),
-                ))
-            }
-            None => Ok(None),
-        }
+        self.walkdir_files(self.project_root.as_path())
     }
 
     fn files_from_cli(&self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec<PathBuf>>> {
@@ -165,14 +154,8 @@ impl GroupMaker {
             }
 
             if full.is_dir() {
-                if let Some(contents) = self.walkdir_files(&full)? {
-                    files.append(
-                        contents
-                            .into_iter()
-                            .filter(|p| !excluder.path_matches(p))
-                            .collect::<Vec<_>>()
-                            .as_mut(),
-                    );
+                if let Some(mut contents) = self.walkdir_files(&full)? {
+                    files.append(&mut contents);
                 }
             } else {
                 files.push(rel_to_root);
@@ -214,7 +197,13 @@ impl GroupMaker {
             };
         }
 
-        Ok(Some(self.relative_files(&self.project_root, files)?))
+        let excluder = self.excluder()?;
+        Ok(Some(
+            self.relative_files(&self.project_root, files)?
+                .into_iter()
+                .filter(|p| !excluder.path_matches(p))
+                .collect::<Vec<_>>(),
+        ))
     }
 
     fn files_from_git(&self, args: &[&str]) -> Result<Option<Vec<PathBuf>>> {
