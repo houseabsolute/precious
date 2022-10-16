@@ -289,9 +289,6 @@ impl GroupMaker {
                 f = root.to_path_buf().join(f);
             }
 
-            // If the directory given is just "." then the first clean()
-            // removes that and we then strip the prefix, leaving an empty
-            // string. The second clean turns that back into ".".
             relative.push(self.relative_to_project_root(&f)?);
         }
 
@@ -299,6 +296,9 @@ impl GroupMaker {
     }
 
     fn relative_to_project_root(&self, file: &Path) -> Result<PathBuf> {
+        // If the directory given is just "." then the first clean() removes
+        // that and we then strip the prefix, leaving an empty string. The
+        // second clean turns that back into ".".
         Ok(file
             .clean()
             .strip_prefix(&self.project_root)
