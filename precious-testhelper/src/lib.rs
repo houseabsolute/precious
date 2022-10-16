@@ -11,12 +11,13 @@ use std::{
     io::prelude::*,
     path::{Path, PathBuf},
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::TempDir;
 
 pub struct TestHelper {
     // While we never access this field we need to hold onto the tempdir or
     // else the directory it references will be deleted.
-    _tempdir: TempDir,
+    _tempdir: Option<TempDir>,
+    _preserved_tempdir: Option<PathBuf>,
     git_root: PathBuf,
     precious_root: PathBuf,
     paths: Vec<PathBuf>,
@@ -48,10 +49,18 @@ impl TestHelper {
             true
         });
 
-        let temp = tempdir()?;
-        let root = maybe_canonicalize(temp.path())?;
+        let td = tempfile::Builder::new()
+            .prefix("precious-testhelper-")
+            .tempdir()?;
+        let root = maybe_canonicalize(td.path())?;
+
+        let (tempdir, preserved_tempdir) = match env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
+            Ok(v) if v != "" && v != "0" => (None, Some(td.into_path())),
+            _ => (Some(td), None),
+        };
         let helper = TestHelper {
-            _tempdir: temp,
+            _tempdir: tempdir,
+            _preserved_tempdir: preserved_tempdir,
             git_root: root.clone(),
             precious_root: root,
             paths: Self::PATHS.iter().map(PathBuf::from).collect(),
