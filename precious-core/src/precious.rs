@@ -948,9 +948,10 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
+    #[cfg(not(target_os = "windows"))]
     fn tidy_succeeds() -> Result<()> {
         let config = r#"
-[commands.true]
+[commands.precious]
 type    = "tidy"
 include = "**/*"
 cmd     = ["true"]
@@ -971,6 +972,7 @@ ok_exit_codes = [0]
 
     #[test]
     #[serial]
+    #[cfg(not(target_os = "windows"))]
     fn tidy_fails() -> Result<()> {
         let config = r#"
 [commands.false]
@@ -994,6 +996,7 @@ ok_exit_codes = [0]
 
     #[test]
     #[serial]
+    #[cfg(not(target_os = "windows"))]
     fn lint_succeeds() -> Result<()> {
         let config = r#"
 [commands.true]
