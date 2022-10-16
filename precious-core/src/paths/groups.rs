@@ -992,11 +992,12 @@ mod tests {
         ];
         let res = bp.groups(cli_paths);
         assert!(res.is_err());
+        let err = res.unwrap_err();
         assert_eq!(
-            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
-            std::mem::discriminant(&GroupMakerError::NonExistentPathOnCli {
-                path: PathBuf::from("does/not/exist"),
-            }),
+            err.downcast_ref(),
+            Some(&GroupMakerError::NonExistentPathOnCli {
+                path: PathBuf::from("does/not/exist")
+            })
         );
         Ok(())
     }

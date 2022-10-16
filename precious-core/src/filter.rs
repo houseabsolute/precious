@@ -42,7 +42,7 @@ pub enum RunMode {
     Root,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Eq, PartialEq)]
 enum FilterError {
     #[error(
         "You cannot create a Command which lints and tidies without lint_flags and/or tidy_flags"
@@ -578,14 +578,15 @@ mod tests {
         file.push(helper.all_files()[0].clone());
         let res = filter.require_path_type("tidy", &file);
         assert!(res.is_err());
+
+        let err = res.unwrap_err();
         assert_eq!(
-            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap(),),
-            std::mem::discriminant(&FilterError::CanOnlyOperateOnDirectories {
+            err.downcast_ref(),
+            Some(&FilterError::CanOnlyOperateOnDirectories {
                 method: "tidy",
                 path: file.to_string_lossy().to_string(),
-            }),
+            })
         );
-
         Ok(())
     }
 
@@ -604,12 +605,14 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let res = filter.require_path_type("tidy", &helper.precious_root());
         assert!(res.is_err());
+
+        let err = res.unwrap_err();
         assert_eq!(
-            std::mem::discriminant(res.unwrap_err().downcast_ref().unwrap()),
-            std::mem::discriminant(&FilterError::CanOnlyOperateOnFiles {
+            err.downcast_ref(),
+            Some(&FilterError::CanOnlyOperateOnFiles {
                 method: "tidy",
                 path: helper.precious_root().to_string_lossy().to_string(),
-            }),
+            })
         );
 
         let mut file = helper.precious_root();
