@@ -127,7 +127,7 @@ impl TestHelper {
     }
 
     pub fn all_files(&self) -> Vec<PathBuf> {
-        self.paths.to_vec()
+        self.paths.clone()
     }
 
     pub fn stage_all(&self) -> Result<()> {
