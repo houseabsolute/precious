@@ -11,6 +11,7 @@ use precious_exec as exec;
 use regex::Regex;
 use std::{
     collections::HashMap,
+    fs,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
@@ -60,7 +61,7 @@ impl GroupMaker {
     ) -> Result<GroupMaker> {
         Ok(GroupMaker {
             mode,
-            project_root,
+            project_root: fs::canonicalize(project_root)?,
             git_root: None,
             cwd,
             exclude_globs,
@@ -153,13 +154,13 @@ impl GroupMaker {
         let excluder = self.excluder()?;
 
         let mut files: Vec<PathBuf> = vec![];
-        for rel in self.relative_files(&self.cwd, cli_paths)? {
-            let full = self.project_root.clone().join(rel.clone());
+        for rel_to_cwd in cli_paths {
+            let full = self.cwd.clone().join(rel_to_cwd.clone());
             if !full.exists() {
-                return Err(GroupMakerError::NonExistentPathOnCli { path: rel }.into());
+                return Err(GroupMakerError::NonExistentPathOnCli { path: rel_to_cwd }.into());
             }
 
-            let rel_to_root = self.relative_to_project_root(&full)?;
+            let rel_to_root = self.path_relative_to_project_root(&full)?;
             if excluder.path_matches(&rel_to_root) {
                 continue;
             }
@@ -210,7 +211,7 @@ impl GroupMaker {
 
         let excluder = self.excluder()?;
         Ok(Some(
-            self.relative_files(&self.project_root, files)?
+            self.paths_relative_project_root(&self.project_root, files)?
                 .into_iter()
                 .filter(|p| !excluder.path_matches(p))
                 .collect::<Vec<_>>(),
@@ -236,7 +237,7 @@ impl GroupMaker {
                 // us paths relative to the project root. But if the precious
                 // root _isn't_ the git root, we need to get the path relative
                 // to the project root, not the repo root.
-                self.relative_files(
+                self.paths_relative_project_root(
                     &git_root,
                     s.lines()
                         .filter_map(|rel| {
@@ -298,30 +299,35 @@ impl GroupMaker {
     }
 
     // We want to make all files relative. This lets us consistently produce
-    // path names starting at the root dir (without "./").
-    fn relative_files(&self, root: &Path, files: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+    // path names starting at the root dir (without "./"). The given root is
+    // the _current_ root for the relative file, which can be the cwd or the
+    // git root instead of the project root.
+    fn paths_relative_project_root(
+        &self,
+        root: &Path,
+        paths: Vec<PathBuf>,
+    ) -> Result<Vec<PathBuf>> {
         let mut relative: Vec<PathBuf> = vec![];
-
-        for mut f in files {
+        for mut f in paths {
             if !f.is_absolute() {
                 f = root.to_path_buf().join(f);
             }
 
-            relative.push(self.relative_to_project_root(&f)?);
+            relative.push(self.path_relative_to_project_root(&f)?);
         }
 
         Ok(relative)
     }
 
-    fn relative_to_project_root(&self, file: &Path) -> Result<PathBuf> {
+    fn path_relative_to_project_root(&self, path: &Path) -> Result<PathBuf> {
         // If the directory given is just "." then the first clean() removes
         // that and we then strip the prefix, leaving an empty string. The
         // second clean turns that back into ".".
-        Ok(file
+        Ok(fs::canonicalize(path)?
             .clean()
             .strip_prefix(&self.project_root)
             .map_err(|_| GroupMakerError::PrefixNotFound {
-                path: file.to_path_buf(),
+                path: path.to_path_buf(),
                 prefix: self.project_root.clone(),
             })?
             .to_path_buf()
