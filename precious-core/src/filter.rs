@@ -273,7 +273,7 @@ impl Filter {
     }
 
     fn require_is_not_filter_type(&self, not_allowed: FilterType) -> Result<()> {
-        if std::mem::discriminant(&not_allowed) == std::mem::discriminant(&self.typ) {
+        if not_allowed == self.typ {
             return Err(FilterError::CannotX {
                 what: "command",
                 typ: self.typ.what(),
