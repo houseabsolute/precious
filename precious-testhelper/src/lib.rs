@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use log::debug;
 use once_cell::sync::{Lazy, OnceCell};
-use precious_exec as exec;
+use precious_helpers::{exec, pushd::Pushd};
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -271,35 +271,6 @@ generated.*
 
 pub fn pushd_to(to: PathBuf) -> Result<Pushd> {
     Pushd::new(to)
-}
-
-pub struct Pushd(PathBuf);
-
-impl Pushd {
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Pushd> {
-        let cwd = env::current_dir()?;
-        env::set_current_dir(path.as_ref())
-            .with_context(|| format!("setting current directory to {}", path.as_ref().display()))?;
-        Ok(Pushd(cwd))
-    }
-}
-
-impl Drop for Pushd {
-    fn drop(&mut self) {
-        // If the original path was a tempdir it may be gone now.
-        if !self.0.exists() {
-            return;
-        }
-
-        let res = env::set_current_dir(&self.0);
-        if let Err(e) = res {
-            panic!(
-                "Could not return to original dir, {}: {}",
-                self.0.display(),
-                e,
-            );
-        }
-    }
 }
 
 fn is_rust_file(p: &Path) -> bool {

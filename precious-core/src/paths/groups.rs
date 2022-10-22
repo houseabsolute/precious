@@ -7,7 +7,7 @@ use clean_path::Clean;
 use itertools::Itertools;
 use log::{debug, error};
 use once_cell::sync::Lazy;
-use precious_exec as exec;
+use precious_helpers::exec;
 use regex::Regex;
 use std::{
     collections::HashMap,

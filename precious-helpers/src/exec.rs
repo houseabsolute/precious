@@ -211,6 +211,8 @@ mod tests {
     use anyhow::{format_err, Result};
     use pretty_assertions::assert_eq;
     use regex::Regex;
+    // Anything that does pushd must be run serially or else chaos ensues.
+    use serial_test::{parallel, serial};
     use std::{
         collections::HashMap,
         env, fs,
@@ -219,6 +221,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
+    #[parallel]
     fn exec_string() {
         assert_eq!(
             super::exec_string("foo", &[]),
@@ -238,6 +241,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_exit_0() -> Result<()> {
         let res = super::run("echo", &["foo"], &HashMap::new(), &[0], None, None)?;
         assert_eq!(res.exit_code, 0, "process exits 0");
@@ -246,6 +250,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_exit_0_with_unexpected_stderr() -> Result<()> {
         let args = &["-c", "echo 'some stderr output' 1>&2"];
         let res = super::run("sh", args, &HashMap::new(), &[0], None, None);
@@ -265,6 +270,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_exit_0_with_matching_ignore_stderr() -> Result<()> {
         let args = &["-c", "echo 'some stderr output' 1>&2"];
         let res = super::run(
@@ -286,6 +292,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_exit_0_with_non_matching_ignore_stderr() -> Result<()> {
         let args = &["-c", "echo 'some stderr output' 1>&2"];
         let res = super::run(
@@ -312,6 +319,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_exit_0_with_multiple_ignore_stderr() -> Result<()> {
         let args = &["-c", "echo 'some stderr output' 1>&2"];
         let res = super::run(
@@ -341,6 +349,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_wth_env() -> Result<()> {
         let env_key = "PRECIOUS_ENV_TEST";
         let mut env = HashMap::new();
@@ -394,6 +403,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_exit_32_with_stdout() -> Result<()> {
         let res = super::run(
             "sh",
@@ -431,6 +441,7 @@ Stderr was empty.
     }
 
     #[test]
+    #[parallel]
     fn run_exit_32_with_stderr() -> Result<()> {
         let res = super::run(
             "sh",
@@ -472,6 +483,7 @@ STDERR
     }
 
     #[test]
+    #[parallel]
     fn run_exit_32_with_stdout_and_stderr() -> Result<()> {
         let res = super::run(
             "sh",
@@ -518,6 +530,7 @@ STDERR
     }
 
     #[test]
+    #[serial]
     fn run_in_dir() -> Result<()> {
         // On windows the path we get from `pwd` is a Windows path (C:\...)
         // but `td.path()` contains a Unix path (/tmp/...). Very confusing.
@@ -544,6 +557,7 @@ STDERR
     }
 
     #[test]
+    #[parallel]
     fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
         let args = &["--arg", "42"];

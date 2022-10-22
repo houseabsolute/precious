@@ -1,5 +1,5 @@
 use anyhow::Result;
-use precious_exec as exec;
+use precious_helpers::exec;
 use precious_testhelper::TestHelper;
 use regex::Regex;
 use serial_test::serial;

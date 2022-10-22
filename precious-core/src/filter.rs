@@ -1,7 +1,7 @@
 use crate::paths::matcher;
 use anyhow::Result;
 use log::{debug, info};
-use precious_exec as exec;
+use precious_helpers::exec;
 use regex::Regex;
 use serde::Deserialize;
 use std::{
