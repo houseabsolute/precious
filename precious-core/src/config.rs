@@ -116,7 +116,7 @@ where
         type Value = Vec<u8>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("integer or list of integers")
+            formatter.write_str("integer or list of integers, each from 0-255")
         }
 
         fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
