@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Cache cargo & target directories
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -65,7 +65,7 @@ jobs:
         with:
           command: install
           args: --path . --locked --target=${{ matrix.platform.target }}
-        if: matrix.platform.os_name == 'Linux'
+        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
       - uses: actions/setup-node@v2
         if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
       - name: Run install-dev-tools.sh
@@ -73,7 +73,7 @@ jobs:
           set -e
           mkdir $HOME/bin
           ./dev/bin/install-dev-tools.sh
-        if: matrix.platform.os_name == 'Linux'
+        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
       - name: Self-check
         run: PATH=$HOME/bin:$PATH $HOME/.cargo/bin/precious --debug lint --all
         if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
