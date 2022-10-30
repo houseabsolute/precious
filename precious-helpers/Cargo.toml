@@ -1,11 +1,12 @@
 [package]
 name = "precious-helpers"
-version = "0.3.0"
-authors = ["Dave Rolsky <autarch@urth.org>"]
-description = "A hlper library for precious - not for external use"
-repository = "https://github.com/houseabsolute/precious"
-license = "MIT OR Apache-2.0"
-edition = "2018"
+authors.workspace = true
+description = "A helper library for precious - not for external use"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
 
 [dependencies]
 anyhow = "1.0.53"
