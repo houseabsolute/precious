@@ -10,11 +10,14 @@ version.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
+itertools.workspace = true
 regex.workspace = true
 precious-core.workspace = true
 precious-helpers.workspace = true
 precious-testhelper.workspace = true
+pretty_assertions.workspace = true
 serial_test.workspace = true
+tempfile.workspace = true
 
 [[test]]
 name = "integration_tests"

@@ -563,6 +563,7 @@ name = "precious-helpers"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "itertools",
  "log",
  "pretty_assertions",
  "regex",
@@ -577,11 +578,14 @@ name = "precious-integration"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "itertools",
  "precious-core",
  "precious-helpers",
  "precious-testhelper",
+ "pretty_assertions",
  "regex",
  "serial_test",
+ "tempfile",
 ]
 
 [[package]]

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use log::{
     Level::Debug,
     {debug, error, log_enabled},
@@ -104,6 +105,9 @@ pub fn run(
             exec_string(exe, args),
             cwd.display()
         );
+        for k in env.keys().sorted() {
+            debug!(r#"  with env: {k} = "{}""#, env.get(k).unwrap());
+        }
     }
 
     let output = output_from_command(c, ok_exit_codes, exe, args)

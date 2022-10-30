@@ -117,6 +117,7 @@ pub struct Command {
     ignore_stderr: Option<Vec<Regex>>,
 }
 
+#[derive(Debug)]
 pub struct CommandParams {
     pub project_root: PathBuf,
     pub name: String,
