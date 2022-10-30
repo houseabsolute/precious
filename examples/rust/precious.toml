@@ -34,6 +34,7 @@ cmd = [
     "--locked",
     "--all-targets",
     "--all-features",
+    "--workspace",
     "--",
     "-D", "clippy::all",
 ]
