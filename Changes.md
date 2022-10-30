@@ -1,5 +1,10 @@
 <!-- next-header -->
 
+- **This release has huge changes to how commands are invoked. The old
+  `run_mode` and `chdir` configuration keys have been deprecated.** See [the
+  documentation](README.md) for more details. There are also some [docs on
+  upgrading from previous versions](docs/upgrade-from-0.3.0-to-0.4.0.md).
+
 - Fixed path handling for `--git` and `--staged` when the project root (the
   directory containing the precious config file) is a subdirectory of the git
   repo root. Previously this would just attempt to run against incorrect

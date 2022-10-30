@@ -1,14 +1,20 @@
-use crate::{chars, config, filter, paths, vcs};
+use crate::{
+    chars,
+    command::{self, TidyOutcome},
+    config,
+    paths::{self, finder::Finder},
+    vcs,
+};
 use anyhow::{Error, Result};
 use clap::{AppSettings, ArgGroup, Parser};
 use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
 };
+use itertools::Itertools;
 use log::{debug, error, info};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
-    collections::HashMap,
     env,
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -20,14 +26,17 @@ enum PreciousError {
     #[error("No mode or paths were provided in the command line args")]
     NoModeOrPathsInCliArgs,
 
+    #[error("The path given in --config, {}, has no parent directory", file.display())]
+    ConfigFileHasNoParent { file: PathBuf },
+
     #[error("Could not find a VCS checkout root starting from {cwd:}")]
     CannotFindRoot { cwd: String },
 
     #[error("No {what:} commands defined in your config")]
-    NoFilters { what: String },
+    NoCommands { what: String },
 
     #[error("No {what:} commands match the given command name, {name:}")]
-    NoFiltersMatch { what: String, name: String },
+    NoCommandsMatch { what: String, name: String },
 }
 
 #[derive(Debug)]
@@ -51,7 +60,7 @@ impl From<Error> for Exit {
 struct ActionFailure {
     error: String,
     config_key: String,
-    path: PathBuf,
+    paths: Vec<PathBuf>,
 }
 
 const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
@@ -75,6 +84,7 @@ pub struct App {
     /// Suppresses most output
     #[clap(long, short)]
     quiet: bool,
+
     /// Enable verbose output
     #[clap(long, short)]
     verbose: bool,
@@ -198,7 +208,7 @@ impl Precious {
 
         let mode = Self::mode(&app)?;
         let cwd = env::current_dir()?;
-        let project_root = Self::project_root(&cwd)?;
+        let project_root = Self::project_root(app.config.as_ref(), &cwd)?;
         let config_file = Self::config_file(app.config.as_ref(), &project_root);
         let config = config::Config::new(config_file)?;
         let quiet = app.quiet;
@@ -242,7 +252,14 @@ impl Precious {
         Ok(paths::mode::Mode::FromCli)
     }
 
-    fn project_root(cwd: &Path) -> Result<PathBuf> {
+    fn project_root(file: Option<&PathBuf>, cwd: &Path) -> Result<PathBuf> {
+        if let Some(file) = file {
+            if let Some(p) = file.parent() {
+                return Ok(p.to_path_buf());
+            }
+            return Err(PreciousError::ConfigFileHasNoParent { file: file.clone() }.into());
+        }
+
         if Self::has_config_file(cwd) {
             return Ok(cwd.into());
         }
@@ -259,18 +276,8 @@ impl Precious {
         .into())
     }
 
-    fn config_file(file: Option<&PathBuf>, dir: &Path) -> PathBuf {
-        if let Some(cf) = file {
-            debug!("Loading config from {} (set via flag)", cf.display());
-            return cf.to_path_buf();
-        }
-
-        let default = Self::default_config_file(dir);
-        debug!(
-            "Loading config from {} (default location)",
-            default.display()
-        );
-        default
+    fn has_config_file(dir: &Path) -> bool {
+        Self::default_config_file(dir).exists()
     }
 
     fn default_config_file(dir: &Path) -> PathBuf {
@@ -297,6 +304,31 @@ impl Precious {
             return first;
         }
         iter.find(|i| pred(i)).unwrap_or(first)
+    }
+
+    fn config_file(file: Option<&PathBuf>, dir: &Path) -> PathBuf {
+        if let Some(cf) = file {
+            debug!("Loading config from {} (set via flag)", cf.display());
+            return cf.to_path_buf();
+        }
+
+        let default = Self::default_config_file(dir);
+        debug!(
+            "Loading config from {} (default location)",
+            default.display()
+        );
+        default
+    }
+
+    fn is_checkout_root(dir: &Path) -> bool {
+        for subdir in vcs::DIRS {
+            let mut poss = PathBuf::from(dir);
+            poss.push(subdir);
+            if poss.exists() {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn run(&mut self) -> i8 {
@@ -331,12 +363,15 @@ impl Precious {
 
         let tidiers = self
             .config
-            .tidy_filters(&self.project_root, self.command.as_deref())?;
-        self.run_all_filters(
+            // XXX - This clone can be removed if config is passed into this
+            // method instead of being a field of self.
+            .clone()
+            .into_tidy_commands(&self.project_root, self.command.as_deref())?;
+        self.run_all_commands(
             "tidying",
             tidiers,
-            |self_: &mut Self, paths: Vec<paths::groups::Group>, tidier: &filter::Filter| {
-                self_.run_one_tidier(paths, tidier)
+            |self_: &mut Self, files: Vec<PathBuf>, tidier: &command::Command| {
+                self_.run_one_tidier(files, tidier)
             },
         )
     }
@@ -346,34 +381,36 @@ impl Precious {
 
         let linters = self
             .config
-            .lint_filters(&self.project_root, self.command.as_deref())?;
-        self.run_all_filters(
+            // XXX - same as above.
+            .clone()
+            .into_lint_commands(&self.project_root, self.command.as_deref())?;
+        self.run_all_commands(
             "linting",
             linters,
-            |self_: &mut Self, paths: Vec<paths::groups::Group>, linter: &filter::Filter| {
-                self_.run_one_linter(paths, linter)
+            |self_: &mut Self, files: Vec<PathBuf>, linter: &command::Command| {
+                self_.run_one_linter(files, linter)
             },
         )
     }
 
-    fn run_all_filters<R>(
+    fn run_all_commands<R>(
         &mut self,
         action: &str,
-        filters: Vec<filter::Filter>,
-        run_filter: R,
+        commands: Vec<command::Command>,
+        run_command: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, Vec<paths::groups::Group>, &filter::Filter) -> Option<Vec<ActionFailure>>,
+        R: Fn(&mut Self, Vec<PathBuf>, &command::Command) -> Result<Option<Vec<ActionFailure>>>,
     {
-        if filters.is_empty() {
+        if commands.is_empty() {
             if let Some(c) = &self.command {
-                return Err(PreciousError::NoFiltersMatch {
+                return Err(PreciousError::NoCommandsMatch {
                     what: action.into(),
                     name: c.into(),
                 }
                 .into());
             }
-            return Err(PreciousError::NoFilters {
+            return Err(PreciousError::NoCommands {
                 what: action.into(),
             }
             .into());
@@ -384,15 +421,12 @@ impl Precious {
             _ => vec![],
         };
 
-        match self.group_maker()?.groups(cli_paths)? {
+        match self.finder()?.files(cli_paths)? {
             None => Ok(self.no_files_exit()),
-            Some(paths) => {
-                debug!("Setting current dir to {}", self.project_root.display());
-                env::set_current_dir(&self.project_root)?;
-
+            Some(files) => {
                 let mut all_failures: Vec<ActionFailure> = vec![];
-                for f in filters {
-                    if let Some(mut failures) = run_filter(self, paths.clone(), &f) {
+                for f in commands {
+                    if let Some(mut failures) = run_command(self, files.clone(), &f)? {
                         all_failures.append(&mut failures);
                     }
                 }
@@ -400,6 +434,15 @@ impl Precious {
                 Ok(self.make_exit(all_failures, action))
             }
         }
+    }
+
+    fn finder(&mut self) -> Result<Finder> {
+        Finder::new(
+            self.mode,
+            self.project_root.clone(),
+            self.cwd.clone(),
+            self.config.exclude.clone(),
+        )
     }
 
     fn make_exit(&self, failures: Vec<ActionFailure>, action: &str) -> Exit {
@@ -419,9 +462,9 @@ impl Precious {
                 failures
                     .iter()
                     .map(|af| format!(
-                        "  {} {} [{}]\n    {}\n",
+                        "  {} [{}] [{}]\n    {}\n",
                         self.chars.bullet,
-                        af.path.display(),
+                        af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
                         af.config_key,
                         af.error,
                     ))
@@ -439,32 +482,40 @@ impl Precious {
 
     fn run_one_tidier(
         &mut self,
-        all_paths: Vec<paths::groups::Group>,
-        t: &filter::Filter,
-    ) -> Option<Vec<ActionFailure>> {
-        let runner = |s: &Self,
-                      p: &Path,
-                      paths: &paths::groups::Group|
-         -> Option<Result<(), ActionFailure>> {
-            match t.tidy(p, &paths.files) {
-                Ok(Some(true)) => {
+        files: Vec<PathBuf>,
+        t: &command::Command,
+    ) -> Result<Option<Vec<ActionFailure>>> {
+        let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
+            match t.tidy(files) {
+                Ok(Some(TidyOutcome::Changed)) => {
                     if !s.quiet {
                         println!(
-                            "{} Tidied by {}:    {}",
+                            "{} Tidied by {}:    [{}]",
                             s.chars.tidied,
                             t.name,
-                            p.display()
+                            files.iter().map(|p| p.to_string_lossy()).join(" "),
                         );
                     }
                     Some(Ok(()))
                 }
-                Ok(Some(false)) => {
+                Ok(Some(TidyOutcome::Unchanged)) => {
                     if !s.quiet {
                         println!(
-                            "{} Unchanged by {}: {}",
+                            "{} Unchanged by {}: [{}]",
                             s.chars.unchanged,
                             t.name,
-                            p.display()
+                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        );
+                    }
+                    Some(Ok(()))
+                }
+                Ok(Some(TidyOutcome::Unknown)) => {
+                    if !s.quiet {
+                        println!(
+                            "{} Maybe changed by {}: [{}]",
+                            s.chars.unknown,
+                            t.name,
+                            files.iter().map(|p| p.to_string_lossy()).join(" "),
                         );
                     }
                     Some(Ok(()))
@@ -472,41 +523,48 @@ impl Precious {
                 Ok(None) => None,
                 Err(e) => {
                     println!(
-                        "{} error {}: {}",
+                        "{} Error from {}: [{}]",
                         s.chars.execution_error,
                         t.name,
-                        p.display()
+                        files.iter().map(|p| p.to_string_lossy()).join(" "),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{:#}", e),
                         config_key: t.config_key(),
-                        path: p.to_owned(),
+                        paths: files.iter().map(|f| f.to_path_buf()).collect(),
                     }))
                 }
             }
         };
 
-        self.run_parallel("Tidying", all_paths, t, runner)
+        self.run_parallel("Tidying", files, t, runner)
     }
 
     fn run_one_linter(
         &mut self,
-        all_paths: Vec<paths::groups::Group>,
-        l: &filter::Filter,
-    ) -> Option<Vec<ActionFailure>> {
-        let runner = |s: &Self,
-                      p: &Path,
-                      paths: &paths::groups::Group|
-         -> Option<Result<(), ActionFailure>> {
-            match l.lint(p, &paths.files) {
+        files: Vec<PathBuf>,
+        l: &command::Command,
+    ) -> Result<Option<Vec<ActionFailure>>> {
+        let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
+            match l.lint(files) {
                 Ok(Some(lo)) => {
                     if lo.ok {
                         if !s.quiet {
-                            println!("{} Passed {}: {}", s.chars.lint_free, l.name, p.display());
+                            println!(
+                                "{} Passed {}: {}",
+                                s.chars.lint_free,
+                                l.name,
+                                files.iter().map(|p| p.to_string_lossy()).join(" "),
+                            );
                         }
                         Some(Ok(()))
                     } else {
-                        println!("{} Failed {}: {}", s.chars.lint_dirty, l.name, p.display());
+                        println!(
+                            "{} Failed {}: {}",
+                            s.chars.lint_dirty,
+                            l.name,
+                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        );
                         if let Some(s) = lo.stdout {
                             println!("{}", s);
                         }
@@ -517,7 +575,7 @@ impl Precious {
                         Some(Err(ActionFailure {
                             error: "linting failed".into(),
                             config_key: l.config_key(),
-                            path: p.to_owned(),
+                            paths: files.iter().map(|f| f.to_path_buf()).collect(),
                         }))
                     }
                 }
@@ -527,48 +585,51 @@ impl Precious {
                         "{} error {}: {}",
                         s.chars.execution_error,
                         l.name,
-                        p.display()
+                        files.iter().map(|p| p.to_string_lossy()).join(" "),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{:#}", e),
                         config_key: l.config_key(),
-                        path: p.to_owned(),
+                        paths: files.iter().map(|f| f.to_path_buf()).collect(),
                     }))
                 }
             }
         };
 
-        self.run_parallel("Linting", all_paths, l, runner)
+        self.run_parallel("Linting", files, l, runner)
     }
 
     fn run_parallel<R>(
         &mut self,
         what: &str,
-        all_paths: Vec<paths::groups::Group>,
-        f: &filter::Filter,
+        files: Vec<PathBuf>,
+        c: &command::Command,
         runner: R,
-    ) -> Option<Vec<ActionFailure>>
+    ) -> Result<Option<Vec<ActionFailure>>>
     where
-        R: Fn(&Self, &Path, &paths::groups::Group) -> Option<Result<(), ActionFailure>> + Sync,
+        R: Fn(&Self, &[&Path]) -> Option<Result<(), ActionFailure>> + Sync,
     {
-        let map = self.path_map(all_paths, f);
+        let sets = c.files_to_args_sets(&files)?;
 
         let start = Instant::now();
-        let mut results: Vec<Result<(), ActionFailure>> = vec![];
-        self.thread_pool.install(|| {
-            results.append(
-                &mut map
-                    .par_iter()
-                    .filter_map(|(p, paths)| runner(self, p, paths))
-                    .collect::<Vec<Result<(), ActionFailure>>>(),
-            );
-        });
+        let results = self
+            .thread_pool
+            .install(|| -> Result<Vec<Result<(), ActionFailure>>> {
+                let mut res: Vec<Result<(), ActionFailure>> = vec![];
+                res.append(
+                    &mut sets
+                        .into_par_iter()
+                        .filter_map(|set| runner(self, &set))
+                        .collect::<Vec<Result<(), ActionFailure>>>(),
+                );
+                Ok(res)
+            })?;
 
         if !results.is_empty() {
             info!(
                 "{} with {} on {} path{}, elapsed time = {}",
                 what,
-                f.name,
+                c.name,
                 results.len(),
                 if results.len() > 1 { "s" } else { "" },
                 format_duration(&start.elapsed())
@@ -583,9 +644,9 @@ impl Precious {
             })
             .collect::<Vec<ActionFailure>>();
         if failures.is_empty() {
-            None
+            Ok(None)
         } else {
-            Some(failures)
+            Ok(Some(failures))
         }
     }
 
@@ -595,88 +656,6 @@ impl Precious {
             message: Some(String::from("No files found")),
             error: None,
         }
-    }
-
-    fn path_map(
-        &mut self,
-        all_paths: Vec<paths::groups::Group>,
-        f: &filter::Filter,
-    ) -> HashMap<PathBuf, paths::groups::Group> {
-        if f.run_mode_is(filter::RunMode::Root) {
-            return self.root_as_paths(all_paths);
-        } else if f.run_mode_is(filter::RunMode::Dirs) {
-            return self.dirs(all_paths);
-        }
-        self.files(all_paths)
-    }
-
-    fn root_as_paths(
-        &mut self,
-        mut all_paths: Vec<paths::groups::Group>,
-    ) -> HashMap<PathBuf, paths::groups::Group> {
-        let mut root_map = HashMap::new();
-
-        let mut all: Vec<PathBuf> = vec![];
-        for p in all_paths.iter_mut() {
-            all.append(&mut p.files);
-        }
-
-        let root_paths = paths::groups::Group {
-            dir: PathBuf::from("."),
-            files: all,
-        };
-        root_map.insert(PathBuf::from("."), root_paths);
-        root_map
-    }
-
-    fn dirs(
-        &mut self,
-        all_paths: Vec<paths::groups::Group>,
-    ) -> HashMap<PathBuf, paths::groups::Group> {
-        let mut map = HashMap::new();
-
-        for p in all_paths {
-            map.insert(p.dir.clone(), p);
-        }
-        map
-    }
-
-    fn files(
-        &mut self,
-        all_paths: Vec<paths::groups::Group>,
-    ) -> HashMap<PathBuf, paths::groups::Group> {
-        let mut map = HashMap::new();
-
-        for p in all_paths {
-            for f in p.files.iter() {
-                map.insert(f.clone(), p.clone());
-            }
-        }
-        map
-    }
-
-    fn group_maker(&mut self) -> Result<paths::groups::GroupMaker> {
-        paths::groups::GroupMaker::new(
-            self.mode,
-            self.project_root.clone(),
-            self.cwd.clone(),
-            self.config.exclude.clone(),
-        )
-    }
-
-    fn is_checkout_root(dir: &Path) -> bool {
-        for subdir in vcs::DIRS {
-            let mut poss = PathBuf::from(dir);
-            poss.push(subdir);
-            if poss.exists() {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn has_config_file(dir: &Path) -> bool {
-        Self::default_config_file(dir).exists()
     }
 }
 
@@ -719,9 +698,9 @@ mod tests {
     use pretty_assertions::assert_eq;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
-    use std::path::PathBuf;
     #[cfg(not(target_os = "windows"))]
     use std::str::FromStr;
+    use std::{collections::HashMap, path::PathBuf};
     #[cfg(not(target_os = "windows"))]
     use which::which;
 
@@ -825,59 +804,47 @@ lint_failure_exit_codes = [1]
 
     #[test]
     #[serial]
-    fn group_maker_uses_project_root() -> Result<()> {
+    fn finder_uses_project_root() -> Result<()> {
         // It'd be more Rusty to make this a macro that generates multiple
         // `#[test]` funcs, but that's kind of painful. Maybe I'll do this
         // later.
-        struct OneTest {
+        struct TestCase {
             flag: &'static str,
             paths: &'static [&'static str],
             #[allow(clippy::type_complexity)]
             action: Box<dyn Fn(&TestHelper) -> Result<()>>,
-            expect: &'static [&'static [&'static str]],
+            expect: &'static [&'static str],
         }
         let tests = &[
-            OneTest {
+            TestCase {
                 flag: "--all",
                 paths: &[],
                 action: Box::new(|_| Ok(())),
                 expect: &[
-                    &[
-                        ".",
-                        "README.md",
-                        "can_ignore.x",
-                        "merge-conflict-file",
-                        "precious.toml",
-                    ],
-                    &[
-                        "src",
-                        "src/bar.rs",
-                        "src/can_ignore.rs",
-                        "src/main.rs",
-                        "src/module.rs",
-                    ],
-                    &["src/sub", "src/sub/mod.rs"],
-                    &[
-                        "tests/data",
-                        "tests/data/bar.txt",
-                        "tests/data/foo.txt",
-                        "tests/data/generated.txt",
-                    ],
+                    "README.md",
+                    "can_ignore.x",
+                    "merge-conflict-file",
+                    "precious.toml",
+                    "src/bar.rs",
+                    "src/can_ignore.rs",
+                    "src/main.rs",
+                    "src/module.rs",
+                    "src/sub/mod.rs",
+                    "tests/data/bar.txt",
+                    "tests/data/foo.txt",
+                    "tests/data/generated.txt",
                 ],
             },
-            OneTest {
+            TestCase {
                 flag: "--git",
                 paths: &[],
                 action: Box::new(|th| {
                     th.modify_files()?;
                     Ok(())
                 }),
-                expect: &[
-                    &["src", "src/module.rs"],
-                    &["tests/data", "tests/data/foo.txt"],
-                ],
+                expect: &["src/module.rs", "tests/data/foo.txt"],
             },
-            OneTest {
+            TestCase {
                 flag: "--staged",
                 paths: &[],
                 action: Box::new(|th| {
@@ -885,36 +852,30 @@ lint_failure_exit_codes = [1]
                     th.stage_all()?;
                     Ok(())
                 }),
-                expect: &[
-                    &["src", "src/module.rs"],
-                    &["tests/data", "tests/data/foo.txt"],
-                ],
+                expect: &["src/module.rs", "tests/data/foo.txt"],
             },
-            OneTest {
+            TestCase {
                 flag: "",
                 paths: &["main.rs", "module.rs"],
                 action: Box::new(|_| Ok(())),
-                expect: &[&["src", "src/main.rs", "src/module.rs"]],
+                expect: &["src/main.rs", "src/module.rs"],
             },
-            OneTest {
+            TestCase {
                 flag: "",
                 paths: &["."],
                 action: Box::new(|_| Ok(())),
                 expect: &[
-                    &[
-                        "src",
-                        "src/bar.rs",
-                        "src/can_ignore.rs",
-                        "src/main.rs",
-                        "src/module.rs",
-                    ],
-                    &["src/sub", "src/sub/mod.rs"],
+                    "src/bar.rs",
+                    "src/can_ignore.rs",
+                    "src/main.rs",
+                    "src/module.rs",
+                    "src/sub/mod.rs",
                 ],
             },
         ];
         for t in tests {
             println!(
-                "  group_maker_uses_project_root: {} [{}]",
+                "finder_uses_project_root: {} [{}]",
                 if t.flag.is_empty() { "<none>" } else { t.flag },
                 t.paths.join(" ")
             );
@@ -936,11 +897,14 @@ lint_failure_exit_codes = [1]
             let app = App::try_parse_from(&cmd)?;
 
             let mut p = Precious::new(app)?;
-            let mut paths = p.group_maker()?;
 
             assert_eq!(
-                paths.groups(t.paths.iter().map(PathBuf::from).collect())?,
-                Some(t.expect.iter().map(|e| make_paths(e)).collect::<Vec<_>>())
+                p.finder()?
+                    .files(t.paths.iter().map(PathBuf::from).collect())?,
+                Some(t.expect.iter().map(PathBuf::from).collect::<Vec<_>>()),
+                "finder_uses_project_root: {} [{}]",
+                if t.flag.is_empty() { "<none>" } else { t.flag },
+                t.paths.join(" ")
             );
         }
 
@@ -952,12 +916,12 @@ lint_failure_exit_codes = [1]
     #[cfg(not(target_os = "windows"))]
     fn tidy_succeeds() -> Result<()> {
         let config = r#"
-[commands.precious]
-type    = "tidy"
-include = "**/*"
-cmd     = ["true"]
-ok_exit_codes = [0]
-"#;
+    [commands.precious]
+    type    = "tidy"
+    include = "**/*"
+    cmd     = ["true"]
+    ok_exit_codes = [0]
+    "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
 
@@ -976,12 +940,12 @@ ok_exit_codes = [0]
     #[cfg(not(target_os = "windows"))]
     fn tidy_fails() -> Result<()> {
         let config = r#"
-[commands.false]
-type    = "tidy"
-include = "**/*"
-cmd     = ["false"]
-ok_exit_codes = [0]
-"#;
+    [commands.false]
+    type    = "tidy"
+    include = "**/*"
+    cmd     = ["false"]
+    ok_exit_codes = [0]
+    "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
 
@@ -1000,13 +964,13 @@ ok_exit_codes = [0]
     #[cfg(not(target_os = "windows"))]
     fn lint_succeeds() -> Result<()> {
         let config = r#"
-[commands.true]
-type    = "lint"
-include = "**/*"
-cmd     = ["true"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-"#;
+    [commands.true]
+    type    = "lint"
+    include = "**/*"
+    cmd     = ["true"]
+    ok_exit_codes = [0]
+    lint_failure_exit_codes = [1]
+    "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
 
@@ -1082,26 +1046,26 @@ lint_failure_exit_codes = [1]
         }
 
         let config = r#"
-[commands.perl-replace-a-with-b]
-type    = "tidy"
-include = "test.replace"
-cmd     = ["perl", "-pi", "-e", "s/a/b/i"]
-ok_exit_codes = [0]
+    [commands.perl-replace-a-with-b]
+    type    = "tidy"
+    include = "test.replace"
+    cmd     = ["perl", "-pi", "-e", "s/a/b/i"]
+    ok_exit_codes = [0]
 
-[commands.perl-replace-a-with-c]
-type    = "tidy"
-include = "test.replace"
-cmd     = ["perl", "-pi", "-e", "s/a/c/i"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
+    [commands.perl-replace-a-with-c]
+    type    = "tidy"
+    include = "test.replace"
+    cmd     = ["perl", "-pi", "-e", "s/a/c/i"]
+    ok_exit_codes = [0]
+    lint_failure_exit_codes = [1]
 
-[commands.perl-replace-a-with-d]
-type    = "tidy"
-include = "test.replace"
-cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-"#;
+    [commands.perl-replace-a-with-d]
+    type    = "tidy"
+    include = "test.replace"
+    cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
+    ok_exit_codes = [0]
+    lint_failure_exit_codes = [1]
+    "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
         helper.write_file(&test_replace, "The letter A")?;
@@ -1170,13 +1134,6 @@ lint_failure_exit_codes = [1]
             let f = format_duration(k);
             let e = tests.get(k).unwrap().to_string();
             assert_eq!(f, e, "{}s {}ns", k.as_secs(), k.as_nanos());
-        }
-    }
-
-    fn make_paths(from: &[&str]) -> paths::groups::Group {
-        paths::groups::Group {
-            dir: PathBuf::from(from[0]),
-            files: from[1..].iter().map(PathBuf::from).collect(),
         }
     }
 }

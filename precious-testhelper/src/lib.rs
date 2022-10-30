@@ -55,7 +55,7 @@ impl TestHelper {
         let root = maybe_canonicalize(td.path())?;
 
         let (tempdir, preserved_tempdir) = match env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
-            Ok(v) if v != "" && v != "0" => (None, Some(td.into_path())),
+            Ok(v) if !(v.is_empty() || v == "0") => (None, Some(td.into_path())),
             _ => (Some(td), None),
         };
         let helper = TestHelper {
@@ -83,7 +83,7 @@ impl TestHelper {
     fn create_git_repo(&self) -> Result<()> {
         debug!("Creating git repo in {}", self.git_root.display());
         for p in self.paths.iter() {
-            let content = if is_rust_file(&p) {
+            let content = if is_rust_file(p) {
                 "fn foo() {}\n"
             } else {
                 "some text"
@@ -136,7 +136,9 @@ impl TestHelper {
     }
 
     pub fn all_files(&self) -> Vec<PathBuf> {
-        self.paths.clone()
+        let mut files = self.paths.clone();
+        files.sort();
+        files
     }
 
     pub fn stage_all(&self) -> Result<()> {
@@ -239,6 +241,7 @@ generated.*
             self.write_file(&p, content)?;
             paths.push(p.clone());
         }
+        paths.sort();
         Ok(paths)
     }
 

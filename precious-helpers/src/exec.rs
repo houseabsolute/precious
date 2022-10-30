@@ -12,7 +12,7 @@ use which::which;
 use std::os::unix::prelude::*;
 
 #[derive(Debug, Error)]
-pub enum ExecError {
+pub enum Error {
     #[error(r#"Could not find "{exe:}" in your path ({path:}"#)]
     ExecutableNotInPath { exe: String, path: String },
 
@@ -74,7 +74,7 @@ pub fn run(
             Ok(p) => p,
             Err(e) => format!("<could not get PATH environment variable: {e}>"),
         };
-        return Err(ExecError::ExecutableNotInPath {
+        return Err(Error::ExecutableNotInPath {
             exe: exe.to_string(),
             path,
         }
@@ -126,7 +126,7 @@ pub fn run(
             false
         };
         if !ok {
-            return Err(ExecError::UnexpectedStderr {
+            return Err(Error::UnexpectedStderr {
                 cmd: exec_string(exe, args),
                 code,
                 stderr,
@@ -154,7 +154,7 @@ fn output_from_command(
             let estr = exec_string(exe, args);
             debug!("Ran {} and got exit code of {}", estr, code);
             if !ok_exit_codes.contains(&code) {
-                return Err(ExecError::UnexpectedExitCode {
+                return Err(Error::UnexpectedExitCode {
                     cmd: estr,
                     code,
                     stdout: String::from_utf8(output.stdout)?,
@@ -170,7 +170,7 @@ fn output_from_command(
             } else {
                 let signal = signal_from_status(output.status);
                 debug!("Ran {} which exited because of signal {}", estr, signal);
-                return Err(ExecError::ProcessKilledBySignal { cmd: estr, signal }.into());
+                return Err(Error::ProcessKilledBySignal { cmd: estr, signal }.into());
             }
         }
     }
@@ -207,7 +207,7 @@ fn signal_from_status(_: process::ExitStatus) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::ExecError;
+    use super::Error;
     use anyhow::{format_err, Result};
     use pretty_assertions::assert_eq;
     use regex::Regex;
@@ -256,7 +256,7 @@ mod tests {
         let res = super::run("sh", args, &HashMap::new(), &[0], None, None);
         assert!(res.is_err(), "run returned Err");
         match error_from_run(res)? {
-            ExecError::UnexpectedStderr {
+            Error::UnexpectedStderr {
                 cmd: _,
                 code,
                 stderr,
@@ -305,7 +305,7 @@ mod tests {
         );
         assert!(res.is_err(), "run returned Err");
         match error_from_run(res)? {
-            ExecError::UnexpectedStderr {
+            Error::UnexpectedStderr {
                 cmd: _,
                 code,
                 stderr,
@@ -335,7 +335,7 @@ mod tests {
         );
         assert!(res.is_err(), "run returned Err");
         match error_from_run(res)? {
-            ExecError::UnexpectedStderr {
+            Error::UnexpectedStderr {
                 cmd: _,
                 code,
                 stderr,
@@ -382,11 +382,12 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn run_exit_32() -> Result<()> {
         let res = super::run("sh", &["-c", "exit 32"], &HashMap::new(), &[0], None, None);
         assert!(res.is_err(), "process exits non-zero");
         match error_from_run(res)? {
-            ExecError::UnexpectedExitCode {
+            Error::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
@@ -424,7 +425,7 @@ Stderr was empty.
         assert_eq!(format!("{e}"), expect, "error display output");
 
         match e {
-            ExecError::UnexpectedExitCode {
+            Error::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
@@ -462,7 +463,7 @@ STDERR
         assert_eq!(format!("{e}"), expect, "error display output");
 
         match e {
-            ExecError::UnexpectedExitCode {
+            Error::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
@@ -506,7 +507,7 @@ STDERR
 "#;
         assert_eq!(format!("{e}"), expect, "error display output");
         match e {
-            ExecError::UnexpectedExitCode {
+            Error::UnexpectedExitCode {
                 cmd: _,
                 code,
                 stdout,
@@ -522,10 +523,10 @@ STDERR
         Ok(())
     }
 
-    fn error_from_run(result: Result<super::ExecOutput>) -> Result<ExecError> {
+    fn error_from_run(result: Result<super::ExecOutput>) -> Result<Error> {
         match result {
             Ok(_) => Err(format_err!("did not get an error in the returned Result")),
-            Err(e) => e.downcast::<super::ExecError>(),
+            Err(e) => e.downcast::<super::Error>(),
         }
     }
 

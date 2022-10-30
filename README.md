@@ -89,8 +89,8 @@ optional. If none are specified, `precious` defaults to this:
 
 ```toml
 invoke      = "per-file"
-working-dir = "root"
-path-args   = "file"
+working_dir = "root"
+path_args   = "file"
 ```
 
 This runs the command once per file, passing the file as a single argument to
@@ -104,28 +104,28 @@ The `invoke` key tells `precious` how the command should be invoked.
 | ------------ | ------------------------------------------------------------------------------------------------------------------------ |
 | `"per-file"` | Run this command once for each matching file. **This is the default.**                                                   |
 | `"per-dir"`  | Run this command once for each matching directory.                                                                       |
-| `"once"`     | Run this command either once for the project or once per sub-root. See the `working-dir` documentation below for details |
+| `"once"`     | Run this command either once for the project or once per sub-root. See the `working_dir` documentation below for details |
 
-#### `working-dir`
+#### `working_dir`
 
-The `working-dir` key tells precious what the working directory should be when the
+The `working_dir` key tells precious what the working directory should be when the
 command is run.
 
 | Value                   | Description                                                                                                                                                               |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `"root"`                | The working directory is the project root. **This is the default.**                                                                                                       |
 | `"dir"`                 | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
-| `{ sub-roots = [...] }` | See below                                                                                                                                                                 |
+| `{ sub_roots = [...] }` | See below                                                                                                                                                                 |
 
-##### `working-dir = { sub-roots = [ ... ] }`
+##### `working_dir = { sub_roots = [ ... ] }`
 
-The final option for `working-dir` is to pass a table (aka map) instead of
+The final option for `working_dir` is to pass a table (aka map) instead of
 `"root"` or `"dir"` as a string. In that case, the table should have one key
-of its own, `sub-roots`. The value of that key can either be a single string
+of its own, `sub_roots`. The value of that key can either be a single string
 or an array of strings. Each of these strings should be a _relative_ path to a
 directory under your project root.
 
-When a command is configured with `sub-roots`, `precious` will do the
+When a command is configured with `sub_roots`, `precious` will do the
 following based on other aspects of your config.
 
 - The working directory will be set to each root in turn.
@@ -133,17 +133,17 @@ following based on other aspects of your config.
 - If `invoke = "once"`, then the command will be run _once per root_ instead
   of just once from the project root.
 
-#### `path-args`
+#### `path_args`
 
-The `path-args` key tells precious how paths should be passed when the command
+The `path_args` key tells precious how paths should be passed when the command
 is run.
 
 | Value             | Description                                                                                                                                                                          |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> If using `sub-roots`, then the path is relative to the current working directory, per-root. |
-| `"dir"`           | Passes the path to the directory containing the matching files relative to the root. <br> If using `sub-roots`, then the path is relative to the current working directory, per-root |
+| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> If using `sub_roots`, then the path is relative to the current working directory, per-root. |
+| `"dir"`           | Passes the path to the directory containing the matching files relative to the root. <br> If using `sub_roots`, then the path is relative to the current working directory, per-root |
 | `"none"`          | No file args are passed to the command at all.                                                                                                                                       |
-| `"dot"`           | Always pass `.` as the path. This is useful when `working-dir = "dir"` and the command still requires a path to be passed.                                                           |
+| `"dot"`           | Always pass `.` as the path. This is useful when `working_dir = "dir"` and the command still requires a path to be passed.                                                           |
 | `"absolute-file"` | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                       |
 | `"absolute-dir"`  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                             |
 
@@ -154,27 +154,27 @@ nonsensical combinations that will cause `precious` to exit with an error.
 
 ```
 invoke = "per-file"
-path-args = "dir", "none", "dot", or "absolute-dir"
+path_args = "dir", "none", "dot", or "absolute-dir"
 ```
 
 You cannot invoke a command once per file without passing the filename.
 
 ```
 invoke = "per-dir"
-path-args = "none" or "dot"
-working-dir = "root"
+path_args = "none" or "dot"
+working_dir = "root"
 # ... or ...
-working-dir = { sub-roots = [ "whatever" ] }
+working_dir = { sub_roots = [ "whatever" ] }
 ```
 
 You cannot invoke a command once per dir from a root without passing the
 directory name or a list of file names. If you want to run a command once per
 directory with no path arguments or using `.` as the path then you _must_ set
-`working-dir = "dir"`.
+`working_dir = "dir"`.
 
 ```
 invoke = "once"
-working-dir = "dir"
+working_dir = "dir"
 ```
 
 You cannot invoke a command once if the working directory is set to each
@@ -362,7 +362,7 @@ In order to make that happen you should use the following config:
 ```toml
 include = "**/*.rs"
 invoke = "once"
-path-args = "dot" # or "none"
+path_args = "dot" # or "none"
 ```
 
 This will cause `precious` to run the command exactly once in the project
@@ -371,12 +371,12 @@ root.
 ### Linter runs in the same directory as the files it lints and does not accept path as arguments
 
 If you want to run the command without passing the path being operated on to
-the command, set `invoke = "per-dir"` and `path-args = "none"`:
+the command, set `invoke = "per-dir"` and `path_args = "none"`:
 
 ```toml
 include   = "**/*.rs"
 invoke    = "per-dir"
-path-args = "none"
+path_args = "none"
 ```
 
 ### You want a command to exclude an entire directory (tree) except for one file

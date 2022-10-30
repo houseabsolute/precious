@@ -44,6 +44,7 @@ impl Matcher {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use serial_test::parallel;
     use std::path::PathBuf;
 
     struct TestSet {
@@ -53,6 +54,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn path_matches() -> Result<()> {
         let tests = vec![
             TestSet {

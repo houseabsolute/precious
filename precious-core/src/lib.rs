@@ -1,7 +1,7 @@
 pub mod precious;
 
 mod chars;
+mod command;
 mod config;
-mod filter;
 mod paths;
 mod vcs;

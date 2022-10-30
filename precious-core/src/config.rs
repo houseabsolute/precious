@@ -1,4 +1,4 @@
-use crate::filter;
+use crate::command::{self, Invoke, PathArgs, WorkingDir};
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{de, de::Deserializer, Deserialize};
@@ -10,19 +10,26 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Command {
     #[serde(rename = "type")]
-    typ: filter::FilterType,
+    typ: command::CommandType,
     #[serde(deserialize_with = "string_or_seq_string")]
     include: Vec<String>,
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
     exclude: Vec<String>,
-    #[serde(default = "default_run_mode")]
-    run_mode: filter::RunMode,
     #[serde(default)]
-    chdir: bool,
+    invoke: Option<Invoke>,
+    #[serde(default)]
+    #[serde(deserialize_with = "working_dir")]
+    working_dir: Option<WorkingDir>,
+    #[serde(default)]
+    path_args: Option<PathArgs>,
+    #[serde(default)]
+    run_mode: Option<OldRunMode>,
+    #[serde(default)]
+    chdir: Option<bool>,
     #[serde(deserialize_with = "string_or_seq_string")]
     cmd: Vec<String>,
     #[serde(default)]
@@ -47,15 +54,21 @@ pub struct Command {
     ignore_stderr: Vec<String>,
 }
 
-fn default_run_mode() -> filter::RunMode {
-    filter::RunMode::Files
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum OldRunMode {
+    #[serde(rename = "files")]
+    Files,
+    #[serde(rename = "dirs")]
+    Dirs,
+    #[serde(rename = "root")]
+    Root,
 }
 
 fn empty_string() -> String {
     String::new()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
@@ -70,6 +83,16 @@ pub enum ConfigError {
         file: PathBuf,
         error: std::io::Error,
     },
+    #[error(
+        "The {name:} command mixes old command params (run_mode or chdir) with new command params (invoke, working_dir, or path_args)"
+    )]
+    CannotMixOldAndNewCommandParams { name: String },
+    #[error(r#"Cannot set invoke = "per-file" and path_args = "{path_args:}""#)]
+    CannotInvokePerFileWithPathArgs { path_args: PathArgs },
+    #[error(r#"Cannot set invoke = "per-dir" and path_args = "{path_args:}""#)]
+    CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs },
+    #[error(r#"Cannot set invoke = "once" and working_dir = "dir""#)]
+    CannotInvokeOnceWithWorkingDirEqDir,
     #[error(transparent)]
     Toml(#[from] toml::de::Error),
 }
@@ -235,6 +258,91 @@ where
     deserializer.deserialize_any(U8OrVec(PhantomData))
 }
 
+fn working_dir<'de, D>(deserializer: D) -> Result<Option<WorkingDir>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct WorkingDirOrSubRoots(PhantomData<Option<WorkingDir>>);
+
+    impl<'de> de::Visitor<'de> for WorkingDirOrSubRoots {
+        type Value = Option<WorkingDir>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str(r#"one of "root", "dir", or a sub_roots map"#)
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_any(WorkingDirOrSubRoots(PhantomData))
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            match value {
+                "root" => Ok(Some(WorkingDir::Root)),
+                "dir" => Ok(Some(WorkingDir::Dir)),
+                _ => Err(E::invalid_value(
+                    de::Unexpected::Str(value),
+                    &r#""root" or "dir""#,
+                )),
+            }
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::MapAccess<'de>,
+        {
+            let mut kv_pairs: Vec<(&'de str, Vec<&'de str>)> = vec![];
+            while let Some((k, v)) = map.next_entry::<&str, Vec<&str>>()? {
+                if k != "sub_roots" {
+                    return Err(<A::Error as de::Error>::invalid_value(
+                        de::Unexpected::Str(k),
+                        &r#"the only valid key for a working_dir map is "sub_roots""#,
+                    ));
+                }
+                if v.is_empty() {
+                    return Err(<A::Error as de::Error>::invalid_value(
+                        de::Unexpected::Seq,
+                        &r#"the "sub_roots" key cannot be empty"#,
+                    ));
+                }
+                kv_pairs.push((k, v));
+            }
+
+            if kv_pairs.is_empty() {
+                return Err(<A::Error as de::Error>::invalid_value(
+                    de::Unexpected::Map,
+                    &r#"the "working_dir" cannot be an empty map"#,
+                ));
+            }
+
+            if kv_pairs.len() > 1 {
+                return Err(<A::Error as de::Error>::invalid_value(
+                    de::Unexpected::Map,
+                    &r#"the "working_dir" map must contain one key, "sub_roots""#,
+                ));
+            }
+
+            Ok(Some(WorkingDir::SubRoots(
+                kv_pairs[0].1.iter().map(PathBuf::from).collect::<Vec<_>>(),
+            )))
+        }
+    }
+
+    deserializer.deserialize_any(WorkingDirOrSubRoots(PhantomData))
+}
+
 impl Config {
     pub fn new(file: PathBuf) -> Result<Config> {
         match fs::read(&file) {
@@ -243,57 +351,144 @@ impl Config {
         }
     }
 
-    pub fn tidy_filters(&self, root: &Path, command: Option<&str>) -> Result<Vec<filter::Filter>> {
-        self.filters(root, command, filter::FilterType::Tidy)
-    }
-
-    pub fn lint_filters(&self, root: &Path, command: Option<&str>) -> Result<Vec<filter::Filter>> {
-        self.filters(root, command, filter::FilterType::Lint)
-    }
-
-    fn filters(
-        &self,
-        root: &Path,
+    pub fn into_tidy_commands(
+        self,
+        project_root: &Path,
         command: Option<&str>,
-        typ: filter::FilterType,
-    ) -> Result<Vec<filter::Filter>> {
-        let mut filters: Vec<filter::Filter> = vec![];
-        for (name, c) in self.commands.iter() {
+    ) -> Result<Vec<command::Command>> {
+        self.into_commands(project_root, command, command::CommandType::Tidy)
+    }
+
+    pub fn into_lint_commands(
+        self,
+        project_root: &Path,
+        command: Option<&str>,
+    ) -> Result<Vec<command::Command>> {
+        self.into_commands(project_root, command, command::CommandType::Lint)
+    }
+
+    fn into_commands(
+        self,
+        project_root: &Path,
+        command: Option<&str>,
+        typ: command::CommandType,
+    ) -> Result<Vec<command::Command>> {
+        let mut commands: Vec<command::Command> = vec![];
+        for (name, c) in self.commands.into_iter() {
             if let Some(c) = command {
                 if name != c {
                     continue;
                 }
             }
-            if c.typ != typ && c.typ != filter::FilterType::Both {
+            if c.typ != typ && c.typ != command::CommandType::Both {
                 continue;
             }
 
-            filters.push(self.make_command(root, name, c)?);
+            commands.push(c.into_command(project_root, name)?);
         }
 
-        Ok(filters)
+        Ok(commands)
     }
+}
 
-    fn make_command(&self, root: &Path, name: &str, command: &Command) -> Result<filter::Filter> {
-        let n = filter::Filter::build(filter::FilterParams {
-            root: root.to_owned(),
-            name: name.to_owned(),
-            typ: command.typ,
-            include: command.include.clone(),
-            exclude: command.exclude.clone(),
-            run_mode: command.run_mode,
-            chdir: command.chdir,
-            cmd: command.cmd.clone(),
-            env: command.env.clone(),
-            lint_flags: command.lint_flags.clone(),
-            tidy_flags: command.tidy_flags.clone(),
-            path_flag: command.path_flag.clone(),
-            ok_exit_codes: command.ok_exit_codes.clone(),
-            lint_failure_exit_codes: command.lint_failure_exit_codes.clone(),
-            expect_stderr: command.expect_stderr,
-            ignore_stderr: command.ignore_stderr.clone(),
+impl Command {
+    fn into_command(self, project_root: &Path, name: String) -> Result<command::Command> {
+        let (invoke, working_dir, path_args) = Self::invoke_args(
+            &name,
+            self.run_mode,
+            self.chdir,
+            self.invoke,
+            self.working_dir,
+            self.path_args,
+        )?;
+
+        let n = command::Command::new(command::CommandParams {
+            project_root: project_root.to_owned(),
+            name,
+            typ: self.typ,
+            include: self.include,
+            exclude: self.exclude,
+            invoke,
+            working_dir,
+            path_args,
+            cmd: self.cmd,
+            env: self.env,
+            lint_flags: self.lint_flags,
+            tidy_flags: self.tidy_flags,
+            path_flag: self.path_flag,
+            ok_exit_codes: self.ok_exit_codes,
+            lint_failure_exit_codes: self.lint_failure_exit_codes,
+            expect_stderr: self.expect_stderr,
+            ignore_stderr: self.ignore_stderr,
         })?;
         Ok(n)
+    }
+
+    fn invoke_args(
+        name: &str,
+        run_mode: Option<OldRunMode>,
+        chdir: Option<bool>,
+        invoke: Option<Invoke>,
+        working_dir: Option<WorkingDir>,
+        path_args: Option<PathArgs>,
+    ) -> Result<(Invoke, WorkingDir, PathArgs)> {
+        if (run_mode.is_some() || chdir.is_some())
+            && (invoke.is_some() || working_dir.is_some() || path_args.is_some())
+        {
+            return Err(ConfigError::CannotMixOldAndNewCommandParams {
+                name: name.to_owned(),
+            }
+            .into());
+        }
+
+        // This translates the old config options into their equivalent new
+        // options.
+        match (run_mode, chdir) {
+            (Some(OldRunMode::Files), Some(false)) => {
+                return Ok((Invoke::PerFile, WorkingDir::Root, PathArgs::File))
+            }
+            (Some(OldRunMode::Files), Some(true)) => {
+                return Ok((Invoke::PerFile, WorkingDir::Dir, PathArgs::File))
+            }
+            (Some(OldRunMode::Dirs), Some(false)) => {
+                return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::File))
+            }
+            (Some(OldRunMode::Dirs), Some(true)) => {
+                return Ok((Invoke::PerDir, WorkingDir::Dir, PathArgs::None))
+            }
+            (Some(OldRunMode::Root), Some(false)) => {
+                return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::Dot))
+            }
+            (Some(OldRunMode::Root), Some(true)) => {
+                return Ok((Invoke::PerDir, WorkingDir::Dir, PathArgs::None))
+            }
+            _ => (),
+        }
+
+        let invoke = invoke.unwrap_or(Invoke::PerFile);
+        let working_dir = working_dir.unwrap_or(WorkingDir::Root);
+        let path_args = path_args.unwrap_or(PathArgs::File);
+
+        match (invoke, &working_dir, path_args) {
+            (Invoke::PerFile, _, path_args) => {
+                if path_args != PathArgs::File && path_args != PathArgs::AbsoluteFile {
+                    return Err(ConfigError::CannotInvokePerFileWithPathArgs { path_args }.into());
+                }
+            }
+            (Invoke::PerDir, &WorkingDir::Root | &WorkingDir::SubRoots(_), path_args) => {
+                if path_args != PathArgs::Dir && path_args != PathArgs::AbsoluteDir {
+                    return Err(
+                        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args }.into(),
+                    );
+                }
+            }
+            (Invoke::Once, &WorkingDir::Dir, _) => {
+                return Err(ConfigError::CannotInvokeOnceWithWorkingDirEqDir.into());
+            }
+            _ => (),
+        }
+
+        Ok((invoke, working_dir, path_args))
     }
 }
 
@@ -301,9 +496,11 @@ impl Config {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use serial_test::parallel;
 
     #[test]
-    fn filter_order_is_preserved1() -> Result<()> {
+    #[parallel]
+    fn command_order_is_preserved1() -> Result<()> {
         let toml_text = r#"
             [commands.rustfmt]
             type    = "both"
@@ -345,7 +542,8 @@ mod tests {
     }
 
     #[test]
-    fn filter_order_is_preserved2() -> Result<()> {
+    #[parallel]
+    fn command_order_is_preserved2() -> Result<()> {
         let toml_text = r#"
             [commands.clippy]
             type     = "lint"
@@ -387,7 +585,8 @@ mod tests {
     }
 
     #[test]
-    fn filter_order_is_preserved3() -> Result<()> {
+    #[parallel]
+    fn command_order_is_preserved3() -> Result<()> {
         let toml_text = r#"
             [commands.omegasort-gitignore]
             type = "both"
