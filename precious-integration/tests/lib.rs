@@ -460,7 +460,7 @@ ok_exit_codes = 0
         let mut output = vec![];
         let cd = caps
             .name("cd")
-            .and_then(|m| Some(m.as_str()))
+            .map(|m| m.as_str())
             .unwrap_or("")
             .to_string();
         if !cd.is_empty() {
@@ -478,7 +478,7 @@ ok_exit_codes = 0
     }
     assert_eq!(
         output,
-        expect.trim().split("\n").collect::<Vec<_>>(),
+        expect.trim().split('\n').collect::<Vec<_>>(),
         "{config}"
     );
 

@@ -818,7 +818,7 @@ mod tests {
                 .unwrap(),
             CommandError::CannotMethodWithCommand {
                 method: "tidy",
-                command: command.name.clone(),
+                command: command.name,
                 typ: "linter",
             },
         );
@@ -844,7 +844,7 @@ mod tests {
                 .unwrap(),
             CommandError::CannotMethodWithCommand {
                 method: "lint",
-                command: command.name.clone(),
+                command: command.name,
                 typ: "tidier",
             },
         );
@@ -1053,7 +1053,7 @@ mod tests {
             vec![file1],
         );
 
-        let mut file1 = cwd.clone();
+        let mut file1 = cwd;
         file1.push("subdir/file2");
         assert_eq!(
             command.operating_on(&[&PathBuf::from("subdir/file2")])?,
@@ -1345,7 +1345,7 @@ mod tests {
         for path in helper.all_files() {
             if path.starts_with("src/")
                 && path.to_str().unwrap().ends_with(".rs")
-                && path.ancestors().collect::<Vec<&Path>>().len() == 3
+                && path.ancestors().count() == 3
             {
                 let mut file = helper.git_root();
                 file.push(path);
@@ -1388,7 +1388,7 @@ mod tests {
         for path in helper.all_files() {
             if path.starts_with("src/")
                 && path.to_str().unwrap().ends_with(".rs")
-                && path.ancestors().collect::<Vec<&Path>>().len() == 3
+                && path.ancestors().count() == 3
             {
                 let mut file = helper.git_root();
                 file.push(path);
