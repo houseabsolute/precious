@@ -9,7 +9,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
-anyhow = "1.0.53"
+anyhow.workspace = true
 clap = { version = "3.2.22", features = [ "cargo", "derive" ] }
 clean-path = "0.2.1"
 fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }
@@ -17,20 +17,20 @@ globset = "0.4.8"
 ignore = "0.4.18"
 indexmap = { version = "1.8.0", features = ["serde"] }
 itertools = ">= 0.9.0, < 0.11.0"
-log = "0.4.14"
+log.workspace = true
 md5 = "0.7.0"
-once_cell = "1.6.0"
-precious-helpers = { version = "0.3.0", path = "../precious-helpers" }
+once_cell.workspace = true
+precious-helpers.workspace = true
 rayon = "1.5.1"
-regex = "1.6.0"
+regex.workspace = true
 serde = { version = "1.0.136", features = ["derive"] }
-tempfile = "3.3.0"
-thiserror = "1.0.30"
+tempfile.workspace = true
+thiserror.workspace = true
 toml = "0.5.8"
-which = ">= 3.0.0, < 5.0.0"
+which.workspace = true
 
 [dev-dependencies]
 filetime = "0.2.18"
-precious-testhelper = { version = "0.3.0", path = "../precious-testhelper" }
-pretty_assertions = "1.1.0"
-serial_test = "0.9.0"
+precious-testhelper.workspace = true
+pretty_assertions.workspace = true
+serial_test.workspace = true
