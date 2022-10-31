@@ -27,7 +27,7 @@ cmd = [
 ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 101
-ignore_stderr = "Finished dev"
+ignore_stderr = [ "Finished dev", "could not compile" ]
 
 [commands.prettier]
 type    = "both"
