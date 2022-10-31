@@ -29,7 +29,7 @@ precious-core.workspace = true
 [workspace.dependencies]
 anyhow = "1.0.53"
 itertools = ">= 0.9.0, < 0.11.0"
-log = "0.4.14"
+log = "0.4.17"
 once_cell = "1.6.0"
 precious-core = { version = "0.4.0", path = "./precious-core" }
 precious-helpers = { version = "0.4.0", path = "./precious-helpers" }
