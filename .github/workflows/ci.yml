@@ -160,7 +160,9 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: precious-${{ matrix.platform.os_name }}
-          path: "precious-*"
+          path: |
+            precious-*.zip
+            precious-*.tar.gz
         if: github.ref == 'refs/tags/test-release'
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
