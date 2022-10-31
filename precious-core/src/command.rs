@@ -297,7 +297,7 @@ impl Command {
 
         info!(
             "Tidying [{}] with {} in [{}] command [{}]",
-            operating_on.iter().map(|p| p.to_string_lossy()).join(" "),
+            files.iter().map(|p| p.to_string_lossy()).join(" "),
             self.name,
             in_dir.display(),
             cmd.join(" "),
@@ -335,7 +335,7 @@ impl Command {
 
         info!(
             "Linting [{}] with {} in [{}] command: {}",
-            operating_on.iter().map(|p| p.to_string_lossy()).join(" "),
+            files.iter().map(|p| p.to_string_lossy()).join(" "),
             self.name,
             in_dir.display(),
             cmd.join(" "),
@@ -737,6 +737,7 @@ mod tests {
     fn files_to_args_sets_per_file() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerFile,
+            includer: matcher(&["**/*.go"])?,
             ..default_command()?
         };
         let files = &["foo.go", "bar.go", "subdir/baz.go"]
@@ -760,9 +761,10 @@ mod tests {
     fn files_to_args_sets_per_dir() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerDir,
+            includer: matcher(&["**/*.go"])?,
             ..default_command()?
         };
-        let files = &["foo.go", "test/foo.md", "bar.go", "subdir/baz.go"]
+        let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
@@ -771,7 +773,7 @@ mod tests {
             vec![
                 vec![PathBuf::from("bar.go"), PathBuf::from("foo.go")],
                 vec![PathBuf::from("subdir/baz.go")],
-                vec![PathBuf::from("test/foo.md")],
+                vec![PathBuf::from("test/foo.go")],
             ],
         );
 
@@ -783,6 +785,7 @@ mod tests {
     fn files_to_args_sets_once() -> Result<()> {
         let command = Command {
             invoke: Invoke::Once,
+            includer: matcher(&["**/*.go"])?,
             ..default_command()?
         };
         let files = &["foo.go", "bar.go", "subdir/baz.go"]
