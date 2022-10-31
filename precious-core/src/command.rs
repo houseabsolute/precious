@@ -252,12 +252,13 @@ impl Command {
     // program. The exact paths that are passed to that invocation are later
     // determined based on the command's `path_args` field.
     pub fn files_to_args_sets<'a>(&self, files: &'a [PathBuf]) -> Result<Vec<Vec<&'a Path>>> {
+        let files = files.iter().filter(|f| self.path_matches_rules(f));
         Ok(match self.invoke {
             // Every file becomes its own one one-element Vec.
-            Invoke::PerFile => files.iter().sorted().map(|f| vec![f.as_path()]).collect(),
+            Invoke::PerFile => files.sorted().map(|f| vec![f.as_path()]).collect(),
             // Every directory becomes a Vec of its files.
             Invoke::PerDir => {
-                let files = files.iter().map(|p| p.as_ref()).collect::<Vec<_>>();
+                let files = files.map(|p| p.as_ref()).collect::<Vec<_>>();
                 let by_dir = Self::files_by_dir(&files)?;
                 by_dir
                     .into_iter()
@@ -266,7 +267,7 @@ impl Command {
                     .collect()
             }
             // All the files in one Vec.
-            Invoke::Once => vec![files.iter().sorted().map(PathBuf::as_path).collect()],
+            Invoke::Once => vec![files.sorted().map(PathBuf::as_path).collect()],
         })
     }
 
