@@ -571,6 +571,19 @@ impl Precious {
                         if let Some(s) = lo.stderr {
                             println!("{}", s);
                         }
+                        if let Ok(ga) = env::var("GITHUB_ACTIONS") {
+                            if !ga.is_empty() {
+                                if files.len() == 1 {
+                                    println!(
+                                        "::error file={}::Linting with {} failed",
+                                        files[0].display(),
+                                        l.name
+                                    );
+                                } else {
+                                    println!("::error::Linting with {} failed", l.name);
+                                }
+                            }
+                        }
 
                         Some(Err(ActionFailure {
                             error: "linting failed".into(),

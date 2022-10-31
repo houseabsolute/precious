@@ -10,6 +10,10 @@
   repo root. Previously this would just attempt to run against incorrect
   paths.
 
+- When run in GitHub Actions, `precious` will now emit [GitHub
+  annotations](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message)
+  for linting errors.
+
 ## 0.3.0 - 2022-10-02
 
 - The `expect_stderr` config parameter has been replaced by
