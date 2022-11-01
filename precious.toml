@@ -14,7 +14,7 @@ lint_failure_exit_codes = 1
 type      = "lint"
 include   = "**/*.rs"
 invoke    = "once"
-path_args = "none"
+path-args = "none"
 cmd = [
     "cargo",
     "clippy",

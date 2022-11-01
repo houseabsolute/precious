@@ -111,19 +111,17 @@ The `invoke` key tells `precious` how the command should be invoked.
 The `working_dir` key tells precious what the working directory should be when the
 command is run.
 
-| Value                   | Description                                                                                                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"root"`                | The working directory is the project root. **This is the default.**                                                                                                       |
-| `"dir"`                 | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
-| `{ sub_roots = [...] }` | See below                                                                                                                                                                 |
+| Value                | Description                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"root"`             | The working directory is the project root. **This is the default.**                                                                                                       |
+| `"dir"`              | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
+| `.sub_roots = [...]` | See below                                                                                                                                                                 |
 
-##### `working_dir = { sub_roots = [ ... ] }`
+##### `working_dir.sub_roots = [ ... ]`
 
-The final option for `working_dir` is to pass a table (aka map) instead of
-`"root"` or `"dir"` as a string. In that case, the table should have one key
-of its own, `sub_roots`. The value of that key can either be a single string
-or an array of strings. Each of these strings should be a _relative_ path to a
-directory under your project root.
+The final option for `working_dir` is to set one or more `sub_roots`. This can
+either be a single string or an array of strings. Each of these strings should
+be a _relative_ path to a directory under your project root.
 
 When a command is configured with `sub_roots`, `precious` will do the
 following based on other aspects of your config.
@@ -164,7 +162,7 @@ invoke = "per-dir"
 path_args = "none" or "dot"
 working_dir = "root"
 # ... or ...
-working_dir = { sub_roots = [ "whatever" ] }
+working_dir.sub_roots = [ "whatever" ]
 ```
 
 You cannot invoke a command once per dir from a root without passing the

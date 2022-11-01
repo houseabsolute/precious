@@ -129,12 +129,10 @@ will work.
 ```toml
 [command.some-linter]
 invoke = "per-file"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "file"
 ```
 
@@ -307,12 +305,10 @@ some-linter
 ```toml
 [command.some-linter]
 invoke = "per-dir"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "file"
 ```
 
@@ -333,12 +329,10 @@ some-linter subpkg/subpkg.go
 ```toml
 [command.some-linter]
 invoke = "per-dir"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "file"
 ```
 
@@ -359,12 +353,10 @@ some-linter /example/pkg2/subpkg/subpkg.go
 ```toml
 [command.some-linter]
 invoke = "per-dir"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "dir"
 ```
 
@@ -385,12 +377,10 @@ some-linter pkg2/subpkg
 ```toml
 [command.some-linter]
 invoke = "per-dir"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "dir"
 ```
 
@@ -528,12 +518,10 @@ some-linter
 ```toml
 [command.some-linter]
 invoke = "once"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "file"
 ```
 
@@ -553,12 +541,10 @@ some-linter pkg2.go pkg2_test.go subpkg/subpkg.go
 ```toml
 [command.some-linter]
 invoke = "once"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "file"
 ```
 
@@ -581,12 +567,10 @@ some-linter \
 ```toml
 [command.some-linter]
 invoke = "once"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "dir"
 ```
 
@@ -606,12 +590,10 @@ some-linter . subpkg
 ```toml
 [command.some-linter]
 invoke = "once"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "dir"
 ```
 
@@ -631,12 +613,10 @@ some-linter /example/pkg2 /example/pkg2/subpkg
 ```toml
 [command.some-linter]
 invoke = "once"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "dot"
 ```
 
@@ -656,12 +636,10 @@ some-linter .
 ```toml
 [command.some-linter]
 invoke = "once"
-working_dir = {
-    "sub_roots" = [
-        "pkg1",
-        "pkg2",
-    ]
-}
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
 path_args = "none"
 ```
 
