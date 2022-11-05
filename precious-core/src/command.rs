@@ -162,7 +162,7 @@ pub struct Command {
     excluder: matcher::Matcher,
     invoke: Invoke,
     working_dir: WorkingDir,
-    pub path_args: PathArgs,
+    path_args: PathArgs,
     cmd: Vec<String>,
     env: HashMap<String, String>,
     lint_flags: Option<Vec<String>>,

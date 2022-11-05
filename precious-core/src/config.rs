@@ -393,6 +393,15 @@ impl Config {
 
 impl Command {
     fn into_command(self, project_root: &Path, name: String) -> Result<command::Command> {
+        let n = command::Command::new(self.into_command_params(project_root, name)?)?;
+        Ok(n)
+    }
+
+    fn into_command_params(
+        self,
+        project_root: &Path,
+        name: String,
+    ) -> Result<command::CommandParams> {
         let (invoke, working_dir, path_args) = Self::invoke_args(
             &name,
             self.run_mode,
@@ -401,8 +410,7 @@ impl Command {
             self.working_dir,
             self.path_args,
         )?;
-
-        let n = command::Command::new(command::CommandParams {
+        Ok(command::CommandParams {
             project_root: project_root.to_owned(),
             name,
             typ: self.typ,
@@ -420,8 +428,7 @@ impl Command {
             lint_failure_exit_codes: self.lint_failure_exit_codes,
             expect_stderr: self.expect_stderr,
             ignore_stderr: self.ignore_stderr,
-        })?;
-        Ok(n)
+        })
     }
 
     fn invoke_args(
@@ -451,16 +458,16 @@ impl Command {
                 return Ok((Invoke::PerFile, WorkingDir::Dir, PathArgs::File))
             }
             (Some(OldRunMode::Dirs), Some(false)) => {
-                return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::File))
+                return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::Dir))
             }
             (Some(OldRunMode::Dirs), Some(true)) => {
                 return Ok((Invoke::PerDir, WorkingDir::Dir, PathArgs::None))
             }
             (Some(OldRunMode::Root), Some(false)) => {
-                return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::Dot))
+                return Ok((Invoke::Once, WorkingDir::Root, PathArgs::Dot))
             }
             (Some(OldRunMode::Root), Some(true)) => {
-                return Ok((Invoke::PerDir, WorkingDir::Dir, PathArgs::None))
+                return Ok((Invoke::Once, WorkingDir::Root, PathArgs::None))
             }
             _ => (),
         }
@@ -497,6 +504,99 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
+
+    #[test]
+    #[parallel]
+    fn pre_0_4_0_command_config() -> Result<()> {
+        let base = r#"
+            [commands.c1]
+            type    = "tidy"
+            include = "**/*.rs"
+            cmd     = "cmd"
+            ok_exit_codes = 0
+        "#;
+
+        struct TestCase {
+            run_mode: &'static str,
+            chdir: bool,
+            invoke: command::Invoke,
+            working_dir: command::WorkingDir,
+            path_args: command::PathArgs,
+        }
+        let cases = &[
+            TestCase {
+                run_mode: "files",
+                chdir: false,
+                invoke: Invoke::PerFile,
+                working_dir: WorkingDir::Root,
+                path_args: PathArgs::File,
+            },
+            TestCase {
+                run_mode: "files",
+                chdir: true,
+                invoke: Invoke::PerFile,
+                working_dir: WorkingDir::Dir,
+                path_args: PathArgs::File,
+            },
+            TestCase {
+                run_mode: "dirs",
+                chdir: false,
+                invoke: Invoke::PerDir,
+                working_dir: WorkingDir::Root,
+                path_args: PathArgs::Dir,
+            },
+            TestCase {
+                run_mode: "dirs",
+                chdir: true,
+                invoke: Invoke::PerDir,
+                working_dir: WorkingDir::Dir,
+                path_args: PathArgs::None,
+            },
+            TestCase {
+                run_mode: "root",
+                chdir: false,
+                invoke: Invoke::Once,
+                working_dir: WorkingDir::Root,
+                path_args: PathArgs::Dot,
+            },
+            TestCase {
+                run_mode: "root",
+                chdir: true,
+                invoke: Invoke::Once,
+                working_dir: WorkingDir::Root,
+                path_args: PathArgs::None,
+            },
+        ];
+
+        let root = Path::new("/does-not-matter");
+        for case in cases {
+            println!(
+                r#"pre_0_4_0_command_config: run_mode = "{}", chdir = {}""#,
+                case.run_mode, case.chdir,
+            );
+            let toml_text = format!(
+                r#"
+                {}
+                run_mode = "{}"
+                chdir = {}
+                "#,
+                base, case.run_mode, case.chdir,
+            );
+
+            let config: Config = toml::from_str(&toml_text)?;
+            let params = config
+                .commands
+                .into_iter()
+                .next()
+                .map(|(name, conf)| conf.into_command_params(root, name))
+                .unwrap()?;
+            assert_eq!(params.invoke, case.invoke, "invoke");
+            assert_eq!(params.working_dir, case.working_dir, "working_dir");
+            assert_eq!(params.path_args, case.path_args, "path_args");
+        }
+
+        Ok(())
+    }
 
     #[test]
     #[parallel]
