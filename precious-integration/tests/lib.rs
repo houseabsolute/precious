@@ -306,7 +306,8 @@ fn all_invocation_options() -> Result<()> {
     write_bash_script(&helper)?;
     create_file_tree(&helper)?;
 
-    let docs = fs::read_to_string(PathBuf::from("../docs/invocation-examples.md"))?;
+    let docs =
+        fs::read_to_string(PathBuf::from("../docs/invocation-examples.md"))?.replace("\r\n", "\n");
     let docs_re = Regex::new(
         r#"(?xsm)
             ```toml\n
@@ -427,7 +428,12 @@ ok_exit_codes = 0
 "#,
         helper.precious_root().display(),
     );
-    fs::write(&precious_toml, &full_config)?;
+
+    if cfg!(windows) {
+        fs::write(&precious_toml, &full_config.replace('\n', "\r\n"))?;
+    } else {
+        fs::write(&precious_toml, &full_config)?;
+    }
 
     let td = tempfile::Builder::new()
         .prefix("precious-all_invocation_options-")
@@ -477,7 +483,8 @@ ok_exit_codes = 0
 
 fn munge_invocation_output(output_file: PathBuf, precious_root: PathBuf) -> Result<String> {
     let got = fs::read_to_string(&output_file)
-        .with_context(|| format!("Could not read file {}", output_file.display()))?;
+        .with_context(|| format!("Could not read file {}", output_file.display()))?
+        .replace("\r\n", "\n");
     let output_re = Regex::new(
         r#"(?x)
            ----\n
