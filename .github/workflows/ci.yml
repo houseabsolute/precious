@@ -57,26 +57,36 @@ jobs:
         with:
           command: test
           args: --workspace --locked --target=${{ matrix.platform.target }}
-      # There's not much value in running self-check on multiple
-      # platforms. Either we're lint-clean or not. We do run on each rust
-      # target to catch warnings coming from clippy in future rust versions.
+
+  # There's not much value in running self-check on multiple
+  # platforms. Either we're lint-clean or not. We do run on each rust
+  # target to catch warnings coming from clippy in future rust versions.
+  lint:
+    name: Lint self
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache cargo & target directories
+        uses: Swatinem/rust-cache@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: default
+          toolchain: stable
+          override: true
       - name: Run cargo install
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --path . --locked --target=${{ matrix.platform.target }}
-        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
+          args: --path . --locked --target=x86_64-unknown-linux-gnu
       - uses: actions/setup-node@v2
-        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
       - name: Run install-dev-tools.sh
         run: |
           set -e
           mkdir $HOME/bin
           ./dev/bin/install-dev-tools.sh
-        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
-      - name: Self-check
+      - name: "Run precious --lint"
         run: PATH=$HOME/bin:$PATH $HOME/.cargo/bin/precious --debug lint --all
-        if: matrix.platform.os_name == 'Linux' && matrix.toolchain == 'stable'
 
   # Copied from https://github.com/urbica/martin/blob/master/.github/workflows/ci.yml
   release:
