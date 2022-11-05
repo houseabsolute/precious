@@ -764,7 +764,7 @@ lint_failure_exit_codes = [1]
             let helper = TestHelper::new()?.with_config_file(name, SIMPLE_CONFIG)?;
             let _pushd = helper.pushd_to_git_root()?;
 
-            let app = App::try_parse_from(&["precious", "tidy", "--all"])?;
+            let app = App::try_parse_from(["precious", "tidy", "--all"])?;
             let config = app.config.clone();
 
             let p = Precious::new(app)?;
@@ -787,7 +787,7 @@ lint_failure_exit_codes = [1]
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&["precious", "--ascii", "tidy", "--all"])?;
+        let app = App::try_parse_from(["precious", "--ascii", "tidy", "--all"])?;
 
         let p = Precious::new(app)?;
         assert_eq!(p.chars, chars::BORING_CHARS);
@@ -802,7 +802,7 @@ lint_failure_exit_codes = [1]
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&[
+        let app = App::try_parse_from([
             "precious",
             "--config",
             helper
@@ -835,7 +835,7 @@ lint_failure_exit_codes = [1]
         helper.write_file(&subdir_config, SIMPLE_CONFIG)?;
         let _pushd = Pushd::new(src_dir.clone())?;
 
-        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
+        let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
         let p = Precious::new(app)?;
         assert_eq!(p.project_root, src_dir);
@@ -966,7 +966,7 @@ lint_failure_exit_codes = [1]
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
+        let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(app)?;
         let status = p.run();
@@ -990,7 +990,7 @@ lint_failure_exit_codes = [1]
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "--all"])?;
+        let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
         let mut p = Precious::new(app)?;
         let status = p.run();
@@ -1015,7 +1015,7 @@ lint_failure_exit_codes = [1]
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&["precious", "--quiet", "lint", "--all"])?;
+        let app = App::try_parse_from(["precious", "--quiet", "lint", "--all"])?;
 
         let mut p = Precious::new(app)?;
         let status = p.run();
@@ -1032,7 +1032,7 @@ lint_failure_exit_codes = [1]
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&[
+        let app = App::try_parse_from([
             "precious",
             "--quiet",
             "lint",
@@ -1056,7 +1056,7 @@ lint_failure_exit_codes = [1]
             TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&[
+        let app = App::try_parse_from([
             "precious",
             "--quiet",
             "lint",
@@ -1112,7 +1112,7 @@ lint_failure_exit_codes = [1]
         helper.write_file(&test_replace, "The letter A")?;
         let _pushd = helper.pushd_to_git_root()?;
 
-        let app = App::try_parse_from(&["precious", "--quiet", "tidy", "-a"])?;
+        let app = App::try_parse_from(["precious", "--quiet", "tidy", "-a"])?;
 
         let mut p = Precious::new(app)?;
         let status = p.run();

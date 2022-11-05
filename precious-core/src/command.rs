@@ -340,7 +340,7 @@ impl Command {
             let d = f.parent().ok_or_else(|| CommandError::PathHasNoParent {
                 path: f.to_string_lossy().to_string(),
             })?;
-            by_dir.entry(d).or_insert(vec![]).push(f);
+            by_dir.entry(d).or_default().push(f);
         }
         Ok(by_dir)
     }

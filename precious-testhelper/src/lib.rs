@@ -88,7 +88,7 @@ impl TestHelper {
             } else {
                 "some text"
             };
-            self.write_file(&p, content)?;
+            self.write_file(p, content)?;
         }
 
         self.run_git(&["init", "--initial-branch", "master"])?;
@@ -250,7 +250,7 @@ generated.*
         full.push(rel.as_ref());
         let parent = full.parent().unwrap();
         debug!("creating dir at {}", parent.display());
-        fs::create_dir_all(&parent)
+        fs::create_dir_all(parent)
             .with_context(|| format!("Creating dir at {}", parent.display(),))?;
         debug!("writing file at {}", full.display());
         let mut file = fs::File::create(full.clone())
