@@ -233,6 +233,28 @@ The root command takes the following options:
 | `-c`, `--config` `<config>` | Path to config file                                                 |
 | `-j`, `--jobs` `<jobs>`     | Number of parallel jobs (threads) to run (defaults to one per core) |
 
+### Parallel Execution
+
+Precious will always execute commands in parallel, with one process per CPU by
+default. The execution is parallelized based on the command's invocation
+configuration. For example, one a 12 CPU system, a command that has `invoke = "per-file"` will be executed up to 12 times in parallel, with each command
+execution receiving one file.
+
+When using `sub_roots`, command invocation is parallelized per root, rather
+than across all roots at once. For example, given this config:
+
+```toml
+invoke = "per-file"
+working_dir.sub_roots = [ "root1", "root2" ]
+path_args = "file"
+```
+
+If there are 3 matching files in `root1` and 5 matching files in `root2`, then
+the command will be invoked 3 times in parallel for `root1` and 5 times in
+parallel for `root2`, rather than 8 times in parallel for both.
+
+You can disable parallel execution by passing `--jobs 1`.
+
 ### Subcommands
 
 The `precious` command has two subcommands, `lint` and `tidy`. You must always

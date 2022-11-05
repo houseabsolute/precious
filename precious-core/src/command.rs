@@ -7,7 +7,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    fmt, fs,
+    fmt::{self, Write},
+    fs,
     io::ErrorKind,
     path::{Path, PathBuf},
     time::SystemTime,
@@ -34,7 +35,7 @@ impl CommandType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Invoke {
     #[serde(rename = "per-file")]
     PerFile,
@@ -44,11 +45,50 @@ pub enum Invoke {
     Once,
 }
 
+impl fmt::Display for Invoke {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Is using serde to do this incredibly gross?
+        f.write_str(&toml::to_string(self).unwrap_or_else(|e| {
+            unreachable!(
+                "We should always be able to serialize an Invoke to TOML: {}",
+                e,
+            )
+        }))
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum WorkingDir {
     Root,
     Dir,
     SubRoots(Vec<PathBuf>),
+}
+
+impl fmt::Display for WorkingDir {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WorkingDir::Root => f.write_str(r#""root""#),
+            WorkingDir::Dir => f.write_str(r#""dir""#),
+            WorkingDir::SubRoots(sr) => {
+                f.write_char('[')?;
+                if sr.len() == 1 {
+                    f.write_char('"')?;
+                    f.write_str(&format!("{}", sr[0].display()))?;
+                    f.write_char('"')?;
+                } else {
+                    f.write_char(' ')?;
+                    f.write_str(
+                        &sr.iter()
+                            .map(|r| format!(r#""{}""#, r.display()))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    )?;
+                    f.write_char(' ')?;
+                }
+                f.write_char(']')
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -85,16 +125,32 @@ enum CommandError {
         "You cannot create a Command which lints and tidies without lint_flags and/or tidy_flags"
     )]
     CommandWhichIsBothRequiresLintOrTidyFlags,
+
     #[error("Cannot {method:} with the {command:} command, which is a {typ:}")]
     CannotMethodWithCommand {
         method: &'static str,
         command: String,
         typ: &'static str,
     },
+
     #[error("Path {path:} has no parent")]
     PathHasNoParent { path: String },
+
     #[error("Path {path:} should exist but it does not")]
     PathDoesNotExist { path: String },
+
+    #[error("The path \"{}\" does not contain \"{}\" as a prefix", path.display(), prefix.display())]
+    PrefixNotFound { path: PathBuf, prefix: PathBuf },
+
+    #[error(
+        "Path {} does not match any of this command's sub-roots: {}",
+        path.display(),
+        sub_roots.iter().map(|r| format!("{}", r.display())).join(", "),
+    )]
+    PathDoesNotMatchAnySubRoots {
+        path: PathBuf,
+        sub_roots: Vec<PathBuf>,
+    },
 }
 
 #[derive(Debug)]
@@ -247,6 +303,13 @@ impl Command {
         unique_codes.into_iter().collect()
     }
 
+    pub fn roots(&self) -> Vec<&Path> {
+        match &self.working_dir {
+            WorkingDir::SubRoots(sr) => sr.iter().map(|r| r.as_path()).collect(),
+            _ => vec![Path::new(".")],
+        }
+    }
+
     // This returns a vec of vecs where each of the sub-vecs contains 1+
     // files. Each of those sub-vecs represents one invocation of the
     // program. The exact paths that are passed to that invocation are later
@@ -291,12 +354,12 @@ impl Command {
 
         let path_metadata = self.maybe_path_metadata_for(files)?;
 
-        let operating_on = self.operating_on(files)?;
-        let mut cmd = self.command_for_paths(&self.tidy_flags, &operating_on)?;
         let in_dir = self.in_dir(files[0])?;
+        let operating_on = self.operating_on(files, in_dir)?;
+        let mut cmd = self.command_for_paths(&self.tidy_flags, &operating_on)?;
 
         info!(
-            "Tidying [{}] with {} in [{}] command [{}]",
+            "Tidying [{}] with {} in [{}] using command [{}]",
             files.iter().map(|p| p.to_string_lossy()).join(" "),
             self.name,
             in_dir.display(),
@@ -329,12 +392,12 @@ impl Command {
             return Ok(None);
         }
 
-        let operating_on = self.operating_on(files)?;
-        let mut cmd = self.command_for_paths(&self.lint_flags, &operating_on)?;
         let in_dir = self.in_dir(files[0])?;
+        let operating_on = self.operating_on(files, in_dir)?;
+        let mut cmd = self.command_for_paths(&self.lint_flags, &operating_on)?;
 
         info!(
-            "Linting [{}] with {} in [{}] command: {}",
+            "Linting [{}] with {} in [{}] using command [{}]",
             files.iter().map(|p| p.to_string_lossy()).join(" "),
             self.name,
             in_dir.display(),
@@ -441,8 +504,8 @@ impl Command {
                     if self.includer.path_matches(f) {
                         debug!(
                             "File {} is included for the {} command",
-                            self.name,
                             f.display(),
+                            self.name,
                         );
                         return Ok(true);
                     }
@@ -462,42 +525,79 @@ impl Command {
     // the filenames which were produced by the call to
     // `files_to_args_sets`. This turns those files into the actual paths to
     // be passed to the command, which is passed on the command's `PathArgs`
-    // type.
-    fn operating_on(&self, files: &[&Path]) -> Result<Vec<PathBuf>> {
-        Ok(match self.path_args {
-            PathArgs::File => files.iter().sorted().map(|f| f.to_path_buf()).collect(),
-            PathArgs::Dir => Self::files_by_dir(files)?
-                .into_keys()
-                .map(|d| {
-                    if d == Path::new("") {
-                        PathBuf::from(".")
+    // type. Those files are all relative to the _project root_. We may return
+    // them as is (but sorted), or we may turn them paths relative to the
+    // given directory. The given directory is the directory in which the
+    // command will be run, and may not be the project root.
+    fn operating_on(&self, files: &[&Path], in_dir: &Path) -> Result<Vec<PathBuf>> {
+        //dbg!(files, in_dir);
+        match self.path_args {
+            PathArgs::File => Ok(files
+                .iter()
+                .sorted()
+                .map(|r| {
+                    if in_dir == self.project_root {
+                        Ok(r.to_path_buf())
                     } else {
-                        d.to_path_buf()
+                        r.strip_prefix(in_dir)
+                            .map(|r| r.to_path_buf())
+                            .map_err(|_| {
+                                CommandError::PrefixNotFound {
+                                    path: r.to_path_buf(),
+                                    prefix: self.project_root.clone(),
+                                }
+                                .into()
+                            })
                     }
                 })
+                .collect::<Result<Vec<_>>>()?),
+            PathArgs::Dir => Self::files_by_dir(files)?
+                .into_keys()
                 .sorted()
-                .collect(),
-            PathArgs::None => vec![],
-            PathArgs::Dot => vec![PathBuf::from(".")],
-            PathArgs::AbsoluteFile => files
+                .map(|r| {
+                    if in_dir == self.project_root {
+                        Ok(Self::path_or_dot(r))
+                    } else {
+                        r.strip_prefix(in_dir).map(Self::path_or_dot).map_err(|_| {
+                            CommandError::PrefixNotFound {
+                                path: r.to_path_buf(),
+                                prefix: self.project_root.clone(),
+                            }
+                            .into()
+                        })
+                    }
+                })
+                .collect::<Result<Vec<_>>>(),
+            PathArgs::None => Ok(vec![]),
+            PathArgs::Dot => Ok(vec![PathBuf::from(".")]),
+            PathArgs::AbsoluteFile => Ok(files
                 .iter()
+                .sorted()
                 .map(|f| {
                     let mut abs = self.project_root.clone();
                     abs.push(f);
                     abs
                 })
-                .sorted()
-                .collect(),
-            PathArgs::AbsoluteDir => Self::files_by_dir(files)?
+                .collect()),
+            PathArgs::AbsoluteDir => Ok(Self::files_by_dir(files)?
                 .into_keys()
                 .map(|d| {
                     let mut abs = self.project_root.clone();
-                    abs.push(d);
+                    if d.components().count() != 0 {
+                        abs.push(d);
+                    }
                     abs
                 })
                 .sorted()
-                .collect(),
-        })
+                .collect()),
+        }
+    }
+
+    fn path_or_dot(path: &Path) -> PathBuf {
+        if path == Path::new("") {
+            return PathBuf::from(".");
+        }
+        path.to_path_buf()
     }
 
     // This takes the list of files relevant to the command. That list comes
@@ -669,18 +769,41 @@ impl Command {
         name.to_string()
     }
 
-    fn in_dir<'b, 'a: 'b>(&'a self, path: &'b Path) -> Result<&'b Path> {
-        if self.working_dir != WorkingDir::Dir {
-            return Ok(&self.project_root);
-        }
+    fn in_dir<'a, 'b: 'a>(&'b self, path: &'a Path) -> Result<&'a Path> {
+        match &self.working_dir {
+            WorkingDir::Root => Ok(&self.project_root),
+            WorkingDir::Dir => {
+                let parent = path.parent().ok_or_else(|| CommandError::PathHasNoParent {
+                    path: path.to_string_lossy().to_string(),
+                })?;
 
-        if path.is_dir() {
-            return Ok(path);
-        }
+                if parent == Path::new("") {
+                    return Ok(&self.project_root);
+                }
 
-        Ok(path.parent().ok_or_else(|| CommandError::PathHasNoParent {
-            path: path.to_string_lossy().to_string(),
-        })?)
+                Ok(parent)
+            }
+            WorkingDir::SubRoots(sr) => sr
+                .iter()
+                .find(|r| path.starts_with(r))
+                .map(|r| r.as_path())
+                .ok_or_else(|| {
+                    {
+                        CommandError::PathDoesNotMatchAnySubRoots {
+                            path: path.to_path_buf(),
+                            sub_roots: sr.to_vec(),
+                        }
+                    }
+                    .into()
+                }),
+        }
+    }
+
+    pub fn config_debug(&self) -> String {
+        format!(
+            "invoke = {} | working_dir = {} | path_args = {}",
+            self.invoke, self.working_dir, self.path_args
+        )
     }
 }
 
@@ -1007,34 +1130,73 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn operating_on_with_path_args_file() -> Result<()> {
+    fn operating_on_with_path_args_file_in_project_root() -> Result<()> {
         let command = Command {
             path_args: PathArgs::File,
             ..default_command()?
         };
-        let file1 = PathBuf::from("file1");
-        assert_eq!(command.operating_on(&[&file1])?, vec![file1]);
+        let file1 = Path::new("file1");
+        assert_eq!(
+            command.operating_on(&[file1], &command.project_root)?,
+            vec![file1],
+        );
 
-        let file2 = PathBuf::from("subdir/file2");
-        assert_eq!(command.operating_on(&[&file2])?, vec![file2]);
+        let file2 = Path::new("subdir/file2");
+        assert_eq!(
+            command.operating_on(&[file2], &command.project_root)?,
+            vec![file2],
+        );
 
         Ok(())
     }
 
     #[test]
     #[parallel]
-    fn operating_on_with_path_args_dir() -> Result<()> {
+    fn operating_on_with_path_args_file_in_subdir() -> Result<()> {
+        let command = Command {
+            path_args: PathArgs::File,
+            ..default_command()?
+        };
+        let mut in_dir = command.project_root.clone();
+        in_dir.push("subdir");
+        let file = Path::new("subdir/file");
+        assert_eq!(
+            command.operating_on(&[file], &in_dir)?,
+            vec![PathBuf::from("file")],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_path_args_dir_in_project_root() -> Result<()> {
         let command = Command {
             path_args: PathArgs::Dir,
             ..default_command()?
         };
-        let files = &["file1", "subdir/file2"]
-            .iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
+        let files = &[Path::new("file1"), Path::new("subdir/file2")];
         assert_eq!(
-            command.operating_on(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?,
+            command.operating_on(files, &command.project_root,)?,
             vec![PathBuf::from("."), PathBuf::from("subdir")],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_path_args_dir_in_subdir() -> Result<()> {
+        let command = Command {
+            path_args: PathArgs::Dir,
+            ..default_command()?
+        };
+        let files = &[Path::new("subdir/file1"), Path::new("subdir/more/file2")];
+        let mut in_dir = command.project_root.clone();
+        in_dir.push("subdir");
+        assert_eq!(
+            command.operating_on(files, &in_dir)?,
+            vec![PathBuf::from("."), PathBuf::from("more")],
         );
 
         Ok(())
@@ -1053,14 +1215,14 @@ mod tests {
         let mut file1 = cwd.clone();
         file1.push("file1");
         assert_eq!(
-            command.operating_on(&[&PathBuf::from("file1")])?,
+            command.operating_on(&[Path::new("file1")], &command.project_root)?,
             vec![file1],
         );
 
         let mut file1 = cwd;
         file1.push("subdir/file2");
         assert_eq!(
-            command.operating_on(&[&PathBuf::from("subdir/file2")])?,
+            command.operating_on(&[Path::new("subdir/file2")], &command.project_root)?,
             vec![file1],
         );
 
@@ -1069,7 +1231,37 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn operating_on_with_path_args_absolute_dir() -> Result<()> {
+    fn operating_on_with_path_args_absolute_file_in_dir() -> Result<()> {
+        let cwd = env::current_dir()?;
+        let command = Command {
+            project_root: cwd.clone(),
+            path_args: PathArgs::AbsoluteFile,
+            ..default_command()?
+        };
+
+        let mut in_dir = command.project_root.clone();
+        in_dir.push("subdir");
+
+        let mut file1 = cwd.clone();
+        file1.push("file1");
+        assert_eq!(
+            command.operating_on(&[Path::new("file1")], &in_dir)?,
+            vec![file1],
+        );
+
+        let mut file1 = cwd;
+        file1.push("subdir/file2");
+        assert_eq!(
+            command.operating_on(&[Path::new("subdir/file2")], &in_dir)?,
+            vec![file1],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_path_args_absolute_dir_in_project_root() -> Result<()> {
         let cwd = env::current_dir()?;
         let command = Command {
             project_root: cwd.clone(),
@@ -1077,14 +1269,14 @@ mod tests {
             ..default_command()?
         };
         assert_eq!(
-            command.operating_on(&[&PathBuf::from("file1")])?,
+            command.operating_on(&[Path::new("file1")], &command.project_root)?,
             vec![cwd.clone()],
         );
 
         let mut subdir = cwd;
         subdir.push("subdir");
         assert_eq!(
-            command.operating_on(&[&PathBuf::from("subdir/file2")])?,
+            command.operating_on(&[Path::new("subdir/file2")], &command.project_root)?,
             vec![subdir],
         );
 
@@ -1093,17 +1285,41 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn operating_on_with_path_args_dot() -> Result<()> {
+    fn operating_on_with_path_args_absolute_dir_in_dir() -> Result<()> {
+        let cwd = env::current_dir()?;
+        let command = Command {
+            project_root: cwd.clone(),
+            path_args: PathArgs::AbsoluteDir,
+            ..default_command()?
+        };
+        let mut in_dir = command.project_root.clone();
+        in_dir.push("subdir");
+
+        assert_eq!(
+            command.operating_on(&[Path::new("file1")], &in_dir)?,
+            vec![cwd.clone()],
+        );
+
+        let mut subdir = cwd;
+        subdir.push("subdir");
+        assert_eq!(
+            command.operating_on(&[Path::new("subdir/file2")], &in_dir)?,
+            vec![subdir],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_path_args_dot_in_project_root() -> Result<()> {
         let command = Command {
             path_args: PathArgs::Dot,
             ..default_command()?
         };
-        let files = &["file1", "subdir/file2"]
-            .iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
+        let files = &[Path::new("file1"), Path::new("subdir/file2")];
         assert_eq!(
-            command.operating_on(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?,
+            command.operating_on(files, &command.project_root)?,
             vec![PathBuf::from(".")],
         );
 
@@ -1112,20 +1328,50 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn operating_on_with_path_args_none() -> Result<()> {
+    fn operating_on_with_path_args_dot_in_dir() -> Result<()> {
+        let command = Command {
+            path_args: PathArgs::Dot,
+            ..default_command()?
+        };
+        let mut in_dir = command.project_root.clone();
+        in_dir.push("subdir");
+
+        let files = &[Path::new("file1"), Path::new("subdir/file2")];
+        assert_eq!(
+            command.operating_on(files, &in_dir)?,
+            vec![PathBuf::from(".")],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_path_args_none_in_project_root() -> Result<()> {
         let command = Command {
             path_args: PathArgs::None,
             ..default_command()?
         };
-        let files = &["file1", "subdir/file2"]
-            .iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
+        let files = &[Path::new("file1"), Path::new("subdir/file2")];
         let expect: Vec<PathBuf> = vec![];
-        assert_eq!(
-            command.operating_on(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?,
-            expect
-        );
+        assert_eq!(command.operating_on(files, &command.project_root)?, expect);
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_path_args_none_in_dir() -> Result<()> {
+        let command = Command {
+            path_args: PathArgs::None,
+            ..default_command()?
+        };
+        let mut in_dir = command.project_root.clone();
+        in_dir.push("subdir");
+
+        let files = &[Path::new("file1"), Path::new("subdir/file2")];
+        let expect: Vec<PathBuf> = vec![];
+        assert_eq!(command.operating_on(files, &in_dir)?, expect);
 
         Ok(())
     }

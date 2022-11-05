@@ -476,7 +476,7 @@ impl Command {
                 }
             }
             (Invoke::PerDir, &WorkingDir::Root | &WorkingDir::SubRoots(_), path_args) => {
-                if path_args != PathArgs::Dir && path_args != PathArgs::AbsoluteDir {
+                if path_args == PathArgs::Dot || path_args == PathArgs::None {
                     return Err(
                         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args }.into(),
                     );

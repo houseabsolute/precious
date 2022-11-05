@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use itertools::Itertools;
 use precious_helpers::exec;
 use precious_testhelper::TestHelper;
-use pretty_assertions::assert_eq;
+use pretty_assertions::{assert_eq, assert_str_eq};
 use regex::Regex;
 use serial_test::serial;
 use std::{collections::HashMap, env, fs, path::PathBuf};
@@ -313,16 +313,27 @@ fn all_invocation_options() -> Result<()> {
             \[commands\.some-linter\]\n
             (?P<config>.+?)
             ```
-            \s+
+            \n+
             ```\n
             (?P<output>.+?)
             ```
         "#,
     )?;
 
+    let mut count = 0;
     for caps in docs_re.captures_iter(&docs) {
-        run_one_invocation_test(&helper, &caps["config"], &caps["output"])?;
+        let config = &caps["config"];
+        match run_one_invocation_test(&helper, config, &caps["output"]) {
+            Ok(..) => (),
+            Err(e) => {
+                eprintln!("Error from this config:\n{}", config);
+                return Err(e);
+            }
+        }
+        count += 1;
     }
+    const EXPECT_COUNT: u8 = 28;
+    assert_eq!(count, EXPECT_COUNT, "tested {EXPECT_COUNT} examples");
 
     Ok(())
 }
@@ -347,9 +358,7 @@ fi
     echo "----" 1>&42
 
     cwd=$(pwd)
-    if [ "$cwd" != "$PRECIOUS_INTEGRATION_TEST_ROOT" ]; then
-        echo "cd $cwd" 1>&42
-    fi
+    echo "cwd = $cwd" 1>&42
 
     echo "some-linter $@" 1>&42
 
@@ -412,18 +421,24 @@ fn run_one_invocation_test(helper: &TestHelper, config: &str, expect: &str) -> R
 [commands.some-linter]
 type = "lint"
 include = "**/*.go"
-cmd = [ "bash", "some-linter.sh" ]
+cmd = [ "bash", "{}/some-linter.sh" ]
 ok_exit_codes = 0
 {config}
-"#
+"#,
+        helper.precious_root().display(),
     );
     fs::write(&precious_toml, &full_config)?;
 
-    let output_dir = tempfile::Builder::new()
+    let td = tempfile::Builder::new()
         .prefix("precious-all_invocation_options-")
         .tempdir()?;
-    let mut output_file = output_dir.path().to_path_buf();
+    let mut output_file = td.path().to_path_buf();
     output_file.push("linter-output.txt");
+
+    let (_output_dir, _preserved_tempdir) = match env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
+        Ok(v) if !(v.is_empty() || v == "0") => (None, Some(td.into_path())),
+        _ => (Some(td), None),
+    };
 
     let env = HashMap::from([
         (
@@ -435,54 +450,84 @@ ok_exit_codes = 0
             helper.precious_root().to_string_lossy().to_string(),
         ),
     ]);
-    let result = exec::run(
+    let _result = exec::run(
         &precious,
-        &["lint", "--all"],
+        &["--debug", "lint", "--all"],
         &env,
         &[0],
-        None,
+        Some(&[Regex::new(".*")?]),
         Some(&helper.precious_root()),
     )?;
-    println!("{}", result.stderr.as_deref().unwrap_or(""));
+    // println!("STDERR");
+    // println!("{}", _result.stderr.as_deref().unwrap_or(""));
 
+    let got = munge_invocation_output(output_file, helper.precious_root())?;
+
+    let expect = expect
+        .replace("/example", &helper.precious_root().to_string_lossy())
+        .replace(" \\\n    ", " ");
+    // println!("GOT");
+    // println!("{got}");
+    // println!("EXPECT");
+    // println!("{expect}");
+    assert_str_eq!(got, expect, "\n{config}");
+
+    Ok(())
+}
+
+fn munge_invocation_output(output_file: PathBuf, precious_root: PathBuf) -> Result<String> {
     let got = fs::read_to_string(&output_file)
         .with_context(|| format!("Could not read file {}", output_file.display()))?;
     let output_re = Regex::new(
         r#"(?x)
            ----\n
-           (?:(P<cd>cd\ .+?)\n)?
-           (?P<cmd>some-linter\ (?P<paths>.+?))\n
+           cwd\ =\ (?P<cwd>.+?)\n
+           (?P<cmd>some-linter)(?:\ (?P<paths>.+?)?)\n
         "#,
     )?;
 
-    let mut output_by_paths: HashMap<String, Vec<String>> = HashMap::new();
-    for caps in output_re.captures_iter(&got) {
-        let mut output = vec![];
-        let cd = caps
-            .name("cd")
-            .map(|m| m.as_str())
-            .unwrap_or("")
-            .to_string();
-        if !cd.is_empty() {
-            output.push(cd);
-        }
-        output.push(caps["cmd"].to_string());
-        output_by_paths.insert(caps["paths"].to_string(), output);
+    #[derive(Debug)]
+    struct Invocation<'a> {
+        cwd: &'a str,
+        cmd: &'a str,
+        paths: Option<&'a str>,
     }
-    let mut output = vec![];
-    for (_, mut v) in output_by_paths
-        .into_iter()
-        .sorted_by(|a, b| Ord::cmp(&a.0, &b.0))
-    {
-        output.append(&mut v);
-    }
-    assert_eq!(
-        output,
-        expect.trim().split('\n').collect::<Vec<_>>(),
-        "{config}"
-    );
 
-    Ok(())
+    let mut invocations: Vec<Invocation> = vec![];
+    for caps in output_re.captures_iter(&got) {
+        invocations.push(Invocation {
+            cwd: caps.name("cwd").unwrap().as_str(),
+            cmd: caps.name("cmd").unwrap().as_str(),
+            paths: caps.name("paths").map(|p| p.as_str()),
+        });
+    }
+    invocations.sort_by(|a, b| {
+        if a.cwd != b.cwd {
+            return a.cwd.cmp(b.cwd);
+        }
+        a.paths.unwrap_or("").cmp(b.paths.unwrap_or(""))
+    });
+
+    let mut last_cd = format!("{}", precious_root.display());
+    Ok(invocations
+        .iter()
+        .map(|i| {
+            let mut output = String::new();
+            if last_cd != i.cwd {
+                output.push_str("cd ");
+                output.push_str(i.cwd);
+                output.push('\n');
+            }
+            last_cd = i.cwd.to_string();
+            output.push_str(i.cmd);
+            if let Some(paths) = i.paths {
+                output.push(' ');
+                output.push_str(paths);
+            }
+            output.push('\n');
+            output
+        })
+        .join(""))
 }
 
 fn precious_path() -> Result<String> {

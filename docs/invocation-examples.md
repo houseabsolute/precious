@@ -30,7 +30,7 @@ example
 This is the default configuration.
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-file"
 working_dir = "root"
 path_args = "file"
@@ -52,7 +52,7 @@ some-linter pkg2/subpkg/subpkg.go
 - **Absolute file path as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-file"
 working_dir = "root"
 path_args = "absolute-file"
@@ -74,7 +74,7 @@ some-linter /example/pkg2/subpkg/subpkg.go
 - **Relative file path as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-file"
 working_dir = "dir"
 path_args = "file"
@@ -99,7 +99,7 @@ some-linter subpkg.go
 - **Absolute file path as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-file"
 working_dir = "dir"
 path_args = "absolute-file"
@@ -117,8 +117,8 @@ cd /example/pkg2/subpkg
 some-linter /example/pkg2/subpkg/subpkg.go
 ```
 
-It's odd to combine `working_dir = "dir"` with passing absolute files, but it
-will work.
+It's odd to combine `working_dir = "dir"` with `path_args = "absolute-file"`,
+but it will work.
 
 ---
 
@@ -127,7 +127,7 @@ will work.
 - **Relative file path as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-file"
 working_dir.sub_roots = [
     "pkg1",
@@ -155,10 +155,13 @@ not run for files in the project root.
 - **Absolute file path as the argument**
 
 ```toml
-[command.some-linter]
-invoke = "per-dir"
-working_dir = "root"
-path_args = "dir"
+[commands.some-linter]
+invoke = "per-file"
+working_dir.sub_roots = [
+    "pkg1",
+    "pkg2",
+]
+path_args = "absolute-file"
 ```
 
 ```
@@ -170,6 +173,49 @@ some-linter /example/pkg2/pkg2_test.go
 some-linter /example/pkg2/subpkg/subpkg.go
 ```
 
+Since the root directory is not included in the `sub_roots`, the command is
+not run for files in the project root.
+
+---
+
+- **Runs once per directory**
+- **Working directory is the root**
+- **Relative directory path as pargument**
+
+```toml
+[commands.some-linter]
+invoke = "per-dir"
+working_dir = "root"
+path_args = "dir"
+```
+
+```
+some-linter .
+some-linter pkg1
+some-linter pkg2
+some-linter pkg2/subpkg
+```
+
+---
+
+- **Runs once per directory**
+- **Working directory is the root**
+- **Absolute directory path as pargument**
+
+```toml
+[commands.some-linter]
+invoke = "per-dir"
+working_dir = "root"
+path_args = "absolute-dir"
+```
+
+```
+some-linter /example
+some-linter /example/pkg1
+some-linter /example/pkg2
+some-linter /example/pkg2/subpkg
+```
+
 ---
 
 - **Runs once per directory**
@@ -177,10 +223,10 @@ some-linter /example/pkg2/subpkg/subpkg.go
 - **Relative file paths as arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir = "root"
-path_args = "absolute-dir"
+path_args = "file"
 ```
 
 ```
@@ -197,10 +243,10 @@ some-linter pkg2/subpkg/subpkg.go
 - **Absolute file paths as arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir = "root"
-path_args = "dir"
+path_args = "absolute-file"
 ```
 
 ```
@@ -213,51 +259,11 @@ some-linter /example/pkg2/subpkg/subpkg.go
 ---
 
 - **Runs once per directory**
-- **Working directory is the root**
-- **Relative directory path as the argument**
-
-```toml
-[command.some-linter]
-invoke = "per-dir"
-working_dir = "root"
-path_args = "relative-dir"
-```
-
-```
-some-linter .
-some-linter pkg1
-some-linter pkg2
-some-linter pkg2/subpkg
-```
-
----
-
-- **Runs once per directory**
-- **Working directory is the root**
-- **Absolute directory path as the argument**
-
-```toml
-[command.some-linter]
-invoke = "per-dir"
-working_dir = "root"
-path_args = "absolute-dir"
-```
-
-```
-some-linter /example
-some-linter /example/pkg1
-some-linter /example/pkg2
-some-linter /example/pkg2/subpkg
-```
-
----
-
-- **Runs once per directory**
 - **Working directory is each directory in turn**
 - **Dot (`.`) as the path argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir = "dir"
 path_args = "dot"
@@ -280,7 +286,7 @@ some-linter .
 - **No path argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir = "dir"
 path_args = "none"
@@ -303,7 +309,7 @@ some-linter
 - **Relative file paths as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir.sub_roots = [
     "pkg1",
@@ -327,13 +333,13 @@ some-linter subpkg/subpkg.go
 - **Absolute file paths as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir.sub_roots = [
     "pkg1",
     "pkg2",
 ]
-path_args = "file"
+path_args = "absolute-file"
 ```
 
 ```
@@ -351,7 +357,7 @@ some-linter /example/pkg2/subpkg/subpkg.go
 - **Relative directory path as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir.sub_roots = [
     "pkg1",
@@ -365,7 +371,7 @@ cd /example/pkg1
 some-linter .
 cd /example/pkg2
 some-linter .
-some-linter pkg2/subpkg
+some-linter subpkg
 ```
 
 ---
@@ -375,13 +381,13 @@ some-linter pkg2/subpkg
 - **Absolute directory path as the argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "per-dir"
 working_dir.sub_roots = [
     "pkg1",
     "pkg2",
 ]
-path_args = "dir"
+path_args = "absolute-dir"
 ```
 
 ```
@@ -399,7 +405,7 @@ some-linter /example/pkg2/subpkg
 - **Relative file paths as arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir = "root"
 path_args = "file"
@@ -422,10 +428,10 @@ some-linter \
 - **Absolute file paths as arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir = "root"
-path_args = "file"
+path_args = "absolute-file"
 ```
 
 ```
@@ -445,14 +451,14 @@ some-linter \
 - **Relative directory paths as arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir = "root"
-path_args = "file"
+path_args = "dir"
 ```
 
 ```
-some-linter . pkg1 pkg2
+some-linter . pkg1 pkg2 pkg2/subpkg
 ```
 
 ---
@@ -462,17 +468,18 @@ some-linter . pkg1 pkg2
 - **Absolute directory paths as arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir = "root"
-path_args = "file"
+path_args = "absolute-dir"
 ```
 
 ```
 some-linter \
     /example \
     /example/pkg1 \
-    /example/pkg2
+    /example/pkg2 \
+    /example/pkg2/subpkg
 ```
 
 ---
@@ -482,7 +489,7 @@ some-linter \
 - **Dot (`.`) as the path argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir = "root"
 path_args = "dot"
@@ -499,7 +506,7 @@ some-linter .
 - **No path argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir = "root"
 path_args = "none"
@@ -516,7 +523,7 @@ some-linter
 - **Relative file paths as the arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir.sub_roots = [
     "pkg1",
@@ -539,13 +546,13 @@ some-linter pkg2.go pkg2_test.go subpkg/subpkg.go
 - **Absolute file paths as the arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir.sub_roots = [
     "pkg1",
     "pkg2",
 ]
-path_args = "file"
+path_args = "absolute-file"
 ```
 
 ```
@@ -565,7 +572,7 @@ some-linter \
 - **Relative directory paths as the arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir.sub_roots = [
     "pkg1",
@@ -588,13 +595,13 @@ some-linter . subpkg
 - **Absolute directory paths as the arguments**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir.sub_roots = [
     "pkg1",
     "pkg2",
 ]
-path_args = "dir"
+path_args = "absolute-dir"
 ```
 
 ```
@@ -611,7 +618,7 @@ some-linter /example/pkg2 /example/pkg2/subpkg
 - **Dot (`.`) as the path argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir.sub_roots = [
     "pkg1",
@@ -634,7 +641,7 @@ some-linter .
 - **No path argument**
 
 ```toml
-[command.some-linter]
+[commands.some-linter]
 invoke = "once"
 working_dir.sub_roots = [
     "pkg1",

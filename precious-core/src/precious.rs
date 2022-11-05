@@ -425,9 +425,26 @@ impl Precious {
             None => Ok(self.no_files_exit()),
             Some(files) => {
                 let mut all_failures: Vec<ActionFailure> = vec![];
-                for f in commands {
-                    if let Some(mut failures) = run_command(self, files.clone(), &f)? {
-                        all_failures.append(&mut failures);
+                for c in commands {
+                    debug!(r#"Command config for {}: {}"#, c.name, c.config_debug(),);
+                    let mut found_files = false;
+                    for root in c.roots() {
+                        let files_for_root = self.files_in_root(&files, root);
+                        if files_for_root.is_empty() {
+                            debug!(
+                                "command {} had no files under root {}",
+                                c.name,
+                                root.display()
+                            );
+                            continue;
+                        }
+                        found_files = true;
+                        if let Some(mut failures) = run_command(self, files_for_root, &c)? {
+                            all_failures.append(&mut failures);
+                        }
+                    }
+                    if !found_files {
+                        return Ok(self.no_files_exit());
                     }
                 }
 
@@ -443,6 +460,17 @@ impl Precious {
             self.cwd.clone(),
             self.config.exclude.clone(),
         )
+    }
+
+    fn files_in_root(&self, files: &[PathBuf], root: &Path) -> Vec<PathBuf> {
+        if root == Path::new(".") {
+            return files.to_vec();
+        }
+        files
+            .iter()
+            .filter(|f| f.starts_with(root))
+            .map(|f| f.to_path_buf())
+            .collect()
     }
 
     fn make_exit(&self, failures: Vec<ActionFailure>, action: &str) -> Exit {
@@ -1059,26 +1087,26 @@ lint_failure_exit_codes = [1]
         }
 
         let config = r#"
-    [commands.perl-replace-a-with-b]
-    type    = "tidy"
-    include = "test.replace"
-    cmd     = ["perl", "-pi", "-e", "s/a/b/i"]
-    ok_exit_codes = [0]
+            [commands.perl-replace-a-with-b]
+            type    = "tidy"
+            include = "test.replace"
+            cmd     = ["perl", "-pi", "-e", "s/a/b/i"]
+            ok_exit_codes = [0]
 
-    [commands.perl-replace-a-with-c]
-    type    = "tidy"
-    include = "test.replace"
-    cmd     = ["perl", "-pi", "-e", "s/a/c/i"]
-    ok_exit_codes = [0]
-    lint_failure_exit_codes = [1]
+            [commands.perl-replace-a-with-c]
+            type    = "tidy"
+            include = "test.replace"
+            cmd     = ["perl", "-pi", "-e", "s/a/c/i"]
+            ok_exit_codes = [0]
+            lint_failure_exit_codes = [1]
 
-    [commands.perl-replace-a-with-d]
-    type    = "tidy"
-    include = "test.replace"
-    cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
-    ok_exit_codes = [0]
-    lint_failure_exit_codes = [1]
-    "#;
+            [commands.perl-replace-a-with-d]
+            type    = "tidy"
+            include = "test.replace"
+            cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
+            ok_exit_codes = [0]
+            lint_failure_exit_codes = [1]
+        "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
         helper.write_file(&test_replace, "The letter A")?;

@@ -265,13 +265,16 @@ impl Finder {
     // git root instead of the project root.
     fn paths_relative_to_project_root(
         &self,
-        root: &Path,
+        // This is the root to which the given paths are relative. This might
+        // be the project root or it might be the git root, which are not
+        // guaranteed to be the same thing.
+        path_root: &Path,
         paths: Vec<PathBuf>,
     ) -> Result<Vec<PathBuf>> {
         let mut relative: Vec<PathBuf> = vec![];
         for mut f in paths {
             if !f.is_absolute() {
-                f = root.to_path_buf().join(f);
+                f = path_root.join(f);
             }
 
             relative.push(self.path_relative_to_project_root(&f)?);
