@@ -303,7 +303,7 @@ fn foo() -> u8   {
 #[serial]
 fn all_invocation_options() -> Result<()> {
     let helper = do_test_setup()?;
-    write_bash_script(&helper)?;
+    write_perl_script(&helper)?;
     create_file_tree(&helper)?;
 
     let docs =
@@ -339,37 +339,41 @@ fn all_invocation_options() -> Result<()> {
     Ok(())
 }
 
-fn write_bash_script(helper: &TestHelper) -> Result<()> {
-    let script_contents = r#"
-if [ -z "$PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE" ]; then
-    echo "No PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE set!"
-    exit 1
-fi
+// Since precious runs the linter in parallel on different files we to force
+// the execution to be serialized. On Linux we can use the flock command but
+// that doesn't exist on macOS so we'll use this Perl script instead.
+fn write_perl_script(helper: &TestHelper) -> Result<()> {
+    let script = r#"
+use strict;
+use warnings;
 
-if [ -z "$PRECIOUS_INTEGRATION_TEST_ROOT" ]; then
-    echo "No PRECIOUS_INTEGRATION_TEST_ROOT set!"
-    exit 1
-fi
+use Cwd qw( abs_path );
+use Fcntl qw(:flock);
 
-# Since precious runs the linter in parallel on different files we need to
-# lock the output file.
-(
-    flock --exclusive --wait 2.0 42 || exit 1
+my $output_file = $ENV{PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE}
+    or die "The PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE env var is not set";
 
-    echo "----" 1>&42
+my $test_root = $ENV{PRECIOUS_INTEGRATION_TEST_ROOT}
+    or die "The PRECIOUS_INTEGRATION_TEST_ROOT env var is not set";
 
-    cwd=$(pwd)
-    echo "cwd = $cwd" 1>&42
+open my $self_fh, '<', $0 or die "Cannot open $0: $!";
+flock( $self_fh, LOCK_EX ) or die "Cannot lock $0: $!";
 
-    echo "some-linter $@" 1>&42
+open my $output_fh, '>>', $output_file or die "Cannot open $output_file: $!";
+my $cwd = abs_path('.');
+print {$output_fh} <<"EOF" or die "Cannot write to $output_file: $!";
+----
+cwd = $cwd
+some-linter @ARGV
+EOF
+close $output_fh or die "Cannot close $output_file: $!";
 
-) 42>>"$PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE"
-
-exit 0
+flock( $self_fh, LOCK_UN ) or die "Cannot unlock $0: $!";
 "#;
+
     let mut script_file = helper.precious_root();
-    script_file.push("some-linter.sh");
-    fs::write(&script_file, script_contents)?;
+    script_file.push("some-linter");
+    fs::write(&script_file, script)?;
 
     #[cfg(not(windows))]
     {
@@ -422,17 +426,16 @@ fn run_one_invocation_test(helper: &TestHelper, config: &str, expect: &str) -> R
 [commands.some-linter]
 type = "lint"
 include = "**/*.go"
-cmd = [ "bash", "{}/some-linter.sh" ]
+cmd = [ "perl", "$PRECIOUS_ROOT/some-linter" ]
 ok_exit_codes = 0
 {config}
-"#,
-        helper.precious_root().display(),
+"#
     );
 
     if cfg!(windows) {
-        fs::write(&precious_toml, &full_config.replace('\n', "\r\n"))?;
+        fs::write(&precious_toml, full_config.replace('\n', "\r\n"))?;
     } else {
-        fs::write(&precious_toml, &full_config)?;
+        fs::write(&precious_toml, full_config)?;
     }
 
     let td = tempfile::Builder::new()
