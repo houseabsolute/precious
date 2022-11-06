@@ -3,7 +3,7 @@ use itertools::Itertools;
 use precious_helpers::exec;
 use precious_testhelper::TestHelper;
 use pretty_assertions::{assert_eq, assert_str_eq};
-use regex::Regex;
+use regex::{Captures, Regex};
 use serial_test::serial;
 use std::{collections::HashMap, env, fs, path::PathBuf};
 
@@ -348,17 +348,15 @@ use strict;
 use warnings;
 
 use Cwd qw( abs_path );
-use Fcntl qw(:flock);
+use File::Spec;
 
-my $output_file = $ENV{PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE}
-    or die "The PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE env var is not set";
+my $output_dir = $ENV{PRECIOUS_INTEGRATION_TEST_OUTPUT_DIR}
+    or die "The PRECIOUS_INTEGRATION_TEST_OUTPUT_DIR env var is not set";
 
 my $test_root = $ENV{PRECIOUS_INTEGRATION_TEST_ROOT}
     or die "The PRECIOUS_INTEGRATION_TEST_ROOT env var is not set";
 
-open my $self_fh, '<', $0 or die "Cannot open $0: $!";
-flock( $self_fh, LOCK_EX ) or die "Cannot lock $0: $!";
-
+my $output_file = File::Spec->catfile($output_dir, "invocation.$$");
 open my $output_fh, '>>', $output_file or die "Cannot open $output_file: $!";
 my $cwd = abs_path('.');
 print {$output_fh} <<"EOF" or die "Cannot write to $output_file: $!";
@@ -367,8 +365,6 @@ cwd = $cwd
 some-linter @ARGV
 EOF
 close $output_fh or die "Cannot close $output_file: $!";
-
-flock( $self_fh, LOCK_UN ) or die "Cannot unlock $0: $!";
 "#;
 
     let mut script_file = helper.precious_root();
@@ -441,9 +437,7 @@ ok_exit_codes = 0
     let td = tempfile::Builder::new()
         .prefix("precious-all_invocation_options-")
         .tempdir()?;
-    let mut output_file = td.path().to_path_buf();
-    output_file.push("linter-output.txt");
-
+    let td_path = td.path().to_path_buf();
     let (_output_dir, _preserved_tempdir) = match env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
         Ok(v) if !(v.is_empty() || v == "0") => (None, Some(td.into_path())),
         _ => (Some(td), None),
@@ -451,8 +445,8 @@ ok_exit_codes = 0
 
     let env = HashMap::from([
         (
-            String::from("PRECIOUS_INTEGRATION_TEST_OUTPUT_FILE"),
-            output_file.to_string_lossy().to_string(),
+            String::from("PRECIOUS_INTEGRATION_TEST_OUTPUT_DIR"),
+            td_path.to_string_lossy().to_string(),
         ),
         (
             String::from("PRECIOUS_INTEGRATION_TEST_ROOT"),
@@ -461,20 +455,21 @@ ok_exit_codes = 0
     ]);
     let _result = exec::run(
         &precious,
-        &["--debug", "lint", "--all"],
+        &[
+            //"--debug",
+            "lint", "--all",
+        ],
         &env,
         &[0],
-        Some(&[Regex::new(".*")?]),
+        None, // Some(&[Regex::new(".*")?]),
         Some(&helper.precious_root()),
     )?;
     // println!("STDERR");
     // println!("{}", _result.stderr.as_deref().unwrap_or(""));
 
-    let got = munge_invocation_output(output_file, helper.precious_root())?;
+    let got = munge_invocation_output(td_path)?;
 
-    let expect = expect
-        .replace("/example", &helper.precious_root().to_string_lossy())
-        .replace(" \\\n    ", " ");
+    let expect = expect.replace(" \\\n    ", " ");
     // println!("GOT");
     // println!("{got}");
     // println!("EXPECT");
@@ -484,17 +479,32 @@ ok_exit_codes = 0
     Ok(())
 }
 
-fn munge_invocation_output(output_file: PathBuf, precious_root: PathBuf) -> Result<String> {
-    let mut got = fs::read_to_string(&output_file)
-        .with_context(|| format!("Could not read file {}", output_file.display()))?
-        .replace("\r\n", "\n");
-    if cfg!(windows) {
-        got = got.replace('\\', "/");
+fn munge_invocation_output(output_dir: PathBuf) -> Result<String> {
+    let mut got = String::new();
+    for entry in fs::read_dir(&output_dir)? {
+        let entry = entry?;
+        let meta = entry.metadata()?;
+        if !meta.is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let mut output = fs::read_to_string(&path)
+            .with_context(|| format!("Could not read file {}", path.display()))?
+            .replace("\r\n", "\n");
+        if cfg!(windows) {
+            output = output.replace('\\', "/");
+        }
+        got.push_str(&output);
     }
+
+    // println!("RAW GOT");
+    // println!("{got}");
     let output_re = Regex::new(
         r#"(?x)
            ----\n
-           cwd\ =\ (?P<cwd>.+?)\n
+           # We strip off the actual leading path, since on Windows this can
+           # end up in a different form from what we expect.
+           cwd\ =\ .+?[/\\]precious-testhelper-[^/\\]+?(?:[/\\](?P<cwd>.+?))?\n
            (?P<cmd>some-linter)(?:\ (?P<paths>.+?)?)\n
         "#,
     )?;
@@ -509,7 +519,7 @@ fn munge_invocation_output(output_file: PathBuf, precious_root: PathBuf) -> Resu
     let mut invocations: Vec<Invocation> = vec![];
     for caps in output_re.captures_iter(&got) {
         invocations.push(Invocation {
-            cwd: caps.name("cwd").unwrap().as_str(),
+            cwd: caps.name("cwd").map(|c| c.as_str()).unwrap_or(""),
             cmd: caps.name("cmd").unwrap().as_str(),
             paths: caps.name("paths").map(|p| p.as_str()),
         });
@@ -521,21 +531,31 @@ fn munge_invocation_output(output_file: PathBuf, precious_root: PathBuf) -> Resu
         a.paths.unwrap_or("").cmp(b.paths.unwrap_or(""))
     });
 
-    let mut last_cd = format!("{}", precious_root.display());
+    // This will match the portion of the path up to the temp dir in which we
+    // ran `precious`. This will be replaced with "/example" so it matches the
+    // docs.
+    let path_re = Regex::new(r"[^ ]+?[/\\]precious-testhelper-[^/\\ ]+(?P<path>[/\\][^/\\ ]+\b)?")?;
+
+    let mut last_cd = "";
     Ok(invocations
         .iter()
         .map(|i| {
             let mut output = String::new();
             if last_cd != i.cwd {
-                output.push_str("cd ");
+                output.push_str("cd /example/");
                 output.push_str(i.cwd);
                 output.push('\n');
             }
-            last_cd = i.cwd.to_string();
+            last_cd = i.cwd;
             output.push_str(i.cmd);
             if let Some(paths) = i.paths {
                 output.push(' ');
-                output.push_str(paths);
+                output.push_str(&path_re.replace_all(paths, |caps: &Captures| {
+                    format!(
+                        "/example{}",
+                        caps.name("path").map(|p| p.as_str()).unwrap_or(""),
+                    )
+                }));
             }
             output.push('\n');
             output
