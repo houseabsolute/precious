@@ -66,6 +66,7 @@ struct ActionFailure {
 const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 
 #[derive(Debug, Parser)]
+#[clap(name = "precious")]
 #[clap(author, version)]
 #[clap(propagate_version = true)]
 #[clap(global_setting(AppSettings::DeriveDisplayOrder))]
