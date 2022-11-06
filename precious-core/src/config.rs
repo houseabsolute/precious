@@ -523,7 +523,7 @@ mod tests {
             working_dir: command::WorkingDir,
             path_args: command::PathArgs,
         }
-        let cases = &[
+        let cases = [
             TestCase {
                 run_mode: "files",
                 chdir: false,

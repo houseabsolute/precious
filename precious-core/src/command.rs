@@ -911,12 +911,12 @@ mod tests {
             includer: matcher(&["**/*.go"])?,
             ..default_command()?
         };
-        let files = &["foo.go", "bar.go", "subdir/baz.go"]
+        let files = ["foo.go", "bar.go", "subdir/baz.go"]
             .iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
         assert_eq!(
-            command.files_to_args_sets(files)?,
+            command.files_to_args_sets(&files)?,
             vec![vec![
                 PathBuf::from("bar.go"),
                 PathBuf::from("foo.go"),
@@ -1008,13 +1008,13 @@ mod tests {
             ..default_command()?
         };
 
-        let include = &["something.go", "dir/foo.go", ".foo.go", "bar/foo/x.go"];
+        let include = ["something.go", "dir/foo.go", ".foo.go", "bar/foo/x.go"];
         for i in include.iter().map(PathBuf::from) {
             let name = i.clone();
             assert!(command.should_act_on_files(&[&i])?, "{}", name.display());
         }
 
-        let exclude = &[
+        let exclude = [
             "something.pl",
             "dir/foo.pl",
             "foo/bar.go",
@@ -1042,10 +1042,10 @@ mod tests {
             ..default_command()?
         };
 
-        let include = &[
-            &["foo.go", "README.md"],
-            &["dir/foo/foo.pl", "dir/foo/file.go"],
-            &["dir/some.go", "dir/some.rs"],
+        let include = [
+            ["foo.go", "README.md"],
+            ["dir/foo/foo.pl", "dir/foo/file.go"],
+            ["dir/some.go", "dir/some.rs"],
         ];
         for i in include.iter() {
             let files = i.iter().map(PathBuf::from).collect::<Vec<_>>();
@@ -1057,10 +1057,10 @@ mod tests {
             );
         }
 
-        let exclude = &[
-            &["foo/bar.go", "foo/baz.go"],
-            &["baz/bar/foo/quux/file.go", "baz/bar/foo/quux/other.go"],
-            &["dir/foo.pl", "dir/file.txt"],
+        let exclude = [
+            ["foo/bar.go", "foo/baz.go"],
+            ["baz/bar/foo/quux/file.go", "baz/bar/foo/quux/other.go"],
+            ["dir/foo.pl", "dir/file.txt"],
         ];
         for e in exclude.iter() {
             let files = e.iter().map(PathBuf::from).collect::<Vec<_>>();
@@ -1088,9 +1088,9 @@ mod tests {
             ..default_command()?
         };
 
-        let include = &[
-            &[".", "foo.go", "README.md"],
-            &["dir/foo", "dir/foo/foo.pl", "dir/foo/file.go"],
+        let include = [
+            [".", "foo.go", "README.md"],
+            ["dir/foo", "dir/foo/foo.pl", "dir/foo/file.go"],
         ];
         for i in include.iter() {
             let dir = PathBuf::from(i[0]);
@@ -1104,14 +1104,14 @@ mod tests {
             );
         }
 
-        let exclude = &[
-            &["foo", "foo/bar.go", "foo/baz.go"],
-            &[
+        let exclude = [
+            ["foo", "foo/bar.go", "foo/baz.go"],
+            [
                 "baz/bar/foo/quux",
                 "baz/bar/foo/quux/file.go",
                 "baz/bar/foo/quux/other.go",
             ],
-            &["dir", "dir/foo.pl", "dir/file.txt"],
+            ["dir", "dir/foo.pl", "dir/file.txt"],
         ];
         for e in exclude.iter() {
             let dir = PathBuf::from(e[0]);
@@ -1175,9 +1175,9 @@ mod tests {
             path_args: PathArgs::Dir,
             ..default_command()?
         };
-        let files = &[Path::new("file1"), Path::new("subdir/file2")];
+        let files = [Path::new("file1"), Path::new("subdir/file2")];
         assert_eq!(
-            command.operating_on(files, &command.project_root,)?,
+            command.operating_on(&files, &command.project_root,)?,
             vec![PathBuf::from("."), PathBuf::from("subdir")],
         );
 
@@ -1191,11 +1191,11 @@ mod tests {
             path_args: PathArgs::Dir,
             ..default_command()?
         };
-        let files = &[Path::new("subdir/file1"), Path::new("subdir/more/file2")];
+        let files = [Path::new("subdir/file1"), Path::new("subdir/more/file2")];
         let mut in_dir = command.project_root.clone();
         in_dir.push("subdir");
         assert_eq!(
-            command.operating_on(files, &in_dir)?,
+            command.operating_on(&files, &in_dir)?,
             vec![PathBuf::from("."), PathBuf::from("more")],
         );
 
@@ -1317,9 +1317,9 @@ mod tests {
             path_args: PathArgs::Dot,
             ..default_command()?
         };
-        let files = &[Path::new("file1"), Path::new("subdir/file2")];
+        let files = [Path::new("file1"), Path::new("subdir/file2")];
         assert_eq!(
-            command.operating_on(files, &command.project_root)?,
+            command.operating_on(&files, &command.project_root)?,
             vec![PathBuf::from(".")],
         );
 
@@ -1336,9 +1336,9 @@ mod tests {
         let mut in_dir = command.project_root.clone();
         in_dir.push("subdir");
 
-        let files = &[Path::new("file1"), Path::new("subdir/file2")];
+        let files = [Path::new("file1"), Path::new("subdir/file2")];
         assert_eq!(
-            command.operating_on(files, &in_dir)?,
+            command.operating_on(&files, &in_dir)?,
             vec![PathBuf::from(".")],
         );
 
@@ -1352,9 +1352,9 @@ mod tests {
             path_args: PathArgs::None,
             ..default_command()?
         };
-        let files = &[Path::new("file1"), Path::new("subdir/file2")];
+        let files = [Path::new("file1"), Path::new("subdir/file2")];
         let expect: Vec<PathBuf> = vec![];
-        assert_eq!(command.operating_on(files, &command.project_root)?, expect);
+        assert_eq!(command.operating_on(&files, &command.project_root)?, expect);
 
         Ok(())
     }
@@ -1369,9 +1369,9 @@ mod tests {
         let mut in_dir = command.project_root.clone();
         in_dir.push("subdir");
 
-        let files = &[Path::new("file1"), Path::new("subdir/file2")];
+        let files = [Path::new("file1"), Path::new("subdir/file2")];
         let expect: Vec<PathBuf> = vec![];
-        assert_eq!(command.operating_on(files, &in_dir)?, expect);
+        assert_eq!(command.operating_on(&files, &in_dir)?, expect);
 
         Ok(())
     }

@@ -256,8 +256,8 @@ mod tests {
     #[test]
     #[parallel]
     fn run_exit_0_with_unexpected_stderr() -> Result<()> {
-        let args = &["-c", "echo 'some stderr output' 1>&2"];
-        let res = super::run("sh", args, &HashMap::new(), &[0], None, None);
+        let args = ["-c", "echo 'some stderr output' 1>&2"];
+        let res = super::run("sh", &args, &HashMap::new(), &[0], None, None);
         assert!(res.is_err(), "run returned Err");
         match error_from_run(res)? {
             Error::UnexpectedStderr {
@@ -276,10 +276,10 @@ mod tests {
     #[test]
     #[parallel]
     fn run_exit_0_with_matching_ignore_stderr() -> Result<()> {
-        let args = &["-c", "echo 'some stderr output' 1>&2"];
+        let args = ["-c", "echo 'some stderr output' 1>&2"];
         let res = super::run(
             "sh",
-            args,
+            &args,
             &HashMap::new(),
             &[0],
             Some(&[Regex::new("some.+output").unwrap()]),
@@ -298,10 +298,10 @@ mod tests {
     #[test]
     #[parallel]
     fn run_exit_0_with_non_matching_ignore_stderr() -> Result<()> {
-        let args = &["-c", "echo 'some stderr output' 1>&2"];
+        let args = ["-c", "echo 'some stderr output' 1>&2"];
         let res = super::run(
             "sh",
-            args,
+            &args,
             &HashMap::new(),
             &[0],
             Some(&[Regex::new("some.+output is ok").unwrap()]),
@@ -325,10 +325,10 @@ mod tests {
     #[test]
     #[parallel]
     fn run_exit_0_with_multiple_ignore_stderr() -> Result<()> {
-        let args = &["-c", "echo 'some stderr output' 1>&2"];
+        let args = ["-c", "echo 'some stderr output' 1>&2"];
         let res = super::run(
             "sh",
-            args,
+            &args,
             &HashMap::new(),
             &[0],
             Some(&[
@@ -565,8 +565,8 @@ STDERR
     #[parallel]
     fn executable_does_not_exist() {
         let exe = "I hope this binary does not exist on any system!";
-        let args = &["--arg", "42"];
-        let res = super::run(exe, args, &HashMap::new(), &[0], None, None);
+        let args = ["--arg", "42"];
+        let res = super::run(exe, &args, &HashMap::new(), &[0], None, None);
         assert!(res.is_err());
         if let Err(e) = res {
             assert!(e.to_string().contains(

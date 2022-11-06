@@ -399,7 +399,7 @@ flock( $self_fh, LOCK_UN ) or die "Cannot unlock $0: $!";
 fn create_file_tree(helper: &TestHelper) -> Result<()> {
     let root = helper.precious_root();
 
-    for path in &[
+    for path in [
         "app.go",
         "main.go",
         "pkg1/pkg1.go",
@@ -485,9 +485,12 @@ ok_exit_codes = 0
 }
 
 fn munge_invocation_output(output_file: PathBuf, precious_root: PathBuf) -> Result<String> {
-    let got = fs::read_to_string(&output_file)
+    let mut got = fs::read_to_string(&output_file)
         .with_context(|| format!("Could not read file {}", output_file.display()))?
         .replace("\r\n", "\n");
+    if cfg!(windows) {
+        got = got.replace('\\', "/");
+    }
     let output_re = Regex::new(
         r#"(?x)
            ----\n

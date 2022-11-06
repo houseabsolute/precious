@@ -856,7 +856,7 @@ lint_failure_exit_codes = [1]
             action: Box<dyn Fn(&TestHelper) -> Result<()>>,
             expect: &'static [&'static str],
         }
-        let tests = &[
+        let tests = [
             TestCase {
                 flag: "--all",
                 paths: &[],
