@@ -722,8 +722,12 @@ impl Command {
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
                 Err(e) => return Err(e.into()),
             };
-            if prev_meta.mtime != current_meta.modified()? {
-                return Ok(true);
+            // If the mtime is unchanged we don't need to compare anything
+            // else. Unfortunately there's no guarantee a command won't modify
+            // the mtime even if it doesn't change the file's contents. For
+            // example, Perl::Tidy does this :(
+            if prev_meta.mtime == current_meta.modified()? {
+                continue;
             }
 
             // If the size changed we know the contents changed.
@@ -1495,7 +1499,7 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn paths_were_changed_when_mtime_changes() -> Result<()> {
+    fn paths_were_not_changed_when_only_mtime_changes() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerFile,
             includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
@@ -1514,7 +1518,7 @@ mod tests {
         assert!(!command.paths_were_changed(prev.clone().unwrap())?);
 
         filetime::set_file_mtime(&file, filetime::FileTime::from_unix_time(0, 0))?;
-        assert!(command.paths_were_changed(prev.unwrap())?);
+        assert!(!command.paths_were_changed(prev.unwrap())?);
 
         Ok(())
     }
@@ -1565,14 +1569,9 @@ mod tests {
         assert!(prev.is_some());
         assert!(!command.paths_were_changed(prev.clone().unwrap())?);
 
-        let meta = fs::metadata(&file)?;
         // This needs to be the same size as the old content.
         let new_content = fs::read_to_string(&file)?.chars().rev().collect::<String>();
         helper.write_file(&file, &new_content)?;
-        filetime::set_file_mtime(
-            &file,
-            filetime::FileTime::from_last_modification_time(&meta),
-        )?;
 
         assert!(command.paths_were_changed(prev.unwrap())?);
 
