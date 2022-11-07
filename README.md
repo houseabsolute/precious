@@ -51,7 +51,7 @@ understand where the binary will be installed.
 
 ## Examples
 
-Check out this repo's [examples directory](examples) for example
+Check out this repo's [examples directory](examples), which has
 `precious.toml` config files for several languages. Contributions for other
 languages are welcome!
 
