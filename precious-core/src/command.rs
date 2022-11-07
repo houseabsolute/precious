@@ -724,8 +724,9 @@ impl Command {
             };
             // If the mtime is unchanged we don't need to compare anything
             // else. Unfortunately there's no guarantee a command won't modify
-            // the mtime even if it doesn't change the file's contents. For
-            // example, Perl::Tidy does this :(
+            // the mtime even if it doesn't change the file's contents, so we
+            // cannot assume anything was changed just because the mtime
+            // changed. For example, Perl::Tidy does this :(
             if prev_meta.mtime == current_meta.modified()? {
                 continue;
             }
