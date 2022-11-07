@@ -1,5 +1,8 @@
 use crate::{
-    paths::{matcher, mode::Mode},
+    paths::{
+        matcher::{Matcher, MatcherBuilder},
+        mode::Mode,
+    },
     vcs,
 };
 use anyhow::Result;
@@ -129,7 +132,7 @@ impl Finder {
             }
 
             let rel_to_root = self.path_relative_to_project_root(&full)?;
-            if excluder.path_matches(&rel_to_root) {
+            if excluder.path_matches(&rel_to_root, full.is_dir()) {
                 continue;
             }
 
@@ -209,7 +212,7 @@ impl Finder {
         Ok(self
             .paths_relative_to_project_root(&self.project_root, files)?
             .into_iter()
-            .filter(|p| !excluder.path_matches(p))
+            .filter(|f| !excluder.path_matches(f, false))
             .collect::<Vec<_>>())
     }
 
@@ -237,7 +240,7 @@ impl Finder {
                     s.lines()
                         .filter_map(|rel| {
                             let pb = PathBuf::from(rel);
-                            if excluder.path_matches(&pb) {
+                            if excluder.path_matches(&pb, false) {
                                 return None;
                             }
 
@@ -252,8 +255,8 @@ impl Finder {
         }
     }
 
-    fn excluder(&self) -> Result<matcher::Matcher> {
-        matcher::MatcherBuilder::new()
+    fn excluder(&self) -> Result<Matcher> {
+        MatcherBuilder::new(&self.project_root)
             .with(&self.exclude_globs)?
             .with(vcs::DIRS)?
             .build()

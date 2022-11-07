@@ -1,4 +1,4 @@
-use crate::paths::matcher;
+use crate::paths::matcher::{Matcher, MatcherBuilder};
 use anyhow::Result;
 use itertools::Itertools;
 use log::{debug, info};
@@ -158,8 +158,8 @@ pub struct Command {
     project_root: PathBuf,
     pub name: String,
     typ: CommandType,
-    includer: matcher::Matcher,
-    excluder: matcher::Matcher,
+    includer: Matcher,
+    excluder: Matcher,
     invoke: Invoke,
     working_dir: WorkingDir,
     path_args: PathArgs,
@@ -251,16 +251,13 @@ impl Command {
         };
 
         let cmd = replace_root(params.cmd, &params.project_root);
+        let root = params.project_root.clone();
         Ok(Command {
             project_root: params.project_root,
             name: params.name,
             typ: params.typ,
-            includer: matcher::MatcherBuilder::new()
-                .with(&params.include)?
-                .build()?,
-            excluder: matcher::MatcherBuilder::new()
-                .with(&params.exclude)?
-                .build()?,
+            includer: MatcherBuilder::new(&root).with(&params.include)?.build()?,
+            excluder: MatcherBuilder::new(&root).with(&params.exclude)?.build()?,
             invoke: params.invoke,
             working_dir: params.working_dir,
             path_args: params.path_args,
@@ -315,7 +312,7 @@ impl Command {
     // program. The exact paths that are passed to that invocation are later
     // determined based on the command's `path_args` field.
     pub fn files_to_args_sets<'a>(&self, files: &'a [PathBuf]) -> Result<Vec<Vec<&'a Path>>> {
-        let files = files.iter().filter(|f| self.path_matches_rules(f));
+        let files = files.iter().filter(|f| self.file_matches_rules(f));
         Ok(match self.invoke {
             // Every file becomes its own one one-element Vec.
             Invoke::PerFile => files.sorted().map(|f| vec![f.as_path()]).collect(),
@@ -443,7 +440,7 @@ impl Command {
                 let f = &files[0];
                 // This check isn't stricly necessary since we default to not
                 // matching, but the debug output is helpful.
-                if self.excluder.path_matches(f) {
+                if self.excluder.path_matches(f, false) {
                     debug!(
                         "File {} is excluded for the {} command",
                         f.display(),
@@ -451,7 +448,7 @@ impl Command {
                     );
                     return Ok(false);
                 }
-                if self.includer.path_matches(f) {
+                if self.includer.path_matches(f, false) {
                     debug!(
                         "File {} is included for the {} command",
                         f.display(),
@@ -467,7 +464,7 @@ impl Command {
                         path: files[0].to_string_lossy().to_string(),
                     })?;
                 for f in files {
-                    if self.excluder.path_matches(f) {
+                    if self.excluder.path_matches(f, false) {
                         debug!(
                             "File {} is excluded for the {} command",
                             f.display(),
@@ -475,7 +472,7 @@ impl Command {
                         );
                         continue;
                     }
-                    if self.includer.path_matches(f) {
+                    if self.includer.path_matches(f, false) {
                         debug!(
                             "Directory {} is included for the {} command because it contains {} which is included",
                             dir.display(),
@@ -493,7 +490,7 @@ impl Command {
             }
             Invoke::Once => {
                 for f in files {
-                    if self.excluder.path_matches(f) {
+                    if self.excluder.path_matches(f, false) {
                         debug!(
                             "File {} is excluded for the {} command",
                             f.display(),
@@ -501,7 +498,7 @@ impl Command {
                         );
                         continue;
                     }
-                    if self.includer.path_matches(f) {
+                    if self.includer.path_matches(f, false) {
                         debug!(
                             "File {} is included for the {} command",
                             f.display(),
@@ -644,7 +641,7 @@ impl Command {
             for entry in fs::read_dir(full_path)? {
                 let entry = entry?;
                 let path = entry.path();
-                if path.is_file() && self.path_matches_rules(&path) {
+                if path.is_file() && self.file_matches_rules(&path) {
                     let meta = entry.metadata()?;
                     let hash = md5::compute(fs::read(&path)?);
                     path_map.insert(
@@ -671,11 +668,11 @@ impl Command {
         Ok(PathMetadata { dir, path_map })
     }
 
-    fn path_matches_rules(&self, path: &Path) -> bool {
-        if self.excluder.path_matches(path) {
+    fn file_matches_rules(&self, file: &Path) -> bool {
+        if self.excluder.path_matches(file, false) {
             return false;
         }
-        if self.includer.path_matches(path) {
+        if self.includer.path_matches(file, false) {
             return true;
         }
         false
@@ -752,7 +749,7 @@ impl Command {
                 let entry = entry?;
                 let path = entry.path();
                 if path.is_file()
-                    && self.path_matches_rules(&path)
+                    && self.file_matches_rules(&path)
                     && !prev.path_map.contains_key(&path)
                 {
                     return Ok(true);
@@ -826,7 +823,6 @@ fn replace_root(cmd: Vec<String>, root: &Path) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::matcher;
     use anyhow::Result;
     use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
@@ -834,8 +830,8 @@ mod tests {
     use std::env;
     use testhelper::TestHelper;
 
-    fn matcher(globs: &[&str]) -> Result<matcher::Matcher> {
-        matcher::MatcherBuilder::new().with(globs)?.build()
+    fn matcher(globs: &[&str]) -> Result<Matcher> {
+        MatcherBuilder::new("/").with(globs)?.build()
     }
 
     fn default_command() -> Result<Command> {
@@ -1003,23 +999,30 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn should_process_files_invoke_per_file() -> Result<()> {
+    fn should_act_on_files_invoke_per_file() -> Result<()> {
         let command = Command {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
             typ: CommandType::Lint,
-            includer: matcher(&["**/*.go"])?,
-            excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
+            includer: matcher(&["**/*.go", "!this/file.go"])?,
+            excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             ..default_command()?
         };
 
-        let include = ["something.go", "dir/foo.go", ".foo.go", "bar/foo/x.go"];
+        let include = [
+            "something.go",
+            "dir/foo.go",
+            ".foo.go",
+            "bar/foo/x.go",
+            "foo/some/file.go",
+        ];
         for i in include.iter().map(PathBuf::from) {
             let name = i.clone();
             assert!(command.should_act_on_files(&[&i])?, "{}", name.display());
         }
 
         let exclude = [
+            "this/file.go",
             "something.pl",
             "dir/foo.pl",
             "foo/bar.go",
@@ -1035,13 +1038,13 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn should_process_files_invoke_per_dir() -> Result<()> {
+    fn should_act_on_files_invoke_per_dir() -> Result<()> {
         let command = Command {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
             typ: CommandType::Lint,
-            includer: matcher(&["**/*.go"])?,
-            excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*", "**/*.rs"])?,
+            includer: matcher(&["**/*.go", "!this/file.go"])?,
+            excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             invoke: Invoke::PerDir,
             path_args: PathArgs::Dir,
             ..default_command()?
@@ -1051,6 +1054,7 @@ mod tests {
             ["foo.go", "README.md"],
             ["dir/foo/foo.pl", "dir/foo/file.go"],
             ["dir/some.go", "dir/some.rs"],
+            ["foo/some/file.go", "foo/excluded.go"],
         ];
         for i in include.iter() {
             let files = i.iter().map(PathBuf::from).collect::<Vec<_>>();
@@ -1066,6 +1070,7 @@ mod tests {
             ["foo/bar.go", "foo/baz.go"],
             ["baz/bar/foo/quux/file.go", "baz/bar/foo/quux/other.go"],
             ["dir/foo.pl", "dir/file.txt"],
+            ["this/file.go", "foo/excluded.go"],
         ];
         for e in exclude.iter() {
             let files = e.iter().map(PathBuf::from).collect::<Vec<_>>();
@@ -1082,13 +1087,13 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn should_process_files_invoke_once() -> Result<()> {
+    fn should_act_on_files_invoke_once() -> Result<()> {
         let command = Command {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
             typ: CommandType::Lint,
-            includer: matcher(&["**/*.go"])?,
-            excluder: matcher(&["foo/**/*", "baz/bar/**/quux/*"])?,
+            includer: matcher(&["**/*.go", "!this/file.go"])?,
+            excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             invoke: Invoke::Once,
             ..default_command()?
         };
@@ -1096,6 +1101,7 @@ mod tests {
         let include = [
             [".", "foo.go", "README.md"],
             ["dir/foo", "dir/foo/foo.pl", "dir/foo/file.go"],
+            [".", "foo/bar.go", "foo/some/file.go"],
         ];
         for i in include.iter() {
             let dir = PathBuf::from(i[0]);
@@ -1117,6 +1123,7 @@ mod tests {
                 "baz/bar/foo/quux/other.go",
             ],
             ["dir", "dir/foo.pl", "dir/file.txt"],
+            [".", "this/file.go", "foo/also/excluded.go"],
         ];
         for e in exclude.iter() {
             let dir = PathBuf::from(e[0]);
@@ -1386,7 +1393,7 @@ mod tests {
     fn maybe_path_metadata_for_per_file() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerFile,
-            includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
+            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             ..default_command()?
         };
         let helper = TestHelper::new()?.with_git_repo()?;
@@ -1405,8 +1412,8 @@ mod tests {
     fn maybe_path_metadata_for_per_dir() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerFile,
-            includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
-            excluder: matcher::MatcherBuilder::new()
+            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            excluder: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1503,8 +1510,8 @@ mod tests {
     fn paths_were_not_changed_when_only_mtime_changes() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerFile,
-            includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
-            excluder: matcher::MatcherBuilder::new()
+            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            excluder: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1529,8 +1536,8 @@ mod tests {
     fn paths_were_changed_when_size_changes() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerFile,
-            includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
-            excluder: matcher::MatcherBuilder::new()
+            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            excluder: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1555,8 +1562,8 @@ mod tests {
     fn paths_were_changed_when_content_changes() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerFile,
-            includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
-            excluder: matcher::MatcherBuilder::new()
+            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            excluder: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1584,8 +1591,8 @@ mod tests {
     fn paths_were_changed_when_dir_has_new_file() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerDir,
-            includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
-            excluder: matcher::MatcherBuilder::new()
+            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            excluder: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1627,8 +1634,8 @@ mod tests {
     fn paths_were_changed_when_dir_has_file_deleted() -> Result<()> {
         let command = Command {
             invoke: Invoke::PerDir,
-            includer: matcher::MatcherBuilder::new().with(&["**/*.rs"])?.build()?,
-            excluder: matcher::MatcherBuilder::new()
+            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            excluder: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?

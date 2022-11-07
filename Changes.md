@@ -10,6 +10,12 @@
   repo root. Previously this would just attempt to run against incorrect
   paths.
 
+- Precious now supports patterns starting with `!` in `include` and `exclude`
+  keys. This allow you to exclude the given pattern, even if matches previous
+  rules in the list. See [the Git docs on `.gitignore`
+  patterns](https://git-scm.com/docs/gitignore#_pattern_format) for more
+  details. Fixes GH #39.
+
 - When run in GitHub Actions, `precious` will now emit [GitHub
   annotations](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message)
   for linting errors.

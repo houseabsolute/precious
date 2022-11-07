@@ -67,9 +67,9 @@ format](https://github.com/toml-lang/toml).
 
 There is just one key that can be set in the top level table of the config file:
 
-| Key       | Type             | Required? | Description                                                                                                                                                                                                                                                                                               |
-| --------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exclude` | array of strings | no        | Each array member is a pattern that will be matched against potential files when `precious` is run. These patterns are matched in the same way patterns in a [gitignore file](https://git-scm.com/docs/gitignore). However, you cannot have a pattern starting with a `!` as you can in a gitignore file. |
+| Key       | Type             | Required? | Description                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exclude` | array of strings | no        | Each array member is a pattern that will be matched against potential files when `precious` is run. These patterns are matched in the same way as patterns in a [gitignore file](https://git-scm.com/docs/gitignore#_pattern_format). <br> You can use lines starting with a `!` to negate the meaning of previous rules in the list, so that anything that matches is _not_ excluded even if it matches previous rules. |
 
 All other configuration is on a per-command basis. A command is something that
 either tidies (aka pretty prints or beautifies), lints, or does both. These
@@ -187,19 +187,19 @@ comprehensive examples of every possible set of options.
 
 The other keys allowed for each command are as follows:
 
-| Key                       | Type                         | Required? | Applies To               | Default | Description                                                                                                                                                                                                                                                                                                              |
-| ------------------------- | ---------------------------- | --------- | ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `type`                    | string                       | **yes**   | all                      |         | This must be either `lint`, `tidy`, or `both`. This defines what type of command this is. A command which is `both` **must** define `lint_flags` or `tidy_flags` as well.                                                                                                                                                |
-| `include`                 | string or array of strings   | **yes**   | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this command applies to. <br> However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                                          |
-| `exclude`                 | string or array of strings   | no        | all                      |         | Each array member is a [gitignore file](https://git-scm.com/docs/gitignore) style pattern that tells `precious` what files this command should not be applied to. <br> However, you cannot have a pattern starting with a `!` as you can in a gitignore file.                                                            |
-| `cmd`                     | string or array of strings   | **yes**   | all                      |         | This is the executable to be run followed by any arguments that should always be passed.                                                                                                                                                                                                                                 |
-| `env`                     | table - values are strings   | no        | all                      |         | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings.                                                                                                                                                           |
-| `path_flag`               | string                       | no        | all                      |         | By default, `precious` will pass the path being operated on to the command it executes as the final, positional, argument(s). If the command takes paths via a flag you need to specify that flag with this key.                                                                                                         |
-| `lint_flags`              | string or array of strings   | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in linting mode. This is how you set that flag.                                                                                                                                                                                         |
-| `tidy_flags`              | string or array of strings   | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in tidying mode. This is how you set that flag.                                                                                                                                                                                         |
-| `ok_exit_codes`           | integer or array of integers | **yes**   | all                      |         | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit.                                                                                                                                          |
-| `lint_failure_exit_codes` | integer or array of integers | no        | linters                  |         | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue.                                                                                     |
-| `ignore_stderr`           | string or array of strings   | all       | all                      |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. This parameter can specify one or more strings. These strings are treated as regexes and matched against the command's stderr output. If _any_ of the regexes match, the stderr output is ignored. |
+| Key                       | Type                         | Required? | Applies To               | Default | Description                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | ---------------------------- | --------- | ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                    | string                       | **yes**   | all                      |         | This must be either `lint`, `tidy`, or `both`. This defines what type of command this is. A command which is `both` **must** define `lint_flags` or `tidy_flags` as well.                                                                                                                                                                                 |
+| `include`                 | string or array of strings   | **yes**   | all                      |         | Each array member is a [gitignore pattern](https://git-scm.com/docs/gitignore#_pattern_format) that tells `precious` what files this command applies to. <br> You can use lines starting with a `!` to negate the meaning of previous rules in the list, so that anything that matches is _not_ included even if it matches previous rules.               |
+| `exclude`                 | string or array of strings   | no        | all                      |         | Each array member is a [gitignore pattern](https://git-scm.com/docs/gitignore#_pattern_format) that tells `precious` what files this command should not be applied to. <br> You can use lines starting with a `!` to negate the meaning of previous rules in the list, so that anything that matches is _not_ excluded even if it matches previous rules. |
+| `cmd`                     | string or array of strings   | **yes**   | all                      |         | This is the executable to be run followed by any arguments that should always be passed.                                                                                                                                                                                                                                                                  |
+| `env`                     | table - values are strings   | no        | all                      |         | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings.                                                                                                                                                                                            |
+| `path_flag`               | string                       | no        | all                      |         | By default, `precious` will pass the path being operated on to the command it executes as the final, positional, argument(s). If the command takes paths via a flag you need to specify that flag with this key.                                                                                                                                          |
+| `lint_flags`              | string or array of strings   | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in linting mode. This is how you set that flag.                                                                                                                                                                                                                          |
+| `tidy_flags`              | string or array of strings   | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in tidying mode. This is how you set that flag.                                                                                                                                                                                                                          |
+| `ok_exit_codes`           | integer or array of integers | **yes**   | all                      |         | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit.                                                                                                                                                                           |
+| `lint_failure_exit_codes` | integer or array of integers | no        | linters                  |         | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue.                                                                                                                      |
+| `ignore_stderr`           | string or array of strings   | all       | all                      |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. This parameter can specify one or more strings. These strings are treated as regexes and matched against the command's stderr output. If _any_ of the regexes match, the stderr output is ignored.                                  |
 
 ### Referencing the Project Root
 
@@ -399,26 +399,18 @@ invoke    = "per-dir"
 path_args = "none"
 ```
 
-### You want a command to exclude an entire directory (tree) except for one file
+### You want a command to exclude an entire directory (tree) except for one or more files
 
-There's no good way to do this with a single command's `include` and `exclude`,
-as `excluding` a directory means that any attempt to `include` a file under
-that directory will be ignored. Instead, you can configure the same command
-twice:
+Use an ignore pattern starting with `!` in the `exclude` list:
 
 ```toml
-[commands.rustfmt-most]
+[commands.rustfmt]
 type    = "both"
 include = "**/*.rs"
-exclude = "path/to/dir"
-cmd     = ["rustfmt"]
-lint_flags = "--check"
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
-
-[commands.rustfmt-that-file]
-type    = "both"
-include = "path/to/dir/that.rs"
+exclude = [
+    "path/to/dir",
+    "!path/to/dir/included.rs",
+]
 cmd     = ["rustfmt"]
 lint_flags = "--check"
 ok_exit_codes = [0]
