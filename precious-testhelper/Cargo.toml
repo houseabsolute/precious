@@ -10,7 +10,7 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-env_logger = "0.9.1"
+env_logger.workspace = true
 log.workspace = true
 once_cell.workspace = true
 precious-helpers.workspace = true
