@@ -371,7 +371,7 @@ impl Precious {
         self.run_all_commands(
             "tidying",
             tidiers,
-            |self_: &mut Self, files: Vec<PathBuf>, tidier: &command::Command| {
+            |self_: &mut Self, files: &[PathBuf], tidier: &command::Command| {
                 self_.run_one_tidier(files, tidier)
             },
         )
@@ -388,7 +388,7 @@ impl Precious {
         self.run_all_commands(
             "linting",
             linters,
-            |self_: &mut Self, files: Vec<PathBuf>, linter: &command::Command| {
+            |self_: &mut Self, files: &[PathBuf], linter: &command::Command| {
                 self_.run_one_linter(files, linter)
             },
         )
@@ -401,7 +401,7 @@ impl Precious {
         run_command: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, Vec<PathBuf>, &command::Command) -> Result<Option<Vec<ActionFailure>>>,
+        R: Fn(&mut Self, &[PathBuf], &command::Command) -> Result<Option<Vec<ActionFailure>>>,
     {
         if commands.is_empty() {
             if let Some(c) = &self.command {
@@ -428,24 +428,8 @@ impl Precious {
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for c in commands {
                     debug!(r#"Command config for {}: {}"#, c.name, c.config_debug(),);
-                    let mut found_files = false;
-                    for root in c.roots() {
-                        let files_for_root = self.files_in_root(&files, root);
-                        if files_for_root.is_empty() {
-                            debug!(
-                                "command {} had no files under root {}",
-                                c.name,
-                                root.display()
-                            );
-                            continue;
-                        }
-                        found_files = true;
-                        if let Some(mut failures) = run_command(self, files_for_root, &c)? {
-                            all_failures.append(&mut failures);
-                        }
-                    }
-                    if !found_files {
-                        return Ok(self.no_files_exit());
+                    if let Some(mut failures) = run_command(self, &files, &c)? {
+                        all_failures.append(&mut failures);
                     }
                 }
 
@@ -461,17 +445,6 @@ impl Precious {
             self.cwd.clone(),
             self.config.exclude.clone(),
         )
-    }
-
-    fn files_in_root(&self, files: &[PathBuf], root: &Path) -> Vec<PathBuf> {
-        if root == Path::new(".") {
-            return files.to_vec();
-        }
-        files
-            .iter()
-            .filter(|f| f.starts_with(root))
-            .map(|f| f.to_path_buf())
-            .collect()
     }
 
     fn make_exit(&self, failures: Vec<ActionFailure>, action: &str) -> Exit {
@@ -511,7 +484,7 @@ impl Precious {
 
     fn run_one_tidier(
         &mut self,
-        files: Vec<PathBuf>,
+        files: &[PathBuf],
         t: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
@@ -571,7 +544,7 @@ impl Precious {
 
     fn run_one_linter(
         &mut self,
-        files: Vec<PathBuf>,
+        files: &[PathBuf],
         l: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
@@ -644,14 +617,14 @@ impl Precious {
     fn run_parallel<R>(
         &mut self,
         what: &str,
-        files: Vec<PathBuf>,
+        files: &[PathBuf],
         c: &command::Command,
         runner: R,
     ) -> Result<Option<Vec<ActionFailure>>>
     where
         R: Fn(&Self, &[&Path]) -> Option<Result<(), ActionFailure>> + Sync,
     {
-        let sets = c.files_to_args_sets(&files)?;
+        let sets = c.files_to_args_sets(files)?;
 
         let start = Instant::now();
         let results = self

@@ -100,11 +100,11 @@ the command. The working directory for the command will be the project root.
 
 The `invoke` key tells `precious` how the command should be invoked.
 
-| Value        | Description                                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `"per-file"` | Run this command once for each matching file. **This is the default.**                                                   |
-| `"per-dir"`  | Run this command once for each matching directory.                                                                       |
-| `"once"`     | Run this command either once for the project or once per sub-root. See the `working_dir` documentation below for details |
+| Value        | Description                                                            |
+| ------------ | ---------------------------------------------------------------------- |
+| `"per-file"` | Run this command once for each matching file. **This is the default.** |
+| `"per-dir"`  | Run this command once for each matching directory.                     |
+| `"once"`     | Run this command once.                                                 |
 
 #### `working_dir`
 
@@ -115,35 +115,30 @@ command is run.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `"root"`             | The working directory is the project root. **This is the default.**                                                                                                       |
 | `"dir"`              | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
-| `.sub_roots = [...]` | See below                                                                                                                                                                 |
+| `.chdir_to = "path"` | The working directory will be the given path when executing the command.                                                                                                  |
 
-##### `working_dir.sub_roots = [ ... ]`
+##### `working_dir.chdir_to = "path"`
 
-The final option for `working_dir` is to set one or more `sub_roots`. This can
-either be a single string or an array of strings. Each of these strings should
-be a _relative_ path to a directory under your project root.
+The final option for `working_dir` is to set an explicit path as the working
+directory.
 
-When a command is configured with `sub_roots`, `precious` will do the
-following based on other aspects of your config.
-
-- The working directory will be set to each root in turn.
-- Relative paths will be relative to each root, rather than the project root.
-- If `invoke = "once"`, then the command will be run _once per root_ instead
-  of just once from the project root.
+With this option, the working directory will be set to the given subdirectory
+when the command is executed. Relative paths will be relative to this
+subdirectory, rather than the project root.
 
 #### `path_args`
 
 The `path_args` key tells precious how paths should be passed when the command
 is run.
 
-| Value             | Description                                                                                                                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> If using `sub_roots`, then the path is relative to the current working directory, per-root. |
-| `"dir"`           | Passes the path to the directory containing the matching files relative to the root. <br> If using `sub_roots`, then the path is relative to the current working directory, per-root |
-| `"none"`          | No file args are passed to the command at all.                                                                                                                                       |
-| `"dot"`           | Always pass `.` as the path. This is useful when `working_dir = "dir"` and the command still requires a path to be passed.                                                           |
-| `"absolute-file"` | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                       |
-| `"absolute-dir"`  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                             |
+| Value             | Description                                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> If using `working_directory.chdir_to`, then the path is relative to the given working directory.  |
+| `"dir"`           | Passes the path to the directory containing the matching files relative to the root. <br> If using `working_directory.chdir_to`, then the path is relative to the given working directory. |
+| `"none"`          | No file args are passed to the command at all.                                                                                                                                             |
+| `"dot"`           | Always pass `.` as the path. This is useful when `working_dir = "dir"` and the command still requires a path to be passed.                                                                 |
+| `"absolute-file"` | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                             |
+| `"absolute-dir"`  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                                   |
 
 #### Nonsensical Combinations
 
@@ -162,10 +157,10 @@ invoke = "per-dir"
 path_args = "none" or "dot"
 working_dir = "root"
 # ... or ...
-working_dir.sub_roots = [ "whatever" ]
+working_dir.chdir_to = "whatever"
 ```
 
-You cannot invoke a command once per dir from a root without passing the
+You cannot invoke a command once per directory from a root without passing the
 directory name or a list of file names. If you want to run a command once per
 directory with no path arguments or using `.` as the path then you _must_ set
 `working_dir = "dir"`.
@@ -239,19 +234,6 @@ Precious will always execute commands in parallel, with one process per CPU by
 default. The execution is parallelized based on the command's invocation
 configuration. For example, one a 12 CPU system, a command that has `invoke = "per-file"` will be executed up to 12 times in parallel, with each command
 execution receiving one file.
-
-When using `sub_roots`, command invocation is parallelized per root, rather
-than across all roots at once. For example, given this config:
-
-```toml
-invoke = "per-file"
-working_dir.sub_roots = [ "root1", "root2" ]
-path_args = "file"
-```
-
-If there are 3 matching files in `root1` and 5 matching files in `root2`, then
-the command will be invoked 3 times in parallel for `root1` and 5 times in
-parallel for `root2`, rather than 8 times in parallel for both.
 
 You can disable parallel execution by passing `--jobs 1`.
 

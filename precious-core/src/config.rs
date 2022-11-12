@@ -1,4 +1,4 @@
-use crate::command::{self, Invoke, PathArgs, WorkingDir};
+use crate::command::{self, CommandType, Invoke, PathArgs, WorkingDir};
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{de, de::Deserializer, Deserialize};
@@ -11,9 +11,9 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Command {
+pub struct CommandConfig {
     #[serde(rename = "type")]
-    typ: command::CommandType,
+    typ: CommandType,
     #[serde(deserialize_with = "string_or_seq_string")]
     include: Vec<String>,
     #[serde(default)]
@@ -73,16 +73,13 @@ pub struct Config {
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
     pub exclude: Vec<String>,
-    commands: IndexMap<String, Command>,
+    commands: IndexMap<String, CommandConfig>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum ConfigError {
     #[error("File at {} cannot be read: {error:}", file.display())]
-    FileCannotBeRead {
-        file: PathBuf,
-        error: std::io::Error,
-    },
+    FileCannotBeRead { file: PathBuf, error: String },
     #[error(
         "The {name:} command mixes old command params (run_mode or chdir) with new command params (invoke, working_dir, or path_args)"
     )]
@@ -262,13 +259,13 @@ fn working_dir<'de, D>(deserializer: D) -> Result<Option<WorkingDir>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct WorkingDirOrSubRoots(PhantomData<Option<WorkingDir>>);
+    struct WorkingDirOrChdirTo(PhantomData<Option<WorkingDir>>);
 
-    impl<'de> de::Visitor<'de> for WorkingDirOrSubRoots {
+    impl<'de> de::Visitor<'de> for WorkingDirOrChdirTo {
         type Value = Option<WorkingDir>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str(r#"one of "root", "dir", or a sub_roots map"#)
+            formatter.write_str(r#"one of "root", "dir", or a chdir_to map"#)
         }
 
         fn visit_none<E>(self) -> Result<Self::Value, E>
@@ -282,7 +279,7 @@ where
         where
             D: Deserializer<'de>,
         {
-            deserializer.deserialize_any(WorkingDirOrSubRoots(PhantomData))
+            deserializer.deserialize_any(WorkingDirOrChdirTo(PhantomData))
         }
 
         fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -303,18 +300,18 @@ where
         where
             A: de::MapAccess<'de>,
         {
-            let mut kv_pairs: Vec<(&'de str, Vec<&'de str>)> = vec![];
-            while let Some((k, v)) = map.next_entry::<&str, Vec<&str>>()? {
-                if k != "sub_roots" {
+            let mut kv_pairs: Vec<(&'de str, &'de str)> = vec![];
+            while let Some((k, v)) = map.next_entry::<&str, &str>()? {
+                if k != "chdir_to" {
                     return Err(<A::Error as de::Error>::invalid_value(
                         de::Unexpected::Str(k),
-                        &r#"the only valid key for a working_dir map is "sub_roots""#,
+                        &r#"the only valid key for a working_dir map is "chdir_to""#,
                     ));
                 }
                 if v.is_empty() {
                     return Err(<A::Error as de::Error>::invalid_value(
                         de::Unexpected::Seq,
-                        &r#"the "sub_roots" key cannot be empty"#,
+                        &r#"the "chdir_to" key cannot be empty"#,
                     ));
                 }
                 kv_pairs.push((k, v));
@@ -330,23 +327,25 @@ where
             if kv_pairs.len() > 1 {
                 return Err(<A::Error as de::Error>::invalid_value(
                     de::Unexpected::Map,
-                    &r#"the "working_dir" map must contain one key, "sub_roots""#,
+                    &r#"the "working_dir" map must contain one key, "chdir_to""#,
                 ));
             }
 
-            Ok(Some(WorkingDir::SubRoots(
-                kv_pairs[0].1.iter().map(PathBuf::from).collect::<Vec<_>>(),
-            )))
+            Ok(Some(WorkingDir::ChdirTo(PathBuf::from(kv_pairs[0].1))))
         }
     }
 
-    deserializer.deserialize_any(WorkingDirOrSubRoots(PhantomData))
+    deserializer.deserialize_any(WorkingDirOrChdirTo(PhantomData))
 }
 
 impl Config {
     pub fn new(file: PathBuf) -> Result<Config> {
         match fs::read(&file) {
-            Err(e) => Err(ConfigError::FileCannotBeRead { file, error: e }.into()),
+            Err(e) => Err(ConfigError::FileCannotBeRead {
+                file,
+                error: e.to_string(),
+            }
+            .into()),
             Ok(bytes) => Ok(toml::from_slice(&bytes)?),
         }
     }
@@ -356,7 +355,7 @@ impl Config {
         project_root: &Path,
         command: Option<&str>,
     ) -> Result<Vec<command::Command>> {
-        self.into_commands(project_root, command, command::CommandType::Tidy)
+        self.into_commands(project_root, command, CommandType::Tidy)
     }
 
     pub fn into_lint_commands(
@@ -364,14 +363,14 @@ impl Config {
         project_root: &Path,
         command: Option<&str>,
     ) -> Result<Vec<command::Command>> {
-        self.into_commands(project_root, command, command::CommandType::Lint)
+        self.into_commands(project_root, command, CommandType::Lint)
     }
 
     fn into_commands(
         self,
         project_root: &Path,
         command: Option<&str>,
-        typ: command::CommandType,
+        typ: CommandType,
     ) -> Result<Vec<command::Command>> {
         let mut commands: Vec<command::Command> = vec![];
         for (name, c) in self.commands.into_iter() {
@@ -380,7 +379,7 @@ impl Config {
                     continue;
                 }
             }
-            if c.typ != typ && c.typ != command::CommandType::Both {
+            if c.typ != typ && c.typ != CommandType::Both {
                 continue;
             }
 
@@ -391,7 +390,7 @@ impl Config {
     }
 }
 
-impl Command {
+impl CommandConfig {
     fn into_command(self, project_root: &Path, name: String) -> Result<command::Command> {
         let n = command::Command::new(self.into_command_params(project_root, name)?)?;
         Ok(n)
@@ -482,7 +481,7 @@ impl Command {
                     return Err(ConfigError::CannotInvokePerFileWithPathArgs { path_args }.into());
                 }
             }
-            (Invoke::PerDir, &WorkingDir::Root | &WorkingDir::SubRoots(_), path_args) => {
+            (Invoke::PerDir, &WorkingDir::Root | &WorkingDir::ChdirTo(_), path_args) => {
                 if path_args == PathArgs::Dot || path_args == PathArgs::None {
                     return Err(
                         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args }.into(),
@@ -504,6 +503,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
+    use test_case::test_case;
 
     #[test]
     #[parallel]
@@ -723,6 +723,102 @@ mod tests {
             .collect::<Vec<&str>>();
         let expect: Vec<&str> = vec!["omegasort-gitignore", "clippy", "rustfmt"];
         assert_eq!(keys, expect);
+
+        Ok(())
+    }
+
+    #[test_case(
+        Invoke::PerFile,
+        WorkingDir::Root,
+        PathArgs::Dir,
+        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dir } ;
+        r#"invoke = "per-file" + path_args = "dir""#
+    )]
+    #[test_case(
+        Invoke::PerFile,
+        WorkingDir::Root,
+        PathArgs::None,
+        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::None } ;
+        r#"invoke = "per-file" + path_args = "none""#
+    )]
+    #[test_case(
+        Invoke::PerFile,
+        WorkingDir::Root,
+        PathArgs::Dot,
+        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dot } ;
+        r#"invoke = "per-file" + path_args = "dot""#
+    )]
+    #[test_case(
+        Invoke::PerFile,
+        WorkingDir::Root,
+        PathArgs::AbsoluteDir,
+        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::AbsoluteDir } ;
+        r#"invoke = "per-file" + path_args = "absolute-dir""#
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        WorkingDir::Root,
+        PathArgs::None,
+        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
+        r#"invoke = "per-dir" + working_dir = "root" + path_args = "none""#
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        WorkingDir::Root,
+        PathArgs::Dot,
+        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
+        r#"invoke = "per-dir" + working_dir = "root" + path_args = "dot""#
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        WorkingDir::ChdirTo(PathBuf::from("foo")),
+        PathArgs::None,
+        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
+        r#"invoke = "per-dir" + working_dir.chdir_to = "foo" + path_args = "none""#
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        WorkingDir::ChdirTo(PathBuf::from("foo")),
+        PathArgs::Dot,
+        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
+        r#"invoke = "per-dir" + working_dir.chdir_to = "foo" + path_args = "dot""#
+    )]
+    #[test_case(
+        Invoke::Once,
+        WorkingDir::Dir,
+        PathArgs::File,
+        ConfigError::CannotInvokeOnceWithWorkingDirEqDir ;
+        r#"invoke = "once" + working_dir = "dir""#
+    )]
+    #[parallel]
+    fn invalid_command_config(
+        invoke: Invoke,
+        working_dir: WorkingDir,
+        path_args: PathArgs,
+        expect_err: ConfigError,
+    ) -> Result<()> {
+        let config = CommandConfig {
+            typ: CommandType::Lint,
+            invoke: Some(invoke),
+            working_dir: Some(working_dir),
+            path_args: Some(path_args),
+            include: vec![String::from("**/*.rs")],
+            exclude: vec![],
+            run_mode: None,
+            chdir: None,
+            cmd: vec![String::from("some-linter")],
+            env: Default::default(),
+            lint_flags: vec![],
+            tidy_flags: vec![],
+            path_flag: String::new(),
+            ok_exit_codes: vec![],
+            lint_failure_exit_codes: vec![],
+            expect_stderr: false,
+            ignore_stderr: vec![],
+        };
+        let res = config.into_command(Path::new("."), String::from("some-linter"));
+        let err = res.unwrap_err().downcast::<ConfigError>().unwrap();
+        assert_eq!(err, expect_err);
 
         Ok(())
     }

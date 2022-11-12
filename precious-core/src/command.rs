@@ -7,8 +7,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    fmt::{self, Write},
-    fs,
+    fmt, fs,
     io::ErrorKind,
     path::{Path, PathBuf},
     time::SystemTime,
@@ -61,7 +60,7 @@ impl fmt::Display for Invoke {
 pub enum WorkingDir {
     Root,
     Dir,
-    SubRoots(Vec<PathBuf>),
+    ChdirTo(PathBuf),
 }
 
 impl fmt::Display for WorkingDir {
@@ -69,23 +68,10 @@ impl fmt::Display for WorkingDir {
         match self {
             WorkingDir::Root => f.write_str(r#""root""#),
             WorkingDir::Dir => f.write_str(r#""dir""#),
-            WorkingDir::SubRoots(sr) => {
-                f.write_char('[')?;
-                if sr.len() == 1 {
-                    f.write_char('"')?;
-                    f.write_str(&format!("{}", sr[0].display()))?;
-                    f.write_char('"')?;
-                } else {
-                    f.write_char(' ')?;
-                    f.write_str(
-                        &sr.iter()
-                            .map(|r| format!(r#""{}""#, r.display()))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    )?;
-                    f.write_char(' ')?;
-                }
-                f.write_char(']')
+            WorkingDir::ChdirTo(cd) => {
+                f.write_str(r#"chdir_to = ""#)?;
+                f.write_str(&format!("{}", cd.display()))?;
+                f.write_str(r#"""#)
             }
         }
     }
@@ -138,19 +124,6 @@ enum CommandError {
 
     #[error("Path {path:} should exist but it does not")]
     PathDoesNotExist { path: String },
-
-    #[error("The path \"{}\" does not contain \"{}\" as a prefix", path.display(), prefix.display())]
-    PrefixNotFound { path: PathBuf, prefix: PathBuf },
-
-    #[error(
-        "Path {} does not match any of this command's sub-roots: {}",
-        path.display(),
-        sub_roots.iter().map(|r| format!("{}", r.display())).join(", "),
-    )]
-    PathDoesNotMatchAnySubRoots {
-        path: PathBuf,
-        sub_roots: Vec<PathBuf>,
-    },
 }
 
 #[derive(Debug)]
@@ -300,13 +273,6 @@ impl Command {
         unique_codes.into_iter().collect()
     }
 
-    pub fn roots(&self) -> Vec<&Path> {
-        match &self.working_dir {
-            WorkingDir::SubRoots(sr) => sr.iter().map(|r| r.as_path()).collect(),
-            _ => vec![Path::new(".")],
-        }
-    }
-
     // This returns a vec of vecs where each of the sub-vecs contains 1+
     // files. Each of those sub-vecs represents one invocation of the
     // program. The exact paths that are passed to that invocation are later
@@ -352,7 +318,7 @@ impl Command {
         let path_metadata = self.maybe_path_metadata_for(files)?;
 
         let in_dir = self.in_dir(files[0])?;
-        let operating_on = self.operating_on(files, in_dir)?;
+        let operating_on = self.operating_on(files, &in_dir)?;
         let mut cmd = self.command_for_paths(&self.tidy_flags, &operating_on)?;
 
         info!(
@@ -370,7 +336,7 @@ impl Command {
             &self.env,
             &self.ok_exit_codes,
             self.ignore_stderr.as_deref(),
-            Some(in_dir),
+            Some(&in_dir),
         )?;
 
         if let Some(pm) = path_metadata {
@@ -390,7 +356,7 @@ impl Command {
         }
 
         let in_dir = self.in_dir(files[0])?;
-        let operating_on = self.operating_on(files, in_dir)?;
+        let operating_on = self.operating_on(files, &in_dir)?;
         let mut cmd = self.command_for_paths(&self.lint_flags, &operating_on)?;
 
         info!(
@@ -408,7 +374,7 @@ impl Command {
             &self.env,
             &self.ok_exit_codes,
             self.ignore_stderr.as_deref(),
-            Some(in_dir),
+            Some(&in_dir),
         )?;
 
         Ok(Some(LintOutcome {
@@ -527,43 +493,16 @@ impl Command {
     // given directory. The given directory is the directory in which the
     // command will be run, and may not be the project root.
     fn operating_on(&self, files: &[&Path], in_dir: &Path) -> Result<Vec<PathBuf>> {
-        //dbg!(files, in_dir);
         match self.path_args {
             PathArgs::File => Ok(files
                 .iter()
                 .sorted()
-                .map(|r| {
-                    if in_dir == self.project_root {
-                        Ok(r.to_path_buf())
-                    } else {
-                        r.strip_prefix(in_dir)
-                            .map(|r| r.to_path_buf())
-                            .map_err(|_| {
-                                CommandError::PrefixNotFound {
-                                    path: r.to_path_buf(),
-                                    prefix: self.project_root.clone(),
-                                }
-                                .into()
-                            })
-                    }
-                })
+                .map(|r| self.path_relative_to(r, in_dir))
                 .collect::<Result<Vec<_>>>()?),
             PathArgs::Dir => Self::files_by_dir(files)?
                 .into_keys()
                 .sorted()
-                .map(|r| {
-                    if in_dir == self.project_root {
-                        Ok(Self::path_or_dot(r))
-                    } else {
-                        r.strip_prefix(in_dir).map(Self::path_or_dot).map_err(|_| {
-                            CommandError::PrefixNotFound {
-                                path: r.to_path_buf(),
-                                prefix: self.project_root.clone(),
-                            }
-                            .into()
-                        })
-                    }
-                })
+                .map(|r| self.path_relative_to(r, in_dir))
                 .collect::<Result<Vec<_>>>(),
             PathArgs::None => Ok(vec![]),
             PathArgs::Dot => Ok(vec![PathBuf::from(".")]),
@@ -590,11 +529,18 @@ impl Command {
         }
     }
 
-    fn path_or_dot(path: &Path) -> PathBuf {
-        if path == Path::new("") {
-            return PathBuf::from(".");
+    fn path_relative_to(&self, path: &Path, in_dir: &Path) -> Result<PathBuf> {
+        let mut abs = self.project_root.clone();
+        abs.push(path);
+
+        if let Some(mut diff) = pathdiff::diff_paths(&abs, in_dir) {
+            if diff == Path::new("") {
+                diff = PathBuf::from(".");
+            }
+            return Ok(diff);
         }
-        path.to_path_buf()
+
+        Ok(path.to_path_buf())
     }
 
     // This takes the list of files relevant to the command. That list comes
@@ -771,33 +717,22 @@ impl Command {
         name.to_string()
     }
 
-    fn in_dir<'a, 'b: 'a>(&'b self, path: &'a Path) -> Result<&'a Path> {
+    fn in_dir(&self, file: &Path) -> Result<PathBuf> {
         match &self.working_dir {
-            WorkingDir::Root => Ok(&self.project_root),
+            WorkingDir::Root => Ok(self.project_root.clone()),
             WorkingDir::Dir => {
-                let parent = path.parent().ok_or_else(|| CommandError::PathHasNoParent {
-                    path: path.to_string_lossy().to_string(),
+                let mut abs = self.project_root.clone();
+                abs.push(file);
+                let parent = abs.parent().ok_or_else(|| CommandError::PathHasNoParent {
+                    path: file.to_string_lossy().to_string(),
                 })?;
-
-                if parent == Path::new("") {
-                    return Ok(&self.project_root);
-                }
-
-                Ok(parent)
+                Ok(parent.to_path_buf())
             }
-            WorkingDir::SubRoots(sr) => sr
-                .iter()
-                .find(|r| path.starts_with(r))
-                .map(|r| r.as_path())
-                .ok_or_else(|| {
-                    {
-                        CommandError::PathDoesNotMatchAnySubRoots {
-                            path: path.to_path_buf(),
-                            sub_roots: sr.to_vec(),
-                        }
-                    }
-                    .into()
-                }),
+            WorkingDir::ChdirTo(cd) => {
+                let mut dir = self.project_root.clone();
+                dir.push(cd);
+                Ok(dir)
+            }
         }
     }
 
