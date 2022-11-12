@@ -353,9 +353,9 @@ with that command when lint checks fail or other issues occur.
 There are some configuration scenarios that you may need to handle. Here are
 some examples:
 
-### Linter runs just once for the entire source tree
+### Command runs just once for the entire source tree
 
-Some linters, such as [rust-clippy](https://github.com/rust-lang/rust-clippy),
+Some commands, such as [rust-clippy](https://github.com/rust-lang/rust-clippy),
 expect to run just once across the entire source tree, rather than once per
 file or directory.
 
@@ -370,7 +370,7 @@ path_args = "dot" # or "none"
 This will cause `precious` to run the command exactly once in the project
 root.
 
-### Linter runs in the same directory as the files it lints and does not accept path as arguments
+### Command runs in the same directory as the files it lints and does not accept path as arguments
 
 If you want to run the command without passing the path being operated on to
 the command, set `invoke = "per-dir"` and `path_args = "none"`:
