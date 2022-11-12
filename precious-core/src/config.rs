@@ -505,95 +505,86 @@ mod tests {
     use serial_test::parallel;
     use test_case::test_case;
 
-    #[test]
+    #[test_case(
+        "files",
+        false,
+        Invoke::PerFile,
+        WorkingDir::Root,
+        PathArgs::File ;
+        "files + false"
+    )]
+    #[test_case(
+        "files",
+        true,
+        Invoke::PerFile,
+        WorkingDir::Dir,
+        PathArgs::File ;
+        "files + true"
+    )]
+    #[test_case(
+        "dirs",
+        false,
+        Invoke::PerDir,
+        WorkingDir::Root,
+        PathArgs::Dir ;
+        "dirs + false"
+    )]
+    #[test_case(
+        "dirs",
+        true,
+        Invoke::PerDir,
+        WorkingDir::Dir,
+        PathArgs::None ;
+        "dirs + true"
+    )]
+    #[test_case(
+        "root",
+        false,
+        Invoke::Once,
+        WorkingDir::Root,
+        PathArgs::Dot ;
+        "root + false"
+    )]
+    #[test_case(
+        "root",
+        true,
+        Invoke::Once,
+        WorkingDir::Root,
+        PathArgs::None ;
+        "root + true"
+    )]
     #[parallel]
-    fn pre_0_4_0_command_config() -> Result<()> {
-        let base = r#"
-            [commands.c1]
-            type    = "tidy"
-            include = "**/*.rs"
-            cmd     = "cmd"
-            ok_exit_codes = 0
-        "#;
-
-        struct TestCase {
-            run_mode: &'static str,
-            chdir: bool,
-            invoke: command::Invoke,
-            working_dir: command::WorkingDir,
-            path_args: command::PathArgs,
-        }
-        let cases = [
-            TestCase {
-                run_mode: "files",
-                chdir: false,
-                invoke: Invoke::PerFile,
-                working_dir: WorkingDir::Root,
-                path_args: PathArgs::File,
-            },
-            TestCase {
-                run_mode: "files",
-                chdir: true,
-                invoke: Invoke::PerFile,
-                working_dir: WorkingDir::Dir,
-                path_args: PathArgs::File,
-            },
-            TestCase {
-                run_mode: "dirs",
-                chdir: false,
-                invoke: Invoke::PerDir,
-                working_dir: WorkingDir::Root,
-                path_args: PathArgs::Dir,
-            },
-            TestCase {
-                run_mode: "dirs",
-                chdir: true,
-                invoke: Invoke::PerDir,
-                working_dir: WorkingDir::Dir,
-                path_args: PathArgs::None,
-            },
-            TestCase {
-                run_mode: "root",
-                chdir: false,
-                invoke: Invoke::Once,
-                working_dir: WorkingDir::Root,
-                path_args: PathArgs::Dot,
-            },
-            TestCase {
-                run_mode: "root",
-                chdir: true,
-                invoke: Invoke::Once,
-                working_dir: WorkingDir::Root,
-                path_args: PathArgs::None,
-            },
-        ];
-
+    fn pre_0_4_0_command_config(
+        run_mode: &str,
+        chdir: bool,
+        invoke: Invoke,
+        working_dir: WorkingDir,
+        path_args: PathArgs,
+    ) -> Result<()> {
         let root = Path::new("/does-not-matter");
-        for case in cases {
-            println!(
-                r#"pre_0_4_0_command_config: run_mode = "{}", chdir = {}""#,
-                case.run_mode, case.chdir,
-            );
-            let toml_text = format!(
-                r#"
-                {}
+        let toml_text = format!(
+            r#"
+                [commands.c1]
+                type    = "tidy"
+                include = "**/*.rs"
+                cmd     = "cmd"
+                ok_exit_codes = 0
                 run_mode = "{}"
                 chdir = {}
-                "#,
-                base, case.run_mode, case.chdir,
-            );
+            "#,
+            run_mode, chdir,
+        );
 
-            let config: Config = toml::from_str(&toml_text)?;
-            let params = config
-                .commands
-                .into_iter()
-                .next()
-                .map(|(name, conf)| conf.into_command_params(root, name))
-                .unwrap()?;
-            assert_eq!(params.invoke, case.invoke, "invoke");
-            assert_eq!(params.working_dir, case.working_dir, "working_dir");
-            assert_eq!(params.path_args, case.path_args, "path_args");
-        }
+        let config: Config = toml::from_str(&toml_text)?;
+        let params = config
+            .commands
+            .into_iter()
+            .next()
+            .map(|(name, conf)| conf.into_command_params(root, name))
+            .unwrap()?;
+        assert_eq!(params.invoke, invoke, "invoke");
+        assert_eq!(params.working_dir, working_dir, "working_dir");
+        assert_eq!(params.path_args, path_args, "path_args");
 
         Ok(())
     }

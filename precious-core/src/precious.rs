@@ -716,6 +716,7 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     use std::str::FromStr;
     use std::{collections::HashMap, path::PathBuf};
+    use test_case::test_case;
     #[cfg(not(target_os = "windows"))]
     use which::which;
 
@@ -817,111 +818,103 @@ lint_failure_exit_codes = [1]
         Ok(())
     }
 
-    #[test]
+    type FinderTestAction = Box<dyn Fn(&TestHelper) -> Result<()>>;
+
+    #[test_case(
+        "--all",
+        &[],
+        Box::new(|_| Ok(())),
+        &[
+            "README.md",
+            "can_ignore.x",
+            "merge-conflict-file",
+            "precious.toml",
+            "src/bar.rs",
+            "src/can_ignore.rs",
+            "src/main.rs",
+            "src/module.rs",
+            "src/sub/mod.rs",
+            "tests/data/bar.txt",
+            "tests/data/foo.txt",
+            "tests/data/generated.txt",
+        ] ;
+        "--all"
+    )]
+    #[test_case(
+        "--git",
+        &[],
+        Box::new(|th| {
+            th.modify_files()?;
+            Ok(())
+        }),
+        &["src/module.rs", "tests/data/foo.txt"] ;
+        "--git"
+    )]
+    #[test_case(
+        "--staged",
+        &[],
+        Box::new(|th| {
+            th.modify_files()?;
+            th.stage_all()?;
+            Ok(())
+        }),
+        &["src/module.rs", "tests/data/foo.txt"] ;
+        "--staged"
+    )]
+    #[test_case(
+        "",
+        &["main.rs", "module.rs"],
+        Box::new(|_| Ok(())),
+        &["src/main.rs", "src/module.rs"] ;
+        "file paths from cli"
+    )]
+    #[test_case(
+        "",
+        &["."],
+        Box::new(|_| Ok(())),
+        &[
+            "src/bar.rs",
+            "src/can_ignore.rs",
+            "src/main.rs",
+            "src/module.rs",
+            "src/sub/mod.rs",
+        ] ;
+        "dir paths from cli"
+    )]
     #[serial]
-    fn finder_uses_project_root() -> Result<()> {
-        // It'd be more Rusty to make this a macro that generates multiple
-        // `#[test]` funcs, but that's kind of painful. Maybe I'll do this
-        // later.
-        struct TestCase {
-            flag: &'static str,
-            paths: &'static [&'static str],
-            #[allow(clippy::type_complexity)]
-            action: Box<dyn Fn(&TestHelper) -> Result<()>>,
-            expect: &'static [&'static str],
+    fn finder_uses_project_root(
+        flag: &str,
+        paths: &[&str],
+        action: FinderTestAction,
+        expect: &[&str],
+    ) -> Result<()> {
+        let helper = TestHelper::new()?
+            .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
+            .with_git_repo()?;
+        (action)(&helper)?;
+
+        let mut src_dir = helper.precious_root();
+        src_dir.push("src");
+        let _pushd = Pushd::new(src_dir)?;
+
+        let mut cmd = vec!["precious", "--quiet", "tidy"];
+        if !flag.is_empty() {
+            cmd.push(flag);
+        } else {
+            cmd.append(&mut paths.to_vec());
         }
-        let tests = [
-            TestCase {
-                flag: "--all",
-                paths: &[],
-                action: Box::new(|_| Ok(())),
-                expect: &[
-                    "README.md",
-                    "can_ignore.x",
-                    "merge-conflict-file",
-                    "precious.toml",
-                    "src/bar.rs",
-                    "src/can_ignore.rs",
-                    "src/main.rs",
-                    "src/module.rs",
-                    "src/sub/mod.rs",
-                    "tests/data/bar.txt",
-                    "tests/data/foo.txt",
-                    "tests/data/generated.txt",
-                ],
-            },
-            TestCase {
-                flag: "--git",
-                paths: &[],
-                action: Box::new(|th| {
-                    th.modify_files()?;
-                    Ok(())
-                }),
-                expect: &["src/module.rs", "tests/data/foo.txt"],
-            },
-            TestCase {
-                flag: "--staged",
-                paths: &[],
-                action: Box::new(|th| {
-                    th.modify_files()?;
-                    th.stage_all()?;
-                    Ok(())
-                }),
-                expect: &["src/module.rs", "tests/data/foo.txt"],
-            },
-            TestCase {
-                flag: "",
-                paths: &["main.rs", "module.rs"],
-                action: Box::new(|_| Ok(())),
-                expect: &["src/main.rs", "src/module.rs"],
-            },
-            TestCase {
-                flag: "",
-                paths: &["."],
-                action: Box::new(|_| Ok(())),
-                expect: &[
-                    "src/bar.rs",
-                    "src/can_ignore.rs",
-                    "src/main.rs",
-                    "src/module.rs",
-                    "src/sub/mod.rs",
-                ],
-            },
-        ];
-        for t in tests {
-            println!(
-                "finder_uses_project_root: {} [{}]",
-                if t.flag.is_empty() { "<none>" } else { t.flag },
-                t.paths.join(" ")
-            );
-            let helper = TestHelper::new()?
-                .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
-                .with_git_repo()?;
-            (t.action)(&helper)?;
+        let app = App::try_parse_from(&cmd)?;
 
-            let mut src_dir = helper.precious_root();
-            src_dir.push("src");
-            let _pushd = Pushd::new(src_dir)?;
+        let mut p = Precious::new(app)?;
 
-            let mut cmd = vec!["precious", "--quiet", "tidy"];
-            if !t.flag.is_empty() {
-                cmd.push(t.flag);
-            } else {
-                cmd.append(&mut t.paths.to_vec());
-            }
-            let app = App::try_parse_from(&cmd)?;
-
-            let mut p = Precious::new(app)?;
-
-            assert_eq!(
-                p.finder()?
-                    .files(t.paths.iter().map(PathBuf::from).collect())?,
-                Some(t.expect.iter().map(PathBuf::from).collect::<Vec<_>>()),
-                "finder_uses_project_root: {} [{}]",
-                if t.flag.is_empty() { "<none>" } else { t.flag },
-                t.paths.join(" ")
-            );
-        }
+        assert_eq!(
+            p.finder()?
+                .files(paths.iter().map(PathBuf::from).collect())?,
+            Some(expect.iter().map(PathBuf::from).collect::<Vec<_>>()),
+            "finder_uses_project_root: {} [{}]",
+            if flag.is_empty() { "<none>" } else { flag },
+            paths.join(" ")
+        );
 
         Ok(())
     }
