@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.4.0 - 2022-11-19
+
 - **This release has huge changes to how commands are invoked. The old
   `run_mode` and `chdir` configuration keys have been deprecated. In the
   future, using these will cause precious to print a warning, and later
