@@ -93,8 +93,9 @@ working_dir = "root"
 path_args   = "file"
 ```
 
-This runs the command once per file, passing the file as a single argument to
-the command. The working directory for the command will be the project root.
+This runs the command once per file with the working directory for the command
+as the project root. The command will be passed a relative path to the file
+from the root as a single argument to the command.
 
 #### `invoke`
 
