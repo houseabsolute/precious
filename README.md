@@ -116,7 +116,7 @@ command is run.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `"root"`             | The working directory is the project root. **This is the default.**                                                                                                       |
 | `"dir"`              | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
-| `.chdir_to = "path"` | The working directory will be the given path when executing the command.                                                                                                  |
+| `.chdir_to = "path"` | The working directory will be the given path when executing the command. **This path must be relative to the project root.**                                              |
 
 ##### `working_dir.chdir_to = "path"`
 
@@ -124,22 +124,22 @@ The final option for `working_dir` is to set an explicit path as the working
 directory.
 
 With this option, the working directory will be set to the given subdirectory
-when the command is executed. Relative paths will be relative to this
-subdirectory, rather than the project root.
+when the command is executed. Relative paths passed to the command will be relative to this
+subdirectory rather than the project root.
 
 #### `path_args`
 
 The `path_args` key tells precious how paths should be passed when the command
 is run.
 
-| Value             | Description                                                                                                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> If using `working_directory.chdir_to`, then the path is relative to the given working directory.  |
-| `"dir"`           | Passes the path to the directory containing the matching files relative to the root. <br> If using `working_directory.chdir_to`, then the path is relative to the given working directory. |
-| `"none"`          | No file args are passed to the command at all.                                                                                                                                             |
-| `"dot"`           | Always pass `.` as the path. This is useful when `working_dir = "dir"` and the command still requires a path to be passed.                                                                 |
-| `"absolute-file"` | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                             |
-| `"absolute-dir"`  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                                   |
+| Value             | Description                                                                                                                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> With `working_directory.chdir_to` the path is relative to the given working directory.  |
+| `"dir"`           | Passes the path to the directory containing the matching files relative to the root. <br> With `working_directory.chdir_to` the path is relative to the given working directory. |
+| `"none"`          | No paths are passed to the command at all.                                                                                                                                       |
+| `"dot"`           | Always pass `.` as the path. This is useful when `working_dir = "dir"` and the command still requires a path to be passed.                                                       |
+| `"absolute-file"` | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                   |
+| `"absolute-dir"`  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                         |
 
 #### Nonsensical Combinations
 
@@ -189,13 +189,13 @@ The other keys allowed for each command are as follows:
 | `include`                 | string or array of strings   | **yes**   | all                      |         | Each array member is a [gitignore pattern](https://git-scm.com/docs/gitignore#_pattern_format) that tells `precious` what files this command applies to. <br> You can use lines starting with a `!` to negate the meaning of previous rules in the list, so that anything that matches is _not_ included even if it matches previous rules.               |
 | `exclude`                 | string or array of strings   | no        | all                      |         | Each array member is a [gitignore pattern](https://git-scm.com/docs/gitignore#_pattern_format) that tells `precious` what files this command should not be applied to. <br> You can use lines starting with a `!` to negate the meaning of previous rules in the list, so that anything that matches is _not_ excluded even if it matches previous rules. |
 | `cmd`                     | string or array of strings   | **yes**   | all                      |         | This is the executable to be run followed by any arguments that should always be passed.                                                                                                                                                                                                                                                                  |
-| `env`                     | table - values are strings   | no        | all                      |         | This key allows you to set one or more environment variables that will be set when the command is run. Both the keys and values of this table must be strings.                                                                                                                                                                                            |
+| `env`                     | table - values are strings   | no        | all                      |         | This key allows you to set one or more environment variables that will be set when the command is run. The values in this table must be strings.                                                                                                                                                                                                          |
 | `path_flag`               | string                       | no        | all                      |         | By default, `precious` will pass the path being operated on to the command it executes as the final, positional, argument(s). If the command takes paths via a flag you need to specify that flag with this key.                                                                                                                                          |
 | `lint_flags`              | string or array of strings   | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in linting mode. This is how you set that flag.                                                                                                                                                                                                                          |
 | `tidy_flags`              | string or array of strings   | no        | combined linter & tidier |         | If a command is both a linter and tidier then it may take extra flags to operate in tidying mode. This is how you set that flag.                                                                                                                                                                                                                          |
 | `ok_exit_codes`           | integer or array of integers | **yes**   | all                      |         | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit.                                                                                                                                                                           |
 | `lint_failure_exit_codes` | integer or array of integers | no        | linters                  |         | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue.                                                                                                                      |
-| `ignore_stderr`           | string or array of strings   | all       | all                      |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. This parameter can specify one or more strings. These strings are treated as regexes and matched against the command's stderr output. If _any_ of the regexes match, the stderr output is ignored.                                  |
+| `ignore_stderr`           | string or array of strings   | all       | all                      |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. This parameter can specify one or more regexes. These regexes will be matched against the command's stderr output. If _any_ of the regexes match, the stderr output is ignored.                                                     |
 
 ### Referencing the Project Root
 
@@ -219,21 +219,21 @@ The root command takes the following options:
 
 | Flag                        | Description                                                         |
 | --------------------------- | ------------------------------------------------------------------- |
-| `-h`, `--help`              | Prints help information                                             |
+| `-c`, `--config` `<config>` | Path to the precious config file                                    |
+| `-j`, `--jobs` `<jobs>`     | Number of parallel jobs (threads) to run (defaults to one per core) |
 | `-q`, `--quiet`             | Suppresses most output                                              |
-| `-V`, `--version`           | Prints version information                                          |
+| `-a`, `--ascii`             | Replace super-fun Unicode symbols with terribly boring ASCII        |
 | `-v`, `--verbose`           | Enable verbose output                                               |
+| `-V`, `--version`           | Prints version information                                          |
 | `-d`, `--debug`             | Enable debugging output                                             |
 | `-t`, `--trace`             | Enable tracing output (maximum logging)                             |
-| `--ascii`                   | Replace super-fun Unicode symbols with terribly boring ASCII        |
-| `-c`, `--config` `<config>` | Path to config file                                                 |
-| `-j`, `--jobs` `<jobs>`     | Number of parallel jobs (threads) to run (defaults to one per core) |
+| `-h`, `--help`              | Prints help information                                             |
 
 ### Parallel Execution
 
 Precious will always execute commands in parallel, with one process per CPU by
 default. The execution is parallelized based on the command's invocation
-configuration. For example, one a 12 CPU system, a command that has `invoke = "per-file"` will be executed up to 12 times in parallel, with each command
+configuration. For example, on a 12 CPU system, a command that has `invoke = "per-file"` will be executed up to 12 times in parallel, with each command
 execution receiving one file.
 
 You can disable parallel execution by passing `--jobs 1`.
@@ -245,16 +245,16 @@ specify one of these. These subcommands take the same options.
 
 #### Selecting Paths to Operate On
 
-When you run `precious` you must tell it what paths to operate on. Precious
-supports several ways of setting these via command line arguments:
+When you run `precious` you must tell it what paths to operate on. There are
+several options for this:
 
-| Mode                                                         | Flag                  | Description                                                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| All paths                                                    | `-a`, `--all`         | Run on all paths in the project.                                                                                                                                                                                                                                                                                  |
-| Modified files according to git                              | `-g`, `--git`         | Run on all files that git reports as having been modified.                                                                                                                                                                                                                                                        |
-| Staged files according to git                                | `-s`, `--staged`      | Run on all files that git reports as having been staged.                                                                                                                                                                                                                                                          |
-| Staged files according to git, with unstaged changes stashed | `--staged-with-stash` | This is liked `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this option. |
-| Paths given on CLI                                           |                       | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other options. If any of these paths are directories then that entire directory tree will be included.                                                                          |
+| Mode                                                         | Flag                  | Description                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All paths                                                    | `-a`, `--all`         | Run on all files under the project root (the directory containing the precious config file).                                                                                                                                                                                                                     |
+| Modified files according to git                              | `-g`, `--git`         | Run on all files that git reports as having been modified.                                                                                                                                                                                                                                                       |
+| Staged files according to git                                | `-s`, `--staged`      | Run on all files that git reports as having been staged.                                                                                                                                                                                                                                                         |
+| Staged files according to git, with unstaged changes stashed | `--staged-with-stash` | This is like `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this option. |
+| Paths given on CLI                                           |                       | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other options. If any of these paths are directories then that entire directory tree will be included.                                                                         |
 
 #### Running One Command
 
@@ -294,7 +294,8 @@ which paths.
 
 - The base files to operate on are selected based on the command line option
   specified. This is one of:
-  - `--all` - All files in the current working directory's tree.
+  - `--all` - All files under the project root (the directory containing the
+    precious config file).
   - `--git` - All files in the git repo that have been modified.
   - `--staged` - All files in the git repo that have been staged.
   - paths passed on the CLI - If a path is a file it is added to the list
@@ -309,7 +310,7 @@ which paths.
   - If `invoke` is `per-file`, then the rules are applied one file at a time.
   - If `invoke` is `per-dir`, then if any file in the directory matches the
     rules, the command will be run on that directory.
-  - If `invoke` is `once`, then the are applied to all of the files at
+  - If `invoke` is `once`, then the rules are applied to all of the files at
     once. If any one of those files matches the include rule, the command will
     be run.
 
@@ -320,14 +321,15 @@ Here are some recommendations for how to get the best experience with precious.
 ### Choosing How to `invoke` the Command
 
 Some commands might work equally well with `invoke` set to either `per-dir` or
-`invoke`. The right run mode to choose depends on how you are using precious.
+`root`. The right run mode to choose depends on how you are using precious.
 
 In general, if you either have a very small set of directories, _or_ you are
 running precious on most or all of the directories at once, then `once` will
 be faster.
 
-However, if you have a larger set of directories and you only need to lint or
-tidy a small subset of these at once, then `per-dir` mode will be faster.
+However, if you have a larger set of directories and you usually only need to
+lint or tidy a small subset of these at once, then `per-dir` mode will be
+faster.
 
 ### Quiet Flags
 
@@ -342,8 +344,8 @@ By default, precious treats _any_ output to stderr as an error in the command
 (as opposed to a linting failure). You can use the `ignore_stderr` to specify
 one or more regexes for allowed stderr output.
 
-In addition, you can see all stdout and stderr output when running precious in
-`--debug` mode.
+In addition, you can see all stdout and stderr output from a comment by
+running precious in `--debug` mode.
 
 All of which is to say that in general there's no value to running a command
 in quiet mode with precious. All that does is make it harder to debug issues
