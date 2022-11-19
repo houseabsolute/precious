@@ -351,6 +351,18 @@ All of which is to say that in general there's no value to running a command
 in quiet mode with precious. All that does is make it harder to debug issues
 with that command when lint checks fail or other issues occur.
 
+## Exit Codes
+
+When running in `--tidy` mode, precious always exits with `0`, whether or not
+any files are tidied.
+
+When running in `--lint` mode, precious will exit with `0` when all files pass
+linting. If any lint commands fail it will exit with `1`.
+
+In both modes, if any commands fail, either by returning exit codes that
+aren't listed as ok or by printing to stderr unexpectedly, then precious will
+exit with a non-0 exit code.
+
 ## Common Scenarios
 
 There are some configuration scenarios that you may need to handle. Here are
