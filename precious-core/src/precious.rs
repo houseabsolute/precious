@@ -73,7 +73,7 @@ const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 #[clap(subcommand_required = true, arg_required_else_help = true)]
 /// One code quality tool to rule them all
 pub struct App {
-    /// Path to config file
+    /// Path to the precious config file
     #[clap(long, short)]
     config: Option<PathBuf>,
     /// Number of parallel jobs (threads) to run (defaults to one per core)
