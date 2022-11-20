@@ -76,7 +76,7 @@ pub struct App {
     #[clap(long, short)]
     config: Option<PathBuf>,
     /// Number of parallel jobs (threads) to run (defaults to one per core)
-    #[clap(long, short, default_value_t = 0)]
+    #[clap(long, short, default_value_t = rayon::current_num_threads())]
     jobs: usize,
     /// Replace super-fun Unicode symbols with terribly boring ASCII
     #[clap(long, short)]
