@@ -2,6 +2,7 @@ use crate::{
     chars,
     command::{self, TidyOutcome},
     config,
+    output::{OutputWriter, UnstructuredTextWriter},
     paths::{self, finder::Finder},
     vcs,
 };
@@ -78,6 +79,9 @@ pub struct App {
     /// Number of parallel jobs (threads) to run (defaults to one per core)
     #[clap(long, short, default_value_t = rayon::current_num_threads())]
     jobs: usize,
+    /// Output format
+    #[clap(long, short, value_enum, default_value_t = OutputFormat::UnstructuredText)]
+    output_format: OutputFormat,
     /// Replace super-fun Unicode symbols with terribly boring ASCII
     #[clap(long, short)]
     ascii: bool,
@@ -95,6 +99,12 @@ pub struct App {
     trace: bool,
     #[clap(subcommand)]
     subcommand: Subcommand,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum OutputFormat {
+    UnstructuredText,
+    Checkstyle,
 }
 
 #[derive(Debug, Parser)]
@@ -143,8 +153,7 @@ pub struct Precious {
     cwd: PathBuf,
     config: config::Config,
     command: Option<String>,
-    chars: chars::Chars,
-    quiet: bool,
+    output_writer: Box<dyn OutputWriter + Sync>,
     thread_pool: ThreadPool,
     should_lint: bool,
     paths: Vec<PathBuf>,
@@ -192,29 +201,28 @@ impl App {
 }
 
 impl Precious {
-    pub fn new(app: App) -> Result<Precious> {
+    pub fn new(app: App) -> Result<Self> {
         if log::log_enabled!(log::Level::Debug) {
             if let Some(path) = env::var_os("PATH") {
                 debug!("PATH = {}", path.to_string_lossy());
             }
         }
 
-        let c = if app.ascii {
-            chars::BORING_CHARS
-        } else {
-            chars::FUN_CHARS
-        };
-
         let mode = Self::mode(&app)?;
         let cwd = env::current_dir()?;
         let project_root = Self::project_root(app.config.as_ref(), &cwd)?;
         let config_file = Self::config_file(app.config.as_ref(), &project_root);
         let config = config::Config::new(config_file)?;
-        let quiet = app.quiet;
         let jobs = app.jobs;
         let (should_lint, paths, command) = match app.subcommand {
             Subcommand::Lint(a) => (true, a.paths, a.command),
             Subcommand::Tidy(a) => (false, a.paths, a.command),
+        };
+
+        let c = if app.ascii {
+            chars::BORING_CHARS
+        } else {
+            chars::FUN_CHARS
         };
 
         Ok(Precious {
@@ -223,8 +231,7 @@ impl Precious {
             cwd,
             config,
             command,
-            chars: c,
-            quiet,
+            output_writer: Box::new(UnstructuredTextWriter::new(c, app.quiet)),
             thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
             should_lint,
             paths,
@@ -331,14 +338,14 @@ impl Precious {
     }
 
     pub fn run(&mut self) -> i8 {
-        match self.run_subcommand() {
+        let status = match self.run_subcommand() {
             Ok(e) => {
-                debug!("{:?}", e);
+                debug!("run_subcommand exit: {:?}", e);
                 if let Some(err) = e.error {
-                    print!("{}", err);
+                    self.output_writer.write_subcommand_exit_error(err);
                 }
                 if let Some(msg) = e.message {
-                    println!("{} {}", self.chars.empty, msg);
+                    self.output_writer.write_subcommand_exit_message(msg);
                 }
                 e.status
             }
@@ -346,7 +353,9 @@ impl Precious {
                 error!("Failed to run precious: {}", e);
                 1
             }
-        }
+        };
+        self.output_writer.flush();
+        status
     }
 
     fn run_subcommand(&mut self) -> Result<Exit> {
@@ -358,7 +367,8 @@ impl Precious {
     }
 
     fn tidy(&mut self) -> Result<Exit> {
-        println!("{} Tidying {}", self.chars.ring, self.mode);
+        self.output_writer
+            .write_starting_action("Tidying", self.mode);
 
         let tidiers = self
             .config
@@ -376,7 +386,8 @@ impl Precious {
     }
 
     fn lint(&mut self) -> Result<Exit> {
-        println!("{} Linting {}", self.chars.ring, self.mode);
+        self.output_writer
+            .write_starting_action("Linting", self.mode);
 
         let linters = self
             .config
@@ -463,7 +474,7 @@ impl Precious {
                     .iter()
                     .map(|af| format!(
                         "  {} [{}] [{}]\n    {}\n",
-                        self.chars.bullet,
+                        "*", // self.chars.bullet,
                         af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
                         af.config_key,
                         af.error,
@@ -488,46 +499,23 @@ impl Precious {
         let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
             match t.tidy(files) {
                 Ok(Some(TidyOutcome::Changed)) => {
-                    if !s.quiet {
-                        println!(
-                            "{} Tidied by {}:    [{}]",
-                            s.chars.tidied,
-                            t.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
-                        );
-                    }
+                    s.output_writer.write_command_tidied_files(&t.name, files);
                     Some(Ok(()))
                 }
                 Ok(Some(TidyOutcome::Unchanged)) => {
-                    if !s.quiet {
-                        println!(
-                            "{} Unchanged by {}: [{}]",
-                            s.chars.unchanged,
-                            t.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
-                        );
-                    }
+                    s.output_writer
+                        .write_command_did_not_tidy_files(&t.name, files);
                     Some(Ok(()))
                 }
                 Ok(Some(TidyOutcome::Unknown)) => {
-                    if !s.quiet {
-                        println!(
-                            "{} Maybe changed by {}: [{}]",
-                            s.chars.unknown,
-                            t.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
-                        );
-                    }
+                    s.output_writer
+                        .write_command_maybe_tidied_files(&t.name, files);
                     Some(Ok(()))
                 }
                 Ok(None) => None,
                 Err(e) => {
-                    println!(
-                        "{} Error from {}: [{}]",
-                        s.chars.execution_error,
-                        t.name,
-                        files.iter().map(|p| p.to_string_lossy()).join(" "),
-                    );
+                    s.output_writer
+                        .write_command_errored_for_files(&t.name, files);
                     Some(Err(ActionFailure {
                         error: format!("{:#}", e),
                         config_key: t.config_key(),
@@ -549,42 +537,13 @@ impl Precious {
             match l.lint(files) {
                 Ok(Some(lo)) => {
                     if lo.ok {
-                        if !s.quiet {
-                            println!(
-                                "{} Passed {}: {}",
-                                s.chars.lint_free,
-                                l.name,
-                                files.iter().map(|p| p.to_string_lossy()).join(" "),
-                            );
-                        }
+                        s.output_writer
+                            .write_command_found_lint_clean_files(&l.name, files);
                         Some(Ok(()))
                     } else {
-                        println!(
-                            "{} Failed {}: {}",
-                            s.chars.lint_dirty,
-                            l.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        s.output_writer.write_command_found_lint_dirty_files(
+                            &l.name, files, lo.stdout, lo.stderr,
                         );
-                        if let Some(s) = lo.stdout {
-                            println!("{}", s);
-                        }
-                        if let Some(s) = lo.stderr {
-                            println!("{}", s);
-                        }
-                        if let Ok(ga) = env::var("GITHUB_ACTIONS") {
-                            if !ga.is_empty() {
-                                if files.len() == 1 {
-                                    println!(
-                                        "::error file={}::Linting with {} failed",
-                                        files[0].display(),
-                                        l.name
-                                    );
-                                } else {
-                                    println!("::error::Linting with {} failed", l.name);
-                                }
-                            }
-                        }
-
                         Some(Err(ActionFailure {
                             error: "linting failed".into(),
                             config_key: l.config_key(),
@@ -594,12 +553,8 @@ impl Precious {
                 }
                 Ok(None) => None,
                 Err(e) => {
-                    println!(
-                        "{} error {}: {}",
-                        s.chars.execution_error,
-                        l.name,
-                        files.iter().map(|p| p.to_string_lossy()).join(" "),
-                    );
+                    s.output_writer
+                        .write_command_errored_for_files(&l.name, files);
                     Some(Err(ActionFailure {
                         error: format!("{:#}", e),
                         config_key: l.config_key(),
@@ -741,8 +696,7 @@ lint_failure_exit_codes = [1]
             let config = app.config.clone();
 
             let p = Precious::new(app)?;
-            assert_eq!(p.chars, chars::FUN_CHARS);
-            assert!(!p.quiet);
+            assert_eq!(p.output_writer.chars(), &chars::FUN_CHARS);
 
             let config_file = Precious::config_file(config.as_ref(), &p.project_root);
             let mut expect_config_file = p.project_root;
@@ -763,7 +717,7 @@ lint_failure_exit_codes = [1]
         let app = App::try_parse_from(["precious", "--ascii", "tidy", "--all"])?;
 
         let p = Precious::new(app)?;
-        assert_eq!(p.chars, chars::BORING_CHARS);
+        assert_eq!(p.output_writer.chars(), &chars::BORING_CHARS);
 
         Ok(())
     }
