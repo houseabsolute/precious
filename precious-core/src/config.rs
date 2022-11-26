@@ -449,26 +449,27 @@ impl CommandConfig {
 
         // This translates the old config options into their equivalent new
         // options.
-        match (run_mode, chdir) {
-            (Some(OldRunMode::Files), Some(false)) => {
-                return Ok((Invoke::PerFile, WorkingDir::Root, PathArgs::File))
+        if run_mode.is_some() || chdir.is_some() {
+            match (run_mode, chdir) {
+                (Some(OldRunMode::Files) | None, Some(false) | None) => {
+                    return Ok((Invoke::PerFile, WorkingDir::Root, PathArgs::File))
+                }
+                (Some(OldRunMode::Files) | None, Some(true)) => {
+                    return Ok((Invoke::PerFile, WorkingDir::Dir, PathArgs::File))
+                }
+                (Some(OldRunMode::Dirs), Some(false) | None) => {
+                    return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::Dir))
+                }
+                (Some(OldRunMode::Dirs), Some(true)) => {
+                    return Ok((Invoke::PerDir, WorkingDir::Dir, PathArgs::None))
+                }
+                (Some(OldRunMode::Root), Some(false) | None) => {
+                    return Ok((Invoke::Once, WorkingDir::Root, PathArgs::Dot))
+                }
+                (Some(OldRunMode::Root), Some(true)) => {
+                    return Ok((Invoke::Once, WorkingDir::Root, PathArgs::None))
+                }
             }
-            (Some(OldRunMode::Files), Some(true)) => {
-                return Ok((Invoke::PerFile, WorkingDir::Dir, PathArgs::File))
-            }
-            (Some(OldRunMode::Dirs), Some(false)) => {
-                return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::Dir))
-            }
-            (Some(OldRunMode::Dirs), Some(true)) => {
-                return Ok((Invoke::PerDir, WorkingDir::Dir, PathArgs::None))
-            }
-            (Some(OldRunMode::Root), Some(false)) => {
-                return Ok((Invoke::Once, WorkingDir::Root, PathArgs::Dot))
-            }
-            (Some(OldRunMode::Root), Some(true)) => {
-                return Ok((Invoke::Once, WorkingDir::Root, PathArgs::None))
-            }
-            _ => (),
         }
 
         let invoke = invoke.unwrap_or(Invoke::PerFile);
@@ -506,74 +507,109 @@ mod tests {
     use test_case::test_case;
 
     #[test_case(
-        "files",
-        false,
+        Some("files"),
+        Some(false),
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::File ;
         "files + false"
     )]
     #[test_case(
-        "files",
-        true,
+        Some("files"),
+        Some(true),
         Invoke::PerFile,
         WorkingDir::Dir,
         PathArgs::File ;
         "files + true"
     )]
     #[test_case(
-        "dirs",
-        false,
+        Some("dirs"),
+        Some(false),
         Invoke::PerDir,
         WorkingDir::Root,
         PathArgs::Dir ;
         "dirs + false"
     )]
     #[test_case(
-        "dirs",
-        true,
+        Some("dirs"),
+        Some(true),
         Invoke::PerDir,
         WorkingDir::Dir,
         PathArgs::None ;
         "dirs + true"
     )]
     #[test_case(
-        "root",
-        false,
+        Some("root"),
+        Some(false),
         Invoke::Once,
         WorkingDir::Root,
         PathArgs::Dot ;
         "root + false"
     )]
     #[test_case(
-        "root",
-        true,
+        Some("root"),
+        Some(true),
         Invoke::Once,
         WorkingDir::Root,
         PathArgs::None ;
         "root + true"
     )]
+    #[test_case(
+        Some("files"),
+        None,
+        Invoke::PerFile,
+        WorkingDir::Root,
+        PathArgs::File ;
+        "files + None"
+    )]
+    #[test_case(
+        Some("dirs"),
+        None,
+        Invoke::PerDir,
+        WorkingDir::Root,
+        PathArgs::Dir ;
+        "dirs + None"
+    )]
+    #[test_case(
+        Some("root"),
+        None,
+        Invoke::Once,
+        WorkingDir::Root,
+        PathArgs::Dot ;
+        "root + None"
+    )]
+    #[test_case(
+        None,
+        Some(true),
+        Invoke::PerFile,
+        WorkingDir::Dir,
+        PathArgs::File ;
+        "None + true"
+    )]
     #[parallel]
     fn pre_0_4_0_command_config(
-        run_mode: &str,
-        chdir: bool,
+        run_mode: Option<&str>,
+        chdir: Option<bool>,
         invoke: Invoke,
         working_dir: WorkingDir,
         path_args: PathArgs,
     ) -> Result<()> {
         let root = Path::new("/does-not-matter");
-        let toml_text = format!(
+        let mut toml_text = String::from(
             r#"
                 [commands.c1]
                 type    = "tidy"
                 include = "**/*.rs"
                 cmd     = "cmd"
                 ok_exit_codes = 0
-                run_mode = "{}"
-                chdir = {}
             "#,
-            run_mode, chdir,
         );
+        if let Some(run_mode) = run_mode {
+            toml_text.push_str(&format!("run_mode = \"{}\"\n", run_mode));
+        }
+        if let Some(chdir) = chdir {
+            toml_text.push_str(&format!("chdir = {}\n", chdir));
+        }
 
         let config: Config = toml::from_str(&toml_text)?;
         let params = config
