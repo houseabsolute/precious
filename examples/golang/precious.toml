@@ -17,6 +17,10 @@ cmd = [
     # these, as by default golangci-lint can simply timeout and fail when
     # multiple instances of the executable are invoked at the same time for
     # the same project.
+    #
+    # Alternatively, for smaller projects you can set `invoke = "once"` and
+    # `path_args = "none"` to run it once for all code in the project, in
+    # which case you can remove this flag.
     "--allow-parallel-runners",
 ]
 env = { "FAIL_ON_WARNINGS" = "1" }

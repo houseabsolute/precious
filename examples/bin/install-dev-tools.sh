@@ -17,12 +17,6 @@ function install_any_project_tools () {
 
 function install_go_project_tools () {
     run "ubi --project golangci/golangci-lint --in ~/bin"
-    # If we run this in the checkout dir it can mess with our go.mod and
-    # go.sum.
-    pushd /tmp
-    # This will end up in $GOBIN, which defaults to $HOME/go/bin.
-    run "go get golang.org/x/tools/cmd/goimports"
-    popd
 }
 
 function install_rust_project_tools () {
