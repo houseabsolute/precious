@@ -5,6 +5,8 @@ on:
     paths:
       - "**/Cargo.toml"
       - "**/Cargo.lock"
+    tags-ignore:
+      - "precious-*"
 
 jobs:
   security_audit:
