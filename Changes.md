@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.4.1 - 2022-11-26
+
 - The previous release didn't handle all of the old config keys correctly. If
   just `run_mode` or `chdir` was set, but not both, it may not have replicated
   the behavior of precious v0.3.0 and earlier with the same settings.
