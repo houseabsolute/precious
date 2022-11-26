@@ -451,12 +451,12 @@ impl CommandConfig {
         // This translates the old config options into their equivalent new
         // options.
         if run_mode.is_some() || chdir.is_some() {
-            let options = match (run_mode, chdir) {
-                (Some(_), None) => "run_mode",
-                (None, Some(_)) => "chdir",
-                _ => "run_mode and chdir",
-            };
-            //warn!("The {name} command is using deprecated config options: {options}");
+            // let options = match (run_mode, chdir) {
+            //     (Some(_), None) => "run_mode",
+            //     (None, Some(_)) => "chdir",
+            //     _ => "run_mode and chdir",
+            // };
+            // warn!("The {name} command is using deprecated config options: {options}");
 
             match (run_mode, chdir) {
                 (Some(OldRunMode::Files) | None, Some(false) | None) => {
