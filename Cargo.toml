@@ -30,6 +30,7 @@ precious-core.workspace = true
 anyhow = "1.0.66"
 clap = { version = "4.0.26", features = [ "cargo", "derive", "wrap_help" ] }
 clean-path = "0.2.1"
+crossbeam = "0.8.2"
 env_logger = "0.9.3"
 fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }
 filetime = "0.2.18"

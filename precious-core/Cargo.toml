@@ -12,6 +12,7 @@ version.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 clean-path.workspace = true
+crossbeam.workspace = true
 fern.workspace = true
 globset.workspace = true
 ignore.workspace = true

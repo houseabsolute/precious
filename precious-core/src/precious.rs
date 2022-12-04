@@ -1,13 +1,18 @@
 use crate::{
-    chars,
+    chars::{self, Chars},
     command::{self, TidyOutcome},
     config,
-    output::{OutputWriter, UnstructuredTextWriter},
+    exit::Exit,
+    output::{Event, OutputWriter, UnstructuredTextWriter},
     paths::{self, finder::Finder},
     vcs,
 };
-use anyhow::{Error, Result};
+use anyhow::Result;
 use clap::{ArgGroup, Parser};
+use crossbeam::{
+    channel::{unbounded, Receiver, RecvError, Sender},
+    thread,
+};
 use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
@@ -38,30 +43,12 @@ enum PreciousError {
 
     #[error("No {what:} commands match the given command name, {name:}")]
     NoCommandsMatch { what: String, name: String },
-}
 
-#[derive(Debug)]
-struct Exit {
-    status: i8,
-    message: Option<String>,
-    error: Option<String>,
-}
+    #[error(transparent)]
+    CrossbeamRecv(#[from] RecvError),
 
-impl From<Error> for Exit {
-    fn from(err: Error) -> Exit {
-        Exit {
-            status: 1,
-            message: None,
-            error: Some(err.to_string()),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ActionFailure {
-    error: String,
-    config_key: String,
-    paths: Vec<PathBuf>,
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
 
 const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
@@ -80,7 +67,7 @@ pub struct App {
     #[clap(long, short, default_value_t = rayon::current_num_threads())]
     jobs: usize,
     /// Output format
-    #[clap(long, short, value_enum, default_value_t = OutputFormat::UnstructuredText)]
+    #[clap(long, short, value_enum, default_value_t = OutputFormat::Unstructured)]
     output_format: OutputFormat,
     /// Replace super-fun Unicode symbols with terribly boring ASCII
     #[clap(long, short)]
@@ -101,10 +88,9 @@ pub struct App {
     subcommand: Subcommand,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
 enum OutputFormat {
-    UnstructuredText,
-    Checkstyle,
+    Unstructured,
 }
 
 #[derive(Debug, Parser)]
@@ -142,21 +128,10 @@ pub struct CommonArgs {
     paths: Vec<PathBuf>,
 }
 
-pub fn app() -> App {
-    App::parse()
-}
-
-#[derive(Debug)]
-pub struct Precious {
-    mode: paths::mode::Mode,
-    project_root: PathBuf,
-    cwd: PathBuf,
-    config: config::Config,
-    command: Option<String>,
-    output_writer: Box<dyn OutputWriter + Sync>,
-    thread_pool: ThreadPool,
-    should_lint: bool,
-    paths: Vec<PathBuf>,
+impl Default for App {
+    fn default() -> Self {
+        Self::parse()
+    }
 }
 
 impl App {
@@ -198,10 +173,36 @@ impl App {
             .chain(std::io::stderr())
             .apply()
     }
+
+    pub fn into_precious(self) -> Result<Precious> {
+        Precious::new(self)
+    }
+}
+
+#[derive(Debug)]
+struct ActionFailure {
+    error: String,
+    config_key: String,
+    paths: Vec<PathBuf>,
+}
+
+#[derive(Debug)]
+pub struct Precious {
+    mode: paths::mode::Mode,
+    project_root: PathBuf,
+    cwd: PathBuf,
+    config: config::Config,
+    command: Option<String>,
+    thread_pool: ThreadPool,
+    should_lint: bool,
+    paths: Vec<PathBuf>,
+    output_format: OutputFormat,
+    chars: &'static Chars,
+    quiet: bool,
 }
 
 impl Precious {
-    pub fn new(app: App) -> Result<Self> {
+    fn new(app: App) -> Result<Self> {
         if log::log_enabled!(log::Level::Debug) {
             if let Some(path) = env::var_os("PATH") {
                 debug!("PATH = {}", path.to_string_lossy());
@@ -220,9 +221,9 @@ impl Precious {
         };
 
         let c = if app.ascii {
-            chars::BORING_CHARS
+            &chars::BORING_CHARS
         } else {
-            chars::FUN_CHARS
+            &chars::FUN_CHARS
         };
 
         Ok(Precious {
@@ -231,10 +232,12 @@ impl Precious {
             cwd,
             config,
             command,
-            output_writer: Box::new(UnstructuredTextWriter::new(c, app.quiet)),
             thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
             should_lint,
             paths,
+            chars: c,
+            quiet: app.quiet,
+            output_format: app.output_format,
         })
     }
 
@@ -338,37 +341,101 @@ impl Precious {
     }
 
     pub fn run(&mut self) -> i8 {
-        let status = match self.run_subcommand() {
-            Ok(e) => {
-                debug!("run_subcommand exit: {:?}", e);
-                if let Some(err) = e.error {
-                    self.output_writer.write_subcommand_exit_error(err);
+        // We use a channel to send and receive events in order to avoid
+        // having to make the output writer Sync, which is hard (or
+        // impossible?) because we want to use a Box<dyn OutputWriter>.
+        let (tx, rx) = unbounded();
+        let mut status: i8 = 0;
+        if let Err(e) = thread::scope(|s| {
+            let format = self.output_format;
+            let chars = self.chars;
+            let quiet = self.quiet;
+            let h = s.spawn(move |_| Self::handle_events(rx, format, chars, quiet));
+
+            debug!("Running subcommand");
+            status = match self.run_subcommand(&tx) {
+                Ok(e) => {
+                    debug!("run_subcommand exit: {:?}", e);
+                    let status = e.status();
+                    match e {
+                        Exit::Ok => (),
+                        Exit::NoFiles => {
+                            println!("{}", e.error_message());
+                        }
+                        Exit::FromActionFailures(_) => {
+                            if let Err(e) =
+                                tx.send(Some(Event::SubcommandExitWithMessage(e.error_message())))
+                            {
+                                error!(
+                                    "Error writing Event::SubcommandExitWithError event to channel: {e}"
+                                );
+                            }
+                        }
+                        Exit::FromError(_) => {
+                            if let Err(e) =
+                                tx.send(Some(Event::SubcommandExitWithError(e.error_message())))
+                            {
+                                error!(
+                                    "Error writing Event::SubcommandExitWithMessage event to channel: {e}"
+                                );
+                            }
+                        }
+                    }
+                    status
                 }
-                if let Some(msg) = e.message {
-                    self.output_writer.write_subcommand_exit_message(msg);
+                Err(e) => {
+                    error!("Failed to run precious: {}", e);
+                    1
                 }
-                e.status
+            };
+            if let Err(e) = tx.send(None) {
+                error!("Error writing None to channel: {e}");
             }
-            Err(e) => {
-                error!("Failed to run precious: {}", e);
-                1
-            }
-        };
-        self.output_writer.flush();
+
+            h.join()
+        }) {
+            error!("Error from thread::scope: {e:?}");
+            return 127;
+        }
+
         status
     }
 
-    fn run_subcommand(&mut self) -> Result<Exit> {
+    fn handle_events(
+        rx: Receiver<Option<Event>>,
+        format: OutputFormat,
+        chars: &'static Chars,
+        quiet: bool,
+    ) -> Result<()> {
+        let mut output_writer: Box<dyn OutputWriter> = match format {
+            OutputFormat::Unstructured => Box::new(UnstructuredTextWriter::new(chars, quiet)),
+        };
+        debug!("Entering recv loop");
+        loop {
+            let e = rx.recv();
+            debug!("Got {e:?} from channel");
+            match e {
+                Ok(Some(e)) => output_writer.handle_event(e)?,
+                Ok(None) => {
+                    output_writer.flush()?;
+                    break;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(())
+    }
+
+    fn run_subcommand(&mut self, tx: &Sender<Option<Event>>) -> Result<Exit> {
         if self.should_lint {
-            self.lint()
+            self.lint(tx)
         } else {
-            self.tidy()
+            self.tidy(tx)
         }
     }
 
-    fn tidy(&mut self) -> Result<Exit> {
-        self.output_writer
-            .write_starting_action("Tidying", self.mode);
+    fn tidy(&mut self, tx: &Sender<Option<Event>>) -> Result<Exit> {
+        tx.send(Some(Event::StartingAction("Tidying", self.mode)))?;
 
         let tidiers = self
             .config
@@ -378,16 +445,17 @@ impl Precious {
             .into_tidy_commands(&self.project_root, self.command.as_deref())?;
         self.run_all_commands(
             "tidying",
+            tx,
             tidiers,
-            |self_: &mut Self, files: &[PathBuf], tidier: &command::Command| {
-                self_.run_one_tidier(files, tidier)
-            },
+            |self_: &mut Self,
+             tx: &Sender<Option<Event>>,
+             files: &[PathBuf],
+             tidier: &command::Command| { self_.run_one_tidier(tx, files, tidier) },
         )
     }
 
-    fn lint(&mut self) -> Result<Exit> {
-        self.output_writer
-            .write_starting_action("Linting", self.mode);
+    fn lint(&mut self, tx: &Sender<Option<Event>>) -> Result<Exit> {
+        tx.send(Some(Event::StartingAction("Linting", self.mode)))?;
 
         let linters = self
             .config
@@ -396,21 +464,29 @@ impl Precious {
             .into_lint_commands(&self.project_root, self.command.as_deref())?;
         self.run_all_commands(
             "linting",
+            tx,
             linters,
-            |self_: &mut Self, files: &[PathBuf], linter: &command::Command| {
-                self_.run_one_linter(files, linter)
-            },
+            |self_: &mut Self,
+             tx: &Sender<Option<Event>>,
+             files: &[PathBuf],
+             linter: &command::Command| { self_.run_one_linter(tx, files, linter) },
         )
     }
 
     fn run_all_commands<R>(
         &mut self,
         action: &str,
+        tx: &Sender<Option<Event>>,
         commands: Vec<command::Command>,
         run_command: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, &[PathBuf], &command::Command) -> Result<Option<Vec<ActionFailure>>>,
+        R: Fn(
+            &mut Self,
+            &Sender<Option<Event>>,
+            &[PathBuf],
+            &command::Command,
+        ) -> Result<Option<Vec<ActionFailure>>>,
     {
         if commands.is_empty() {
             if let Some(c) = &self.command {
@@ -432,12 +508,12 @@ impl Precious {
         };
 
         match self.finder()?.files(cli_paths)? {
-            None => Ok(self.no_files_exit()),
+            None => Ok(Exit::NoFiles),
             Some(files) => {
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for c in commands {
                     debug!(r#"Command config for {}: {}"#, c.name, c.config_debug(),);
-                    if let Some(mut failures) = run_command(self, &files, &c)? {
+                    if let Some(mut failures) = run_command(self, tx, &files, &c)? {
                         all_failures.append(&mut failures);
                     }
                 }
@@ -457,125 +533,144 @@ impl Precious {
     }
 
     fn make_exit(&self, failures: Vec<ActionFailure>, action: &str) -> Exit {
-        let (status, error) = if failures.is_empty() {
-            (0, None)
-        } else {
-            let red = format!("\x1B[{}m", Color::Red.to_fg_str());
-            let ansi_off = "\x1B[0m";
-            let plural = if failures.len() > 1 { 's' } else { '\0' };
-
-            let error = format!(
-                "{}Error{} when {} files:{}\n{}",
-                red,
-                plural,
-                action,
-                ansi_off,
-                failures
-                    .iter()
-                    .map(|af| format!(
-                        "  {} [{}] [{}]\n    {}\n",
-                        "*", // self.chars.bullet,
-                        af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
-                        af.config_key,
-                        af.error,
-                    ))
-                    .collect::<Vec<String>>()
-                    .join("")
-            );
-            (1, Some(error))
-        };
-        Exit {
-            status,
-            message: None,
-            error,
+        if failures.is_empty() {
+            return Exit::Ok;
         }
+
+        let red = format!("\x1B[{}m", Color::Red.to_fg_str());
+        let ansi_off = "\x1B[0m";
+        let plural = if failures.len() > 1 { 's' } else { '\0' };
+
+        let error = format!(
+            "{}Error{} when {} files:{}\n{}",
+            red,
+            plural,
+            action,
+            ansi_off,
+            failures
+                .iter()
+                .map(|af| format!(
+                    "  {} [{}] [{}]\n    {}\n",
+                    "*", // self.chars.bullet,
+                    af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
+                    af.config_key,
+                    af.error,
+                ))
+                .collect::<Vec<String>>()
+                .join("")
+        );
+
+        Exit::FromActionFailures(error)
     }
 
     fn run_one_tidier(
         &mut self,
+        tx: &Sender<Option<Event>>,
         files: &[PathBuf],
         t: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
-        let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
+        let runner = |tx: Sender<Option<Event>>,
+                      files: &[&Path]|
+         -> Result<Option<Result<(), ActionFailure>>> {
             match t.tidy(files) {
                 Ok(Some(TidyOutcome::Changed)) => {
-                    s.output_writer.write_command_tidied_files(&t.name, files);
-                    Some(Ok(()))
+                    tx.send(Some(Event::TidiedFiles(
+                        t.name.clone(),
+                        files.iter().map(PathBuf::from).collect(),
+                    )))?;
+                    Ok(Some(Ok(())))
                 }
                 Ok(Some(TidyOutcome::Unchanged)) => {
-                    s.output_writer
-                        .write_command_did_not_tidy_files(&t.name, files);
-                    Some(Ok(()))
+                    tx.send(Some(Event::DidNotTidyFiles(
+                        t.name.clone(),
+                        files.iter().map(PathBuf::from).collect(),
+                    )))?;
+                    Ok(Some(Ok(())))
                 }
                 Ok(Some(TidyOutcome::Unknown)) => {
-                    s.output_writer
-                        .write_command_maybe_tidied_files(&t.name, files);
-                    Some(Ok(()))
+                    tx.send(Some(Event::MaybeTidiedFiles(
+                        t.name.clone(),
+                        files.iter().map(PathBuf::from).collect(),
+                    )))?;
+                    Ok(Some(Ok(())))
                 }
-                Ok(None) => None,
+                Ok(None) => Ok(None),
                 Err(e) => {
-                    s.output_writer
-                        .write_command_errored_for_files(&t.name, files);
-                    Some(Err(ActionFailure {
+                    tx.send(Some(Event::CommandError(
+                        t.name.clone(),
+                        files.iter().map(PathBuf::from).collect(),
+                    )))?;
+                    Ok(Some(Err(ActionFailure {
                         error: format!("{:#}", e),
                         config_key: t.config_key(),
                         paths: files.iter().map(|f| f.to_path_buf()).collect(),
-                    }))
+                    })))
                 }
             }
         };
 
-        self.run_parallel("Tidying", files, t, runner)
+        self.run_parallel("Tidying", tx, files, t, runner)
     }
 
     fn run_one_linter(
         &mut self,
+        tx: &Sender<Option<Event>>,
         files: &[PathBuf],
         l: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
-        let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
+        let runner = |tx: Sender<Option<Event>>,
+                      files: &[&Path]|
+         -> Result<Option<Result<(), ActionFailure>>> {
             match l.lint(files) {
                 Ok(Some(lo)) => {
                     if lo.ok {
-                        s.output_writer
-                            .write_command_found_lint_clean_files(&l.name, files);
-                        Some(Ok(()))
+                        tx.send(Some(Event::FoundLintCleanFiles(
+                            l.name.clone(),
+                            files.iter().map(PathBuf::from).collect(),
+                        )))?;
+                        Ok(Some(Ok(())))
                     } else {
-                        s.output_writer.write_command_found_lint_dirty_files(
-                            &l.name, files, lo.stdout, lo.stderr,
-                        );
-                        Some(Err(ActionFailure {
+                        tx.send(Some(Event::FoundLintDirtyFiles(
+                            l.name.clone(),
+                            files.iter().map(PathBuf::from).collect(),
+                            lo.stdout,
+                            lo.stderr,
+                        )))?;
+                        Ok(Some(Err(ActionFailure {
                             error: "linting failed".into(),
                             config_key: l.config_key(),
                             paths: files.iter().map(|f| f.to_path_buf()).collect(),
-                        }))
+                        })))
                     }
                 }
-                Ok(None) => None,
+                Ok(None) => Ok(None),
                 Err(e) => {
-                    s.output_writer
-                        .write_command_errored_for_files(&l.name, files);
-                    Some(Err(ActionFailure {
+                    tx.send(Some(Event::CommandError(
+                        l.name.clone(),
+                        files.iter().map(PathBuf::from).collect(),
+                    )))?;
+                    Ok(Some(Err(ActionFailure {
                         error: format!("{:#}", e),
                         config_key: l.config_key(),
                         paths: files.iter().map(|f| f.to_path_buf()).collect(),
-                    }))
+                    })))
                 }
             }
         };
 
-        self.run_parallel("Linting", files, l, runner)
+        self.run_parallel("Linting", tx, files, l, runner)
     }
 
     fn run_parallel<R>(
         &mut self,
         what: &str,
+        tx: &Sender<Option<Event>>,
         files: &[PathBuf],
         c: &command::Command,
         runner: R,
     ) -> Result<Option<Vec<ActionFailure>>>
     where
-        R: Fn(&Self, &[&Path]) -> Option<Result<(), ActionFailure>> + Sync,
+        R: Fn(Sender<Option<Event>>, &[&Path]) -> Result<Option<Result<(), ActionFailure>>> + Sync,
     {
         let sets = c.files_to_args_sets(files)?;
 
@@ -587,8 +682,12 @@ impl Precious {
                 res.append(
                     &mut sets
                         .into_par_iter()
-                        .filter_map(|set| runner(self, &set))
-                        .collect::<Vec<Result<(), ActionFailure>>>(),
+                        .filter_map(|set| match runner(tx.clone(), &set) {
+                            Ok(None) => None,
+                            Ok(Some(r)) => Some(Ok(r)),
+                            Err(e) => Some(Err(e)),
+                        })
+                        .collect::<Result<Vec<Result<(), ActionFailure>>>>()?,
                 );
                 Ok(res)
             })?;
@@ -615,14 +714,6 @@ impl Precious {
             Ok(None)
         } else {
             Ok(Some(failures))
-        }
-    }
-
-    fn no_files_exit(&self) -> Exit {
-        Exit {
-            status: 0,
-            message: Some(String::from("No files found")),
-            error: None,
         }
     }
 }
@@ -696,7 +787,7 @@ lint_failure_exit_codes = [1]
             let config = app.config.clone();
 
             let p = Precious::new(app)?;
-            assert_eq!(p.output_writer.chars(), &chars::FUN_CHARS);
+            assert_eq!(p.chars, &chars::FUN_CHARS);
 
             let config_file = Precious::config_file(config.as_ref(), &p.project_root);
             let mut expect_config_file = p.project_root;
@@ -717,7 +808,7 @@ lint_failure_exit_codes = [1]
         let app = App::try_parse_from(["precious", "--ascii", "tidy", "--all"])?;
 
         let p = Precious::new(app)?;
-        assert_eq!(p.output_writer.chars(), &chars::BORING_CHARS);
+        assert_eq!(p.chars, &chars::BORING_CHARS);
 
         Ok(())
     }
