@@ -745,7 +745,7 @@ fn format_duration(d: &Duration) -> String {
         return format!("{:.2}us", n as f64 / 1_000.0);
     }
 
-    format!("{}ns", n)
+    format!("{:.2}ns", n)
 }
 
 #[cfg(test)]
