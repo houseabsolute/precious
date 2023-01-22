@@ -413,7 +413,7 @@ mod tests {
     #[parallel]
     fn all_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::All,
             helper.precious_root(),
@@ -461,7 +461,7 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_changes_all_excluded() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
 
         let mut finder = new_finder_with_excludes(
@@ -478,12 +478,12 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         helper.commit_all()?;
 
         let modified = helper.modify_files()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
             helper.precious_root(),
@@ -498,12 +498,12 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         helper.commit_all()?;
 
         let modified = helper.modify_files()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
@@ -591,7 +591,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_with_changes_all_excluded() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
 
         let mut finder = new_finder_with_excludes(
@@ -609,7 +609,7 @@ mod tests {
     fn git_staged_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         let mut finder = new_finder_with_excludes(
             Mode::GitStaged,
@@ -626,7 +626,7 @@ mod tests {
     fn git_staged_mode_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = helper.modify_files()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
@@ -647,7 +647,7 @@ mod tests {
         let modified = helper.modify_files()?;
         helper.stage_all()?;
         let unstaged = "tests/data/bar.txt";
-        helper.write_file(&PathBuf::from(unstaged), "new content")?;
+        helper.write_file(PathBuf::from(unstaged), "new content")?;
 
         #[cfg(not(target_os = "windows"))]
         set_up_post_checkout_hook(&helper)?;
@@ -761,7 +761,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_dir_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
             helper.precious_root(),
@@ -779,7 +779,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_dir_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
@@ -805,7 +805,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_files_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
             helper.precious_root(),
@@ -825,7 +825,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_files_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(&PathBuf::from("src/main.rs"), "initial content")?;
+        helper.write_file(PathBuf::from("src/main.rs"), "initial content")?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_excludes(

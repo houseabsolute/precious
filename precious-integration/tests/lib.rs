@@ -481,7 +481,7 @@ ok_exit_codes = 0
 
 fn munge_invocation_output(output_dir: PathBuf) -> Result<String> {
     let mut got = String::new();
-    for entry in fs::read_dir(&output_dir)? {
+    for entry in fs::read_dir(output_dir)? {
         let entry = entry?;
         let meta = entry.metadata()?;
         if !meta.is_file() {

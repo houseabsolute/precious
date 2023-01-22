@@ -686,7 +686,7 @@ impl Command {
         }
 
         if let Some(dir) = prev.dir {
-            let entries = match fs::read_dir(&dir) {
+            let entries = match fs::read_dir(dir) {
                 Ok(rd) => rd,
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
                 Err(e) => return Err(e.into()),
