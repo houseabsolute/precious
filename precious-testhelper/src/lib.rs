@@ -145,6 +145,12 @@ impl TestHelper {
         self.run_git(&["add", "."])
     }
 
+    pub fn stage_some(&self, files: &[&Path]) -> Result<()> {
+        let mut cmd = vec!["add"];
+        cmd.append(&mut files.iter().map(|f| f.to_str().unwrap()).collect());
+        self.run_git(&cmd)
+    }
+
     pub fn commit_all(&self) -> Result<()> {
         self.run_git(&["commit", "-a", "-m", "committed"])
     }

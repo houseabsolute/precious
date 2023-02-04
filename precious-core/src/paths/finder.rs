@@ -149,7 +149,7 @@ impl Finder {
 
     fn git_modified_files(&mut self) -> Result<Vec<PathBuf>> {
         debug!("Getting modified files according to git");
-        self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM"])
+        self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM", "HEAD"])
     }
 
     fn git_staged_files(&mut self) -> Result<Vec<PathBuf>> {
@@ -526,6 +526,17 @@ mod tests {
         let mut project_root = helper.git_root();
         project_root.push("subdir");
         let mut finder = new_finder(Mode::GitModified, project_root)?;
+        assert_eq!(finder.files(vec![])?, Some(modified));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn git_modified_mode_includes_staged() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let modified = helper.modify_files()?;
+        helper.stage_some(&[&modified[0]])?;
+        let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
         assert_eq!(finder.files(vec![])?, Some(modified));
         Ok(())
     }

@@ -1,5 +1,11 @@
 <!-- next-header -->
 
+## 0.5.0
+
+- The `--git` flag did not include any staged files, only files that were
+  modified but _not_ staged. It now includes all modified files, whether or
+  not they're staged.
+
 ## 0.4.1 - 2022-11-26
 
 - The previous release didn't handle all of the old config keys correctly. If
