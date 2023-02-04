@@ -1,6 +1,6 @@
 <!-- next-header -->
 
-## 0.5.0
+## 0.5.0 - 2023-02-04
 
 - The `--git` flag did not include any staged files, only files that were
   modified but _not_ staged. It now includes all modified files, whether or
