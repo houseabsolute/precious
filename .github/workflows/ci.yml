@@ -81,6 +81,8 @@ jobs:
           args: --path . --locked --target=x86_64-unknown-linux-gnu
       - uses: actions/setup-node@v2
       - name: Run install-dev-tools.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           mkdir $HOME/bin
