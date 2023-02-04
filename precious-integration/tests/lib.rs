@@ -435,7 +435,7 @@ ok_exit_codes = 0
     }
 
     let td = tempfile::Builder::new()
-        .prefix("precious-all_invocation_options-")
+        .prefix("precious-integration-")
         .tempdir()?;
     let td_path = td.path().to_path_buf();
     let (_output_dir, _preserved_tempdir) = match env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
