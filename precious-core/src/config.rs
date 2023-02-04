@@ -188,7 +188,7 @@ where
         {
             if value < 0 || value > std::u8::MAX as i64 {
                 return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(value as i64),
+                    de::Unexpected::Signed(value),
                     &"an integer from 0-255",
                 ));
             }
@@ -237,7 +237,7 @@ where
         {
             if value > std::u8::MAX as u64 {
                 return Err(de::Error::invalid_type(
-                    de::Unexpected::Unsigned(value as u64),
+                    de::Unexpected::Unsigned(value),
                     &"an integer from 0-255",
                 ));
             }
@@ -613,10 +613,10 @@ mod tests {
             "#,
         );
         if let Some(run_mode) = run_mode {
-            toml_text.push_str(&format!("run_mode = \"{}\"\n", run_mode));
+            toml_text.push_str(&format!("run_mode = \"{run_mode}\"\n"));
         }
         if let Some(chdir) = chdir {
-            toml_text.push_str(&format!("chdir = {}\n", chdir));
+            toml_text.push_str(&format!("chdir = {chdir}\n"));
         }
 
         let config: Config = toml::from_str(&toml_text)?;

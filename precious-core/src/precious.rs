@@ -337,7 +337,7 @@ impl Precious {
             Ok(e) => {
                 debug!("{:?}", e);
                 if let Some(err) = e.error {
-                    print!("{}", err);
+                    print!("{err}");
                 }
                 if let Some(msg) = e.message {
                     println!("{} {}", self.chars.empty, msg);
@@ -531,7 +531,7 @@ impl Precious {
                         files.iter().map(|p| p.to_string_lossy()).join(" "),
                     );
                     Some(Err(ActionFailure {
-                        error: format!("{:#}", e),
+                        error: format!("{e:#}"),
                         config_key: t.config_key(),
                         paths: files.iter().map(|f| f.to_path_buf()).collect(),
                     }))
@@ -568,10 +568,10 @@ impl Precious {
                             files.iter().map(|p| p.to_string_lossy()).join(" "),
                         );
                         if let Some(s) = lo.stdout {
-                            println!("{}", s);
+                            println!("{s}");
                         }
                         if let Some(s) = lo.stderr {
-                            println!("{}", s);
+                            println!("{s}");
                         }
                         if let Ok(ga) = env::var("GITHUB_ACTIONS") {
                             if !ga.is_empty() {
@@ -603,7 +603,7 @@ impl Precious {
                         files.iter().map(|p| p.to_string_lossy()).join(" "),
                     );
                     Some(Err(ActionFailure {
-                        error: format!("{:#}", e),
+                        error: format!("{e:#}"),
                         config_key: l.config_key(),
                         paths: files.iter().map(|f| f.to_path_buf()).collect(),
                     }))
@@ -689,9 +689,9 @@ fn format_duration(d: &Duration) -> String {
     if s >= 60.0 {
         let minutes = (s / 60.0).floor() as u64;
         let secs = s - (minutes as f64 * 60.0);
-        return format!("{}m {:.2}s", minutes, secs);
+        return format!("{minutes}m {secs:.2}s");
     } else if s >= 0.01 {
-        return format!("{:.2}s", s);
+        return format!("{s:.2}s");
     }
 
     let n = d.as_nanos();
@@ -701,7 +701,7 @@ fn format_duration(d: &Duration) -> String {
         return format!("{:.2}us", n as f64 / 1_000.0);
     }
 
-    format!("{}ns", n)
+    format!("{n}ns")
 }
 
 #[cfg(test)]

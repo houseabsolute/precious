@@ -93,19 +93,12 @@ mod tests {
             let globs = t.globs.join(" ");
             let m = MatcherBuilder::new("/").with(t.globs)?.build()?;
             for y in t.yes {
-                assert!(
-                    m.path_matches(Path::new(y), false),
-                    "{} matches [{}]",
-                    y,
-                    globs,
-                );
+                assert!(m.path_matches(Path::new(y), false), "{y} matches [{globs}]");
             }
             for n in t.no {
                 assert!(
                     !m.path_matches(Path::new(n), false),
-                    "{} does not match [{}]",
-                    n,
-                    globs,
+                    "{n} does not match [{globs}]",
                 );
             }
         }

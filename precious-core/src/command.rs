@@ -297,7 +297,7 @@ impl Command {
         })
     }
 
-    fn files_by_dir<'a, 'b>(files: &'a [&'b Path]) -> Result<HashMap<&'b Path, Vec<&'b Path>>> {
+    fn files_by_dir<'a>(files: &[&'a Path]) -> Result<HashMap<&'a Path, Vec<&'a Path>>> {
         let mut by_dir: HashMap<&Path, Vec<&Path>> = HashMap::new();
         for f in files {
             let d = f.parent().ok_or_else(|| CommandError::PathHasNoParent {
@@ -686,7 +686,7 @@ impl Command {
         }
 
         if let Some(dir) = prev.dir {
-            let entries = match fs::read_dir(&dir) {
+            let entries = match fs::read_dir(dir) {
                 Ok(rd) => rd,
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
                 Err(e) => return Err(e.into()),
@@ -712,7 +712,7 @@ impl Command {
 
     fn maybe_toml_quote(name: &str) -> String {
         if name.contains(' ') {
-            return format!(r#""{}""#, name);
+            return format!(r#""{name}""#);
         }
         name.to_string()
     }
