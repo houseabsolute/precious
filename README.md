@@ -251,7 +251,7 @@ several options for this:
 | Mode                                                         | Flag                  | Description                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | All paths                                                    | `-a`, `--all`         | Run on all files under the project root (the directory containing the precious config file).                                                                                                                                                                                                                     |
-| Modified files according to git                              | `-g`, `--git`         | Run on all files that git reports as having been modified.                                                                                                                                                                                                                                                       |
+| Modified files according to git                              | `-g`, `--git`         | Run on all files that git reports as having been modified, including staged files.                                                                                                                                                                                                                               |
 | Staged files according to git                                | `-s`, `--staged`      | Run on all files that git reports as having been staged.                                                                                                                                                                                                                                                         |
 | Staged files according to git, with unstaged changes stashed | `--staged-with-stash` | This is like `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this option. |
 | Paths given on CLI                                           |                       | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other options. If any of these paths are directories then that entire directory tree will be included.                                                                         |
@@ -296,7 +296,8 @@ which paths.
   specified. This is one of:
   - `--all` - All files under the project root (the directory containing the
     precious config file).
-  - `--git` - All files in the git repo that have been modified.
+  - `--git` - All files in the git repo that have been modified, including
+    staged files.
   - `--staged` - All files in the git repo that have been staged.
   - paths passed on the CLI - If a path is a file it is added to the list
     as-is. If the path is a directory then all the files under that directory
