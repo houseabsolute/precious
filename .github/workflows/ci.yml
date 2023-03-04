@@ -3,9 +3,9 @@ name: Continuous integration
 on:
   push:
     branches:
-      - "**"
+      - '**'
     tags-ignore:
-      - "precious-*"
+      - 'precious-*'
   pull_request:
 
 env:
@@ -87,7 +87,7 @@ jobs:
           set -e
           mkdir $HOME/bin
           ./dev/bin/install-dev-tools.sh
-      - name: "Run precious --lint"
+      - name: 'Run precious --lint'
         run: PATH=$HOME/bin:$PATH $HOME/.cargo/bin/precious --debug lint --all
 
   # Copied from https://github.com/urbica/martin/blob/master/.github/workflows/ci.yml
@@ -180,7 +180,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          files: "precious-*"
+          files: 'precious-*'
           body_path: Changes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3,10 +3,10 @@ name: Security audit
 on:
   push:
     paths:
-      - "**/Cargo.toml"
-      - "**/Cargo.lock"
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
     tags-ignore:
-      - "precious-*"
+      - 'precious-*'
 
 jobs:
   security_audit:
