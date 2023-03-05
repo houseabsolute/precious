@@ -1,0 +1,49 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "precious-*"
+  pull_request:
+
+env:
+  CRATE_NAME: precious
+  RUST_BACKTRACE: 1
+
+# There's not much value in running self-check on multiple platforms. Either
+# we're lint-clean or not. We do run on each rust target to catch warnings
+# coming from clippy in future rust versions.
+jobs:
+  lint:
+    name: Lint self
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+    steps:
+      - uses: actions/checkout@v3
+      - name: Cache cargo & target directories
+        uses: Swatinem/rust-cache@v2
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: rustfmt
+      - name: Run cargo check
+        run: cargo install --path . --locked
+      - uses: actions/setup-node@v2
+      - name: Run install-dev-tools.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir $HOME/bin
+          ./dev/bin/install-dev-tools.sh
+      - name: "Run precious --lint"
+        run: PATH=$HOME/bin:$PATH $HOME/.cargo/bin/precious --debug lint --all

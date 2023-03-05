@@ -10,6 +10,7 @@ on:
 
 env:
   CRATE_NAME: precious
+  GITHUB_TOKEN: ${{ github.token }}
   RUST_BACKTRACE: 1
 
 jobs:
@@ -34,63 +35,23 @@ jobs:
           - beta
           - nightly
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Cache cargo & target directories
         uses: Swatinem/rust-cache@v2
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: default
           toolchain: ${{ matrix.toolchain }}
-          override: true
+          components: rustfmt
       - name: Configure Git
         run: |
           git config --global user.email "jdoe@example.com"
           git config --global user.name "J. Doe"
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --workspace --locked --target=${{ matrix.platform.target }}
+        run: cargo check --workspace --locked --target=${{ matrix.platform.target }}
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace --locked --target=${{ matrix.platform.target }}
+        run: cargo test --workspace --locked --target=${{ matrix.platform.target }}
 
-  # There's not much value in running self-check on multiple
-  # platforms. Either we're lint-clean or not. We do run on each rust
-  # target to catch warnings coming from clippy in future rust versions.
-  lint:
-    name: Lint self
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Cache cargo & target directories
-        uses: Swatinem/rust-cache@v2
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: default
-          toolchain: stable
-          override: true
-      - name: Run cargo install
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: --path . --locked --target=x86_64-unknown-linux-gnu
-      - uses: actions/setup-node@v2
-      - name: Run install-dev-tools.sh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          mkdir $HOME/bin
-          ./dev/bin/install-dev-tools.sh
-      - name: "Run precious --lint"
-        run: PATH=$HOME/bin:$PATH $HOME/.cargo/bin/precious --debug lint --all
-
-  # Copied from https://github.com/urbica/martin/blob/master/.github/workflows/ci.yml
   release:
     name: Release - ${{ matrix.platform.os_name }}
     if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/tags/test-release'
@@ -98,66 +59,214 @@ jobs:
     strategy:
       matrix:
         platform:
+          - os_name: FreeBSD-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-freebsd
+            bin: precious
+            name: precious-FreeBSD-x86_64.tar.gz
+            cross: true
+            cargo_command: ./cross
+
           - os_name: Linux-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-linux-musl
             bin: precious
             name: precious-Linux-x86_64-musl.tar.gz
-            cross: true
+            cross: false
+            cargo_command: cargo
+
           - os_name: Linux-aarch64
             os: ubuntu-20.04
             target: aarch64-unknown-linux-musl
             bin: precious
             name: precious-Linux-aarch64-musl.tar.gz
             cross: true
+            cargo_command: ./cross
+
           - os_name: Linux-arm
             os: ubuntu-20.04
             target: arm-unknown-linux-musleabi
             bin: precious
             name: precious-Linux-arm-musl.tar.gz
             cross: true
-          - os_name: Windows
+            cargo_command: ./cross
+
+          - os_name: Linux-i586
+            os: ubuntu-20.04
+            target: i586-unknown-linux-musl
+            bin: precious
+            name: precious-Linux-i586-musl.tar.gz
+            cross: false
+            cargo_command: cargo
+
+          - os_name: Linux-mips
+            os: ubuntu-20.04
+            target: mips-unknown-linux-musl
+            bin: precious
+            name: precious-Linux-mips.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-mipsel
+            os: ubuntu-20.04
+            target: mipsel-unknown-linux-musl
+            bin: precious
+            name: precious-Linux-mipsel.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-mips64
+            os: ubuntu-20.04
+            target: mips64-unknown-linux-muslabi64
+            bin: precious
+            name: precious-Linux-mips64.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-mips64el
+            os: ubuntu-20.04
+            target: mips64el-unknown-linux-muslabi64
+            bin: precious
+            name: precious-Linux-mips64el.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-powerpc
+            os: ubuntu-20.04
+            target: powerpc-unknown-linux-gnu
+            bin: precious
+            name: precious-Linux-powerpc-gnu.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-powerpc64
+            os: ubuntu-20.04
+            target: powerpc64-unknown-linux-gnu
+            bin: precious
+            name: precious-Linux-powerpc64-gnu.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-powerpc64le
+            os: ubuntu-20.04
+            target: powerpc64le-unknown-linux-gnu
+            bin: precious
+            name: precious-Linux-powerpc64le.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-riscv64
+            os: ubuntu-20.04
+            target: riscv64gc-unknown-linux-gnu
+            bin: precious
+            name: precious-Linux-riscv64gc-gnu.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Linux-s390x
+            os: ubuntu-20.04
+            target: s390x-unknown-linux-gnu
+            bin: precious
+            name: precious-Linux-s390x-gnu.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: NetBSD-x86_64
+            os: ubuntu-20.04
+            target: x86_64-unknown-netbsd
+            bin: precious
+            name: precious-NetBSD-x86_64.tar.gz
+            cross: true
+            cargo_command: ./cross
+
+          - os_name: Windows-aarch64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bin: precious.exe
+            name: precious-Windows-aarch64.zip
+            cross: false
+            cargo_command: cargo
+
+          - os_name: Windows-i686
+            os: windows-latest
+            target: i686-pc-windows-msvc
+            bin: precious.exe
+            name: precious-Windows-i686.zip
+            cross: false
+            cargo_command: cargo
+
+          - os_name: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-x86_64.zip
             cross: false
+            cargo_command: cargo
+
           - os_name: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
             bin: precious
             name: precious-Darwin-x86_64.tar.gz
             cross: false
+            cargo_command: cargo
+
           - os_name: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
             bin: precious
             name: precious-Darwin-aarch64.tar.gz
             cross: false
+            cargo_command: cargo
+
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        uses: actions/checkout@v3
+      - name: Install toolchain if not cross-compiling
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: ${{ matrix.platform.target }}
-      - name: Build binary
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: ${{ matrix.platform.cross }}
-          command: build
-          args: --package precious --locked --release --target ${{ matrix.platform.target }}
+          targets: ${{ matrix.platform.target }}
+        if: ${{ !matrix.platform.cross }}
+      - name: Install musl-tools on Linux
+        run: sudo apt-get update --yes && sudo apt-get install --yes musl-tools
+        if: contains(matrix.platform.os, 'ubuntu') && !matrix.platform.cross
+      - name: Install cross if cross-compiling (*nix)
+        shell: bash
+        run: |
+          set -e
+          export TARGET="$HOME/bin"
+          mkdir -p "$TARGET"
+          curl --silent --location \
+            https://raw.githubusercontent.com/houseabsolute/ubi/master/bootstrap/bootstrap-ubi.sh |
+            sh
+          "$HOME/bin/ubi" --project cross-rs/cross --matching musl --in .
+        if: matrix.platform.cross && !contains(matrix.platform.os, 'windows')
+      - name: Install cross if cross-compiling (Windows)
+        shell: powershell
+        run: |
+          powershell -exec bypass -c "Invoke-WebRequest -URI 'https://raw.githubusercontent.com/houseabsolute/ubi/master/bootstrap/bootstrap-ubi.ps1' -UseBasicParsing | Invoke-Expression"
+          .\ubi --project cross-rs/cross --in .
+        if: matrix.platform.cross && contains(matrix.platform.os, 'windows')
+      - name: Build binary (*nix)
+        shell: bash
+        run: |
+          ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
+        if: ${{ !contains(matrix.platform.os, 'windows') }}
+      - name: Build binary (Windows)
+        shell: powershell
+        run: |
+          & ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
+        if: contains(matrix.platform.os, 'windows')
+      - name: Strip binary
+        shell: bash
+        run: |
+          strip target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
+        # strip doesn't work with cross-arch binaries on Linux or Windows.
+        if: ${{ !(matrix.platform.cross || matrix.platform.target == 'aarch64-pc-windows-msvc') }}
       - name: Package as archive
         shell: bash
         run: |
-          if [[ "${{ matrix.platform.cross }}" == "false" ]]; then
-            # strip doesn't work with non-native binaries on Linux, AFAICT.
-            strip target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
-          fi
           cd target/${{ matrix.platform.target }}/release
           if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
             7z a ../../../${{ matrix.platform.name }} ${{ matrix.platform.bin }}
@@ -168,14 +277,6 @@ jobs:
       - name: Generate SHA-256
         if: matrix.platform.os == 'macOS-latest'
         run: shasum -a 256 ${{ matrix.platform.name }}
-      - name: Publish release artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: precious-${{ matrix.platform.os_name }}
-          path: |
-            precious-*.zip
-            precious-*.tar.gz
-        if: github.ref == 'refs/tags/test-release'
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
         with:
