@@ -52,217 +52,142 @@ jobs:
         run: cargo test --workspace --locked --target=${{ matrix.platform.target }}
 
   release:
-    name: Release - ${{ matrix.platform.os_name }}
+    name: Release - ${{ matrix.platform.release_for }}
     if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/tags/test-release'
     needs: [test]
     strategy:
       matrix:
         platform:
-          - os_name: FreeBSD-x86_64
+          - release_for: FreeBSD-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-freebsd
             bin: precious
             name: precious-FreeBSD-x86_64.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-x86_64
+          - release_for: Linux-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-linux-musl
             bin: precious
             name: precious-Linux-x86_64-musl.tar.gz
-            cross: false
-            cargo_command: cargo
 
-          - os_name: Linux-aarch64
+          - release_for: Linux-aarch64
             os: ubuntu-20.04
             target: aarch64-unknown-linux-musl
             bin: precious
             name: precious-Linux-aarch64-musl.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-arm
+          - release_for: Linux-arm
             os: ubuntu-20.04
             target: arm-unknown-linux-musleabi
             bin: precious
             name: precious-Linux-arm-musl.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-i586
+          - release_for: Linux-i586
             os: ubuntu-20.04
             target: i586-unknown-linux-musl
             bin: precious
             name: precious-Linux-i586-musl.tar.gz
-            cross: false
-            cargo_command: cargo
 
-          - os_name: Linux-mips
+          - release_for: Linux-mips
             os: ubuntu-20.04
             target: mips-unknown-linux-musl
             bin: precious
             name: precious-Linux-mips.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-mipsel
+          - release_for: Linux-mipsel
             os: ubuntu-20.04
             target: mipsel-unknown-linux-musl
             bin: precious
             name: precious-Linux-mipsel.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-mips64
+          - release_for: Linux-mips64
             os: ubuntu-20.04
             target: mips64-unknown-linux-muslabi64
             bin: precious
             name: precious-Linux-mips64.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-mips64el
+          - release_for: Linux-mips64el
             os: ubuntu-20.04
             target: mips64el-unknown-linux-muslabi64
             bin: precious
             name: precious-Linux-mips64el.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-powerpc
+          - release_for: Linux-powerpc
             os: ubuntu-20.04
             target: powerpc-unknown-linux-gnu
             bin: precious
             name: precious-Linux-powerpc-gnu.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-powerpc64
+          - release_for: Linux-powerpc64
             os: ubuntu-20.04
             target: powerpc64-unknown-linux-gnu
             bin: precious
             name: precious-Linux-powerpc64-gnu.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-powerpc64le
+          - release_for: Linux-powerpc64le
             os: ubuntu-20.04
             target: powerpc64le-unknown-linux-gnu
             bin: precious
             name: precious-Linux-powerpc64le.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-riscv64
+          - release_for: Linux-riscv64
             os: ubuntu-20.04
             target: riscv64gc-unknown-linux-gnu
             bin: precious
             name: precious-Linux-riscv64gc-gnu.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Linux-s390x
+          - release_for: Linux-s390x
             os: ubuntu-20.04
             target: s390x-unknown-linux-gnu
             bin: precious
             name: precious-Linux-s390x-gnu.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: NetBSD-x86_64
+          - release_for: NetBSD-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-netbsd
             bin: precious
             name: precious-NetBSD-x86_64.tar.gz
-            cross: true
-            cargo_command: ./cross
 
-          - os_name: Windows-aarch64
+          - release_for: Windows-aarch64
             os: windows-latest
             target: aarch64-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-aarch64.zip
-            cross: false
-            cargo_command: cargo
 
-          - os_name: Windows-i686
+          - release_for: Windows-i686
             os: windows-latest
             target: i686-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-i686.zip
-            cross: false
-            cargo_command: cargo
 
-          - os_name: Windows-x86_64
+          - release_for: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-x86_64.zip
-            cross: false
-            cargo_command: cargo
 
-          - os_name: macOS-x86_64
+          - release_for: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
             bin: precious
             name: precious-Darwin-x86_64.tar.gz
-            cross: false
-            cargo_command: cargo
 
-          - os_name: macOS-aarch64
+          - release_for: macOS-aarch64
             os: macOS-latest
             target: aarch64-apple-darwin
             bin: precious
             name: precious-Darwin-aarch64.tar.gz
-            cross: false
-            cargo_command: cargo
 
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Install toolchain if not cross-compiling
-        uses: dtolnay/rust-toolchain@stable
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
         with:
-          targets: ${{ matrix.platform.target }}
-        if: ${{ !matrix.platform.cross }}
-      - name: Install musl-tools on Linux
-        run: sudo apt-get update --yes && sudo apt-get install --yes musl-tools
-        if: contains(matrix.platform.os, 'ubuntu') && !matrix.platform.cross
-      - name: Install cross if cross-compiling (*nix)
-        shell: bash
-        run: |
-          set -e
-          export TARGET="$HOME/bin"
-          mkdir -p "$TARGET"
-          curl --silent --location \
-            https://raw.githubusercontent.com/houseabsolute/ubi/master/bootstrap/bootstrap-ubi.sh |
-            sh
-          "$HOME/bin/ubi" --project cross-rs/cross --matching musl --in .
-        if: matrix.platform.cross && !contains(matrix.platform.os, 'windows')
-      - name: Install cross if cross-compiling (Windows)
-        shell: powershell
-        run: |
-          powershell -exec bypass -c "Invoke-WebRequest -URI 'https://raw.githubusercontent.com/houseabsolute/ubi/master/bootstrap/bootstrap-ubi.ps1' -UseBasicParsing | Invoke-Expression"
-          .\ubi --project cross-rs/cross --in .
-        if: matrix.platform.cross && contains(matrix.platform.os, 'windows')
-      - name: Build binary (*nix)
-        shell: bash
-        run: |
-          ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
-        if: ${{ !contains(matrix.platform.os, 'windows') }}
-      - name: Build binary (Windows)
-        shell: powershell
-        run: |
-          & ${{ matrix.platform.cargo_command }} build --locked --release --target ${{ matrix.platform.target }}
-        if: contains(matrix.platform.os, 'windows')
-      - name: Strip binary
-        shell: bash
-        run: |
-          strip target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
-        # strip doesn't work with cross-arch binaries on Linux or Windows.
-        if: ${{ !(matrix.platform.cross || matrix.platform.target == 'aarch64-pc-windows-msvc') }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
       - name: Package as archive
         shell: bash
         run: |
