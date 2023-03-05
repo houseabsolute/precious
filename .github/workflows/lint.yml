@@ -37,7 +37,7 @@ jobs:
           components: rustfmt
       - name: Run cargo check
         run: cargo install --path . --locked
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
       - name: Run install-dev-tools.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
