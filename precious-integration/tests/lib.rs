@@ -573,7 +573,7 @@ fn precious_path() -> Result<String> {
 }
 
 fn do_test_setup() -> Result<TestHelper> {
-    let cargo_build_re = Regex::new("Finished dev")?;
+    let cargo_build_re = Regex::new("Finished.+dev.+target")?;
     let env = HashMap::new();
     exec::run(
         "cargo",
