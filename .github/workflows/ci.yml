@@ -10,7 +10,6 @@ on:
 
 env:
   CRATE_NAME: precious
-  GITHUB_TOKEN: ${{ github.token }}
   RUST_BACKTRACE: 1
 
 jobs:
