@@ -32,6 +32,14 @@ impl CommandType {
             CommandType::Both => "linter/tidier",
         }
     }
+
+    fn can_lint(&self) -> bool {
+        self == &CommandType::Lint || self == &CommandType::Both
+    }
+
+    fn can_tidy(&self) -> bool {
+        self == &CommandType::Tidy || self == &CommandType::Both
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -309,7 +317,7 @@ impl Command {
     }
 
     pub fn tidy(&self, files: &[&Path]) -> Result<Option<TidyOutcome>> {
-        self.require_is_not_command_type("tidy", CommandType::Lint)?;
+        self.require_is_command_type("tidy", CommandType::Tidy)?;
 
         if !self.should_act_on_files(files)? {
             return Ok(None);
@@ -349,7 +357,7 @@ impl Command {
     }
 
     pub fn lint(&self, files: &[&Path]) -> Result<Option<LintOutcome>> {
-        self.require_is_not_command_type("lint", CommandType::Tidy)?;
+        self.require_is_command_type("lint", CommandType::Lint)?;
 
         if !self.should_act_on_files(files)? {
             return Ok(None);
@@ -384,12 +392,15 @@ impl Command {
         }))
     }
 
-    fn require_is_not_command_type(
-        &self,
-        method: &'static str,
-        not_allowed: CommandType,
-    ) -> Result<()> {
-        if not_allowed == self.typ {
+    fn require_is_command_type(&self, method: &'static str, correct: CommandType) -> Result<()> {
+        let ok = match method {
+            "lint" => correct.can_lint(),
+            "tidy" => correct.can_tidy(),
+            "fix" => correct.can_fix(),
+            _ => unreachable!(),
+        };
+
+        if !ok {
             return Err(CommandError::CannotMethodWithCommand {
                 method,
                 command: self.name.clone(),
@@ -865,17 +876,17 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn require_is_not_command_type_with_lint_command() -> Result<()> {
+    fn require_is_command_type_with_lint_command() -> Result<()> {
         let command = Command {
             typ: CommandType::Lint,
             ..default_command()?
         };
         assert!(command
-            .require_is_not_command_type("lint", CommandType::Tidy)
+            .require_is_command_type("lint", CommandType::Lint)
             .is_ok());
         assert_eq!(
             command
-                .require_is_not_command_type("tidy", CommandType::Lint)
+                .require_is_command_type("tidy", CommandType::Lint)
                 .unwrap_err()
                 .downcast::<CommandError>()
                 .unwrap(),
@@ -891,17 +902,17 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn require_is_not_command_type_with_tidy_command() -> Result<()> {
+    fn require_is_command_type_with_tidy_command() -> Result<()> {
         let command = Command {
             typ: CommandType::Tidy,
             ..default_command()?
         };
         assert!(command
-            .require_is_not_command_type("tidy", CommandType::Lint)
+            .require_is_command_type("tidy", CommandType::Tidy)
             .is_ok());
         assert_eq!(
             command
-                .require_is_not_command_type("lint", CommandType::Tidy)
+                .require_is_command_type("lint", CommandType::Tidy)
                 .unwrap_err()
                 .downcast::<CommandError>()
                 .unwrap(),
@@ -917,16 +928,16 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn require_is_not_command_type_with_both_command() -> Result<()> {
+    fn require_is_command_type_with_both_command() -> Result<()> {
         let command = Command {
             typ: CommandType::Both,
             ..default_command()?
         };
         assert!(command
-            .require_is_not_command_type("tidy", CommandType::Lint)
+            .require_is_command_type("tidy", CommandType::Tidy)
             .is_ok());
         assert!(command
-            .require_is_not_command_type("lint", CommandType::Tidy)
+            .require_is_command_type("lint", CommandType::Lint)
             .is_ok());
 
         Ok(())
