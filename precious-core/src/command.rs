@@ -22,6 +22,8 @@ pub enum CommandType {
     Tidy,
     #[serde(rename = "both")]
     Both,
+    #[serde(rename = "fix")]
+    Fix,
 }
 
 impl CommandType {
@@ -30,6 +32,7 @@ impl CommandType {
             CommandType::Lint => "linter",
             CommandType::Tidy => "tidier",
             CommandType::Both => "linter/tidier",
+            CommandType::Fix => "fixer",
         }
     }
 
@@ -39,6 +42,10 @@ impl CommandType {
 
     fn can_tidy(&self) -> bool {
         self == &CommandType::Tidy || self == &CommandType::Both
+    }
+
+    fn can_fix(&self) -> bool {
+        self == &CommandType::Fix
     }
 }
 
@@ -148,6 +155,7 @@ pub struct Command {
     env: HashMap<String, String>,
     lint_flags: Option<Vec<String>>,
     tidy_flags: Option<Vec<String>>,
+    fix_flags: Option<Vec<String>>,
     path_flag: Option<String>,
     ok_exit_codes: Vec<i32>,
     lint_failure_exit_codes: HashSet<i32>,
@@ -168,6 +176,7 @@ pub struct CommandParams {
     pub env: HashMap<String, String>,
     pub lint_flags: Vec<String>,
     pub tidy_flags: Vec<String>,
+    pub fix_flags: Vec<String>,
     pub path_flag: String,
     pub ok_exit_codes: Vec<u8>,
     pub lint_failure_exit_codes: Vec<u8>,
@@ -187,6 +196,13 @@ pub struct LintOutcome {
     pub ok: bool,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub enum FixOutcome {
+    Unchanged,
+    Changed,
+    Unknown,
 }
 
 #[derive(Clone, Debug)]
@@ -253,6 +269,11 @@ impl Command {
                 None
             } else {
                 Some(params.tidy_flags)
+            },
+            fix_flags: if params.fix_flags.is_empty() {
+                None
+            } else {
+                Some(params.fix_flags)
             },
             path_flag: if params.path_flag.is_empty() {
                 None
@@ -390,6 +411,47 @@ impl Command {
             stdout: result.stdout,
             stderr: result.stderr,
         }))
+    }
+
+    pub fn fix(&self, files: &[&Path]) -> Result<Option<FixOutcome>> {
+        self.require_is_command_type("fix", CommandType::Fix)?;
+
+        if !self.should_act_on_files(files)? {
+            return Ok(None);
+        }
+
+        let path_metadata = self.maybe_path_metadata_for(files)?;
+
+        let in_dir = self.in_dir(files[0])?;
+        let operating_on = self.operating_on(files, &in_dir)?;
+        let mut cmd = self.command_for_paths(&self.fix_flags, &operating_on)?;
+
+        info!(
+            "Fixing [{}] with {} in [{}] using command [{}]",
+            files.iter().map(|p| p.to_string_lossy()).join(" "),
+            self.name,
+            in_dir.display(),
+            cmd.join(" "),
+        );
+
+        let bin = cmd.remove(0);
+        exec::run(
+            &bin,
+            &cmd.iter().map(|c| c.as_str()).collect::<Vec<_>>(),
+            &self.env,
+            &self.ok_exit_codes,
+            self.ignore_stderr.as_deref(),
+            Some(&in_dir),
+        )?;
+
+        if let Some(pm) = path_metadata {
+            if self.paths_were_changed(pm)? {
+                return Ok(Some(FixOutcome::Changed));
+            }
+            return Ok(Some(FixOutcome::Unchanged));
+        }
+
+        Ok(Some(FixOutcome::Unknown))
     }
 
     fn require_is_command_type(&self, method: &'static str, correct: CommandType) -> Result<()> {
@@ -795,6 +857,7 @@ mod tests {
             env: HashMap::new(),
             lint_flags: None,
             tidy_flags: None,
+            fix_flags: None,
             path_flag: None,
             ok_exit_codes: vec![],
             lint_failure_exit_codes: HashSet::new(),
@@ -939,6 +1002,44 @@ mod tests {
         assert!(command
             .require_is_command_type("lint", CommandType::Lint)
             .is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn require_is_command_type_with_fix_command() -> Result<()> {
+        let command = Command {
+            typ: CommandType::Fix,
+            ..default_command()?
+        };
+        assert!(command
+            .require_is_command_type("fix", CommandType::Fix)
+            .is_ok());
+        assert_eq!(
+            command
+                .require_is_command_type("lint", CommandType::Fix)
+                .unwrap_err()
+                .downcast::<CommandError>()
+                .unwrap(),
+            CommandError::CannotMethodWithCommand {
+                method: "lint",
+                command: command.name.clone(),
+                typ: "fixer",
+            },
+        );
+        assert_eq!(
+            command
+                .require_is_command_type("tidy", CommandType::Fix)
+                .unwrap_err()
+                .downcast::<CommandError>()
+                .unwrap(),
+            CommandError::CannotMethodWithCommand {
+                method: "tidy",
+                command: command.name,
+                typ: "fixer",
+            },
+        );
 
         Ok(())
     }

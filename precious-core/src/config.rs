@@ -41,6 +41,9 @@ pub struct CommandConfig {
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
     tidy_flags: Vec<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
+    fix_flags: Vec<String>,
     #[serde(default = "empty_string")]
     path_flag: String,
     #[serde(deserialize_with = "u8_or_seq_u8")]
@@ -367,6 +370,14 @@ impl Config {
         self.into_commands(project_root, command, CommandType::Lint)
     }
 
+    pub fn into_fix_commands(
+        self,
+        project_root: &Path,
+        command: Option<&str>,
+    ) -> Result<Vec<command::Command>> {
+        self.into_commands(project_root, command, CommandType::Fix)
+    }
+
     fn into_commands(
         self,
         project_root: &Path,
@@ -380,7 +391,14 @@ impl Config {
                     continue;
                 }
             }
-            if c.typ != typ && c.typ != CommandType::Both {
+
+            // A command is relevant if the type is what we ask for, _or_ if its type is both and
+            // we want either lint/tidy.
+            let relevant = c.typ == typ
+                || (c.typ == CommandType::Both
+                    && (typ == CommandType::Lint || typ == CommandType::Tidy));
+
+            if !relevant {
                 continue;
             }
 
@@ -423,6 +441,7 @@ impl CommandConfig {
             env: self.env,
             lint_flags: self.lint_flags,
             tidy_flags: self.tidy_flags,
+            fix_flags: self.fix_flags,
             path_flag: self.path_flag,
             ok_exit_codes: self.ok_exit_codes,
             lint_failure_exit_codes: self.lint_failure_exit_codes,
@@ -845,6 +864,7 @@ mod tests {
             env: Default::default(),
             lint_flags: vec![],
             tidy_flags: vec![],
+            fix_flags: vec![],
             path_flag: String::new(),
             ok_exit_codes: vec![],
             lint_failure_exit_codes: vec![],

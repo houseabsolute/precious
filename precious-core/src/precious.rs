@@ -1,6 +1,6 @@
 use crate::{
     chars,
-    command::{self, TidyOutcome},
+    command::{self, FixOutcome, TidyOutcome},
     config,
     paths::{self, finder::Finder},
     vcs,
@@ -103,6 +103,14 @@ pub struct App {
 pub enum Subcommand {
     Lint(CommonArgs),
     Tidy(CommonArgs),
+    Fix(CommonArgs),
+}
+
+#[derive(Debug)]
+enum SubcommandType {
+    Lint,
+    Tidy,
+    Fix,
 }
 
 #[derive(Debug, Parser)]
@@ -148,7 +156,7 @@ pub struct Precious {
     chars: chars::Chars,
     quiet: bool,
     thread_pool: ThreadPool,
-    should_lint: bool,
+    command_type: SubcommandType,
     paths: Vec<PathBuf>,
 }
 
@@ -214,9 +222,10 @@ impl Precious {
         let config = config::Config::new(config_file)?;
         let quiet = app.quiet;
         let jobs = app.jobs;
-        let (should_lint, paths, command) = match app.subcommand {
-            Subcommand::Lint(a) => (true, a.paths, a.command),
-            Subcommand::Tidy(a) => (false, a.paths, a.command),
+        let (command_type, paths, command) = match app.subcommand {
+            Subcommand::Lint(a) => (SubcommandType::Lint, a.paths, a.command),
+            Subcommand::Tidy(a) => (SubcommandType::Tidy, a.paths, a.command),
+            Subcommand::Fix(a) => (SubcommandType::Fix, a.paths, a.command),
         };
 
         Ok(Precious {
@@ -228,7 +237,7 @@ impl Precious {
             chars: c,
             quiet,
             thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
-            should_lint,
+            command_type,
             paths,
         })
     }
@@ -237,6 +246,7 @@ impl Precious {
         let common = match &app.subcommand {
             Subcommand::Lint(c) => c,
             Subcommand::Tidy(c) => c,
+            Subcommand::Fix(c) => c,
         };
         if common.all {
             return Ok(paths::mode::Mode::All);
@@ -352,10 +362,10 @@ impl Precious {
     }
 
     fn run_subcommand(&mut self) -> Result<Exit> {
-        if self.should_lint {
-            self.lint()
-        } else {
-            self.tidy()
+        match self.command_type {
+            SubcommandType::Lint => self.lint(),
+            SubcommandType::Tidy => self.tidy(),
+            SubcommandType::Fix => self.fix(),
         }
     }
 
@@ -390,6 +400,23 @@ impl Precious {
             linters,
             |self_: &mut Self, files: &[PathBuf], linter: &command::Command| {
                 self_.run_one_linter(files, linter)
+            },
+        )
+    }
+
+    fn fix(&mut self) -> Result<Exit> {
+        println!("{} Fixing {}", self.chars.ring, self.mode);
+
+        let fixers = self
+            .config
+            // XXX - same as above.
+            .clone()
+            .into_fix_commands(&self.project_root, self.command.as_deref())?;
+        self.run_all_commands(
+            "fixing",
+            fixers,
+            |self_: &mut Self, files: &[PathBuf], fixer: &command::Command| {
+                self_.run_one_fixer(files, fixer)
             },
         )
     }
@@ -612,6 +639,66 @@ impl Precious {
         };
 
         self.run_parallel("Linting", files, l, runner)
+    }
+
+    fn run_one_fixer(
+        &mut self,
+        files: &[PathBuf],
+        t: &command::Command,
+    ) -> Result<Option<Vec<ActionFailure>>> {
+        let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
+            match t.fix(files) {
+                Ok(Some(FixOutcome::Changed)) => {
+                    if !s.quiet {
+                        println!(
+                            "{} Fixed by {}:    [{}]",
+                            s.chars.tidied,
+                            t.name,
+                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        );
+                    }
+                    Some(Ok(()))
+                }
+                Ok(Some(FixOutcome::Unchanged)) => {
+                    if !s.quiet {
+                        println!(
+                            "{} Unchanged by {}: [{}]",
+                            s.chars.unchanged,
+                            t.name,
+                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        );
+                    }
+                    Some(Ok(()))
+                }
+                Ok(Some(FixOutcome::Unknown)) => {
+                    if !s.quiet {
+                        println!(
+                            "{} Maybe changed by {}: [{}]",
+                            s.chars.unknown,
+                            t.name,
+                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        );
+                    }
+                    Some(Ok(()))
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    println!(
+                        "{} Error from {}: [{}]",
+                        s.chars.execution_error,
+                        t.name,
+                        files.iter().map(|p| p.to_string_lossy()).join(" "),
+                    );
+                    Some(Err(ActionFailure {
+                        error: format!("{e:#}"),
+                        config_key: t.config_key(),
+                        paths: files.iter().map(|f| f.to_path_buf()).collect(),
+                    }))
+                }
+            }
+        };
+
+        self.run_parallel("Fixing", files, t, runner)
     }
 
     fn run_parallel<R>(
@@ -988,6 +1075,54 @@ lint_failure_exit_codes = [1]
         let status = p.run();
 
         assert_eq!(status, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(not(target_os = "windows"))]
+    fn fix_succeeds() -> Result<()> {
+        let config = r#"
+    [commands.precious]
+    type    = "fix"
+    include = "**/*"
+    cmd     = ["true"]
+    ok_exit_codes = [0]
+    "#;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let _pushd = helper.pushd_to_git_root()?;
+
+        let app = App::try_parse_from(["precious", "--quiet", "fix", "--all"])?;
+
+        let mut p = Precious::new(app)?;
+        let status = p.run();
+
+        assert_eq!(status, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(not(target_os = "windows"))]
+    fn fix_fails() -> Result<()> {
+        let config = r#"
+    [commands.precious]
+    type    = "fix"
+    include = "**/*"
+    cmd     = ["false"]
+    ok_exit_codes = [0]
+    "#;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let _pushd = helper.pushd_to_git_root()?;
+
+        let app = App::try_parse_from(["precious", "--quiet", "fix", "--all"])?;
+
+        let mut p = Precious::new(app)?;
+        let status = p.run();
+
+        assert_eq!(status, 1);
 
         Ok(())
     }
