@@ -1,5 +1,12 @@
 <!-- next-header -->
 
+## 0.5.1
+
+- Added a new labels feature. This allows you to group commands in your config
+  file by assigning one or more `labels` in their config. Then when running
+  `precious`, you can run commands with a specific label: `precious lint
+--label some-label --all`. Suggested by Greg Oschwald. Addresses #8.
+
 ## 0.5.0 - 2023-02-04
 
 - The `--git` flag did not include any staged files, only files that were

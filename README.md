@@ -196,6 +196,7 @@ The other keys allowed for each command are as follows:
 | `ok_exit_codes`           | integer or array of integers | **yes**   | all                      |         | Any exit code that **does not** indicate an abnormal exit should be here. For most commands this is just `0` but some commands may use other exit codes even for a normal exit.                                                                                                                                                                           |
 | `lint_failure_exit_codes` | integer or array of integers | no        | linters                  |         | If the command is a linter then these are the status codes that indicate a lint failure. These need to be specified so `precious` can distinguish an exit because of a lint failure versus an exit because of some unexpected issue.                                                                                                                      |
 | `ignore_stderr`           | string or array of strings   | all       | all                      |         | By default, `precious` assumes that when a command sends output to `stderr` that indicates a failure to lint or tidy. This parameter can specify one or more regexes. These regexes will be matched against the command's stderr output. If _any_ of the regexes match, the stderr output is ignored.                                                     |
+| `labels`                  | string or array of strings   | all       | all                      |         | One or more labels used to categorize commands. See below for more details.                                                                                                                                                                                                                                                                               |
 
 ### Referencing the Project Root
 
@@ -267,6 +268,28 @@ $> precious lint --command some-command --all
 The name passed to `--command` must match the name of the command in your
 config file. So in the above example, this would look for a command defined as
 `[commands.some-command]` in your config.
+
+#### Selecting Commands With Labels
+
+Each command can be assigned one or more labels. This lets you create
+arbitrary groups of commands. Then when you tidy or lint you can pick a label
+by passing a `--label` flag:
+
+```
+$> precious lint --label some-label --all
+```
+
+The way labels work is as follows:
+
+- A command _without_ a `labels` key in its config has one label, `default`.
+- Running `tidy` or `lint` _without_ a `--label` flag uses the `default` label.
+- If you assign `labels` to a command and you want that command included in
+  the `default` label, you must explicitly include it:
+  ```toml
+  [command.some-command]
+  # ...
+  labels = [ "default", "some-label" ]
+  ```
 
 #### Default Exclusions
 

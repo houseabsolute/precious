@@ -53,6 +53,9 @@ pub struct CommandConfig {
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
     ignore_stderr: Vec<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
+    labels: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
@@ -339,6 +342,8 @@ where
     deserializer.deserialize_any(WorkingDirOrChdirTo(PhantomData))
 }
 
+const DEFAULT_LABEL: &str = "default";
+
 impl Config {
     pub fn new(file: PathBuf) -> Result<Config> {
         match fs::read(&file) {
@@ -355,22 +360,25 @@ impl Config {
         self,
         project_root: &Path,
         command: Option<&str>,
+        label: Option<&str>,
     ) -> Result<Vec<command::Command>> {
-        self.into_commands(project_root, command, CommandType::Tidy)
+        self.into_commands(project_root, command, label, CommandType::Tidy)
     }
 
     pub fn into_lint_commands(
         self,
         project_root: &Path,
         command: Option<&str>,
+        label: Option<&str>,
     ) -> Result<Vec<command::Command>> {
-        self.into_commands(project_root, command, CommandType::Lint)
+        self.into_commands(project_root, command, label, CommandType::Lint)
     }
 
     fn into_commands(
         self,
         project_root: &Path,
         command: Option<&str>,
+        label: Option<&str>,
         typ: CommandType,
     ) -> Result<Vec<command::Command>> {
         let mut commands: Vec<command::Command> = vec![];
@@ -380,6 +388,11 @@ impl Config {
                     continue;
                 }
             }
+
+            if !c.matches_label(label.unwrap_or(DEFAULT_LABEL)) {
+                continue;
+            }
+
             if c.typ != typ && c.typ != CommandType::Both {
                 continue;
             }
@@ -504,6 +517,13 @@ impl CommandConfig {
         }
 
         Ok((invoke, working_dir, path_args))
+    }
+
+    fn matches_label(&self, label: &str) -> bool {
+        if self.labels.is_empty() {
+            return label == DEFAULT_LABEL;
+        }
+        self.labels.iter().any(|l| *l == label)
     }
 }
 
@@ -850,10 +870,54 @@ mod tests {
             lint_failure_exit_codes: vec![],
             expect_stderr: false,
             ignore_stderr: vec![],
+            labels: vec![],
         };
         let res = config.into_command(Path::new("."), String::from("some-linter"));
         let err = res.unwrap_err().downcast::<ConfigError>().unwrap();
         assert_eq!(err, expect_err);
+
+        Ok(())
+    }
+
+    #[test_case(vec![], "default", true)]
+    #[test_case(vec!["default".to_string()], "default", true)]
+    #[test_case(vec!["default".to_string(), "foo".to_string()], "default", true)]
+    #[test_case(vec!["default".to_string(), "foo".to_string()], "foo", true)]
+    #[test_case(vec!["foo".to_string()], "foo", true)]
+    #[test_case(vec![], "foo", false)]
+    #[test_case(vec!["foo".to_string()], "default", false)]
+    #[test_case(vec!["default".to_string()], "foo", false)]
+    #[parallel]
+    fn matches_label(
+        labels_in_config: Vec<String>,
+        label_to_match: &str,
+        expect_match: bool,
+    ) -> Result<()> {
+        let config = CommandConfig {
+            typ: CommandType::Lint,
+            invoke: None,
+            working_dir: None,
+            path_args: None,
+            include: vec![String::from("**/*.rs")],
+            exclude: vec![],
+            run_mode: None,
+            chdir: None,
+            cmd: vec![String::from("some-linter")],
+            env: Default::default(),
+            lint_flags: vec![],
+            tidy_flags: vec![],
+            path_flag: String::new(),
+            ok_exit_codes: vec![],
+            lint_failure_exit_codes: vec![],
+            expect_stderr: false,
+            ignore_stderr: vec![],
+            labels: labels_in_config,
+        };
+        if expect_match {
+            assert!(config.matches_label(label_to_match));
+        } else {
+            assert!(!config.matches_label(label_to_match));
+        }
 
         Ok(())
     }
