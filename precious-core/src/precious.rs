@@ -36,7 +36,10 @@ enum PreciousError {
     NoCommands { what: String },
 
     #[error("No {what:} commands match the given command name, {name:}")]
-    NoCommandsMatch { what: String, name: String },
+    NoCommandsMatchCommandName { what: String, name: String },
+
+    #[error("No {what:} commands match the given label, {label:}")]
+    NoCommandsMatchLabel { what: String, label: String },
 }
 
 #[derive(Debug)]
@@ -129,6 +132,11 @@ pub struct CommonArgs {
     /// unstaged content first
     #[clap(long)]
     staged_with_stash: bool,
+    /// If this is set, then only commands matching this label will be run. If
+    /// this isn't set then commands without a label or with the label
+    /// "default" will be run.
+    #[clap(long)]
+    label: Option<String>,
     /// A list of paths on which to operate
     #[clap(value_parser)]
     paths: Vec<PathBuf>,
@@ -150,6 +158,7 @@ pub struct Precious {
     thread_pool: ThreadPool,
     should_lint: bool,
     paths: Vec<PathBuf>,
+    label: Option<String>,
 }
 
 impl App {
@@ -214,9 +223,9 @@ impl Precious {
         let config = config::Config::new(config_file)?;
         let quiet = app.quiet;
         let jobs = app.jobs;
-        let (should_lint, paths, command) = match app.subcommand {
-            Subcommand::Lint(a) => (true, a.paths, a.command),
-            Subcommand::Tidy(a) => (false, a.paths, a.command),
+        let (should_lint, paths, command, label) = match app.subcommand {
+            Subcommand::Lint(a) => (true, a.paths, a.command, a.label),
+            Subcommand::Tidy(a) => (false, a.paths, a.command, a.label),
         };
 
         Ok(Precious {
@@ -230,6 +239,7 @@ impl Precious {
             thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
             should_lint,
             paths,
+            label,
         })
     }
 
@@ -367,7 +377,11 @@ impl Precious {
             // XXX - This clone can be removed if config is passed into this
             // method instead of being a field of self.
             .clone()
-            .into_tidy_commands(&self.project_root, self.command.as_deref())?;
+            .into_tidy_commands(
+                &self.project_root,
+                self.command.as_deref(),
+                self.label.as_deref(),
+            )?;
         self.run_all_commands(
             "tidying",
             tidiers,
@@ -384,7 +398,11 @@ impl Precious {
             .config
             // XXX - same as above.
             .clone()
-            .into_lint_commands(&self.project_root, self.command.as_deref())?;
+            .into_lint_commands(
+                &self.project_root,
+                self.command.as_deref(),
+                self.label.as_deref(),
+            )?;
         self.run_all_commands(
             "linting",
             linters,
@@ -405,9 +423,16 @@ impl Precious {
     {
         if commands.is_empty() {
             if let Some(c) = &self.command {
-                return Err(PreciousError::NoCommandsMatch {
+                return Err(PreciousError::NoCommandsMatchCommandName {
                     what: action.into(),
                     name: c.into(),
+                }
+                .into());
+            }
+            if let Some(l) = &self.label {
+                return Err(PreciousError::NoCommandsMatchLabel {
+                    what: action.into(),
+                    label: l.into(),
                 }
                 .into());
             }
