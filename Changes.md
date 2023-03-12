@@ -1,6 +1,6 @@
 <!-- next-header -->
 
-## 0.5.1
+## 0.5.1 - 2023-03-11
 
 - Added a new labels feature. This allows you to group commands in your config
   file by assigning one or more `labels` in their config. Then when running
