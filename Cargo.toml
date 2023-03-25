@@ -28,7 +28,7 @@ precious-core.workspace = true
 
 [workspace.dependencies]
 anyhow = "1.0.70"
-clap = { version = "3.2.23", features = [ "cargo", "derive" ] }
+clap = { version = "4.1.13", features = [ "cargo", "derive" ] }
 clean-path = "0.2.1"
 env_logger = "0.10.0"
 fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }

@@ -6,7 +6,7 @@ use crate::{
     vcs,
 };
 use anyhow::{Error, Result};
-use clap::{AppSettings, ArgGroup, Parser};
+use clap::{ArgGroup, Parser};
 use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
@@ -72,7 +72,6 @@ const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 #[clap(name = "precious")]
 #[clap(author, version)]
 #[clap(propagate_version = true)]
-#[clap(global_setting(AppSettings::DeriveDisplayOrder))]
 #[clap(subcommand_required = true, arg_required_else_help = true)]
 /// One code quality tool to rule them all
 pub struct App {
@@ -112,7 +111,7 @@ pub enum Subcommand {
 #[clap(group(
     ArgGroup::new("path-spec")
         .required(true)
-        .args(&["all", "git", "staged", "staged-with-stash", "paths"]),
+        .args(&["all", "git", "staged", "staged_with_stash", "paths"]),
 ))]
 pub struct CommonArgs {
     /// The command to run. If specified, only this command will be run. This
