@@ -50,7 +50,7 @@ regex = "1.7.3"
 serde = { version = "1.0.158", features = ["derive"] }
 serial_test = "1.0.0"
 tempfile = "3.4.0"
-test-case = "2.2.2"
+test-case = "3.0.0"
 thiserror = "1.0.40"
 toml = "0.5.11"
 which = ">= 3.0.0, < 5.0.0"
