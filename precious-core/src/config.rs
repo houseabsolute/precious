@@ -304,11 +304,11 @@ where
         where
             A: de::MapAccess<'de>,
         {
-            let mut kv_pairs: Vec<(&'de str, &'de str)> = vec![];
-            while let Some((k, v)) = map.next_entry::<&str, &str>()? {
-                if k != "chdir_to" {
+            let mut kv_pairs: Vec<(String, String)> = vec![];
+            while let Some((k, v)) = map.next_entry::<String, String>()? {
+                if &k != "chdir_to" {
                     return Err(<A::Error as de::Error>::invalid_value(
-                        de::Unexpected::Str(k),
+                        de::Unexpected::Str(&k),
                         &r#"the only valid key for a working_dir map is "chdir_to""#,
                     ));
                 }
@@ -335,7 +335,7 @@ where
                 ));
             }
 
-            Ok(Some(WorkingDir::ChdirTo(PathBuf::from(kv_pairs[0].1))))
+            Ok(Some(WorkingDir::ChdirTo(PathBuf::from(&kv_pairs[0].1))))
         }
     }
 
@@ -352,7 +352,10 @@ impl Config {
                 error: e.to_string(),
             }
             .into()),
-            Ok(bytes) => Ok(toml::from_slice(&bytes)?),
+            Ok(bytes) => {
+                let s = String::from_utf8(bytes)?;
+                Ok(toml::from_str(&s)?)
+            }
         }
     }
 

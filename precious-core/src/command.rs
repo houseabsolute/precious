@@ -47,12 +47,11 @@ pub enum Invoke {
 impl fmt::Display for Invoke {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Is using serde to do this incredibly gross?
-        f.write_str(&toml::to_string(self).unwrap_or_else(|e| {
-            unreachable!(
-                "We should always be able to serialize an Invoke to TOML: {}",
-                e,
-            )
-        }))
+        f.write_str(match self {
+            Invoke::PerFile => r#""per-file""#,
+            Invoke::PerDir => r#""per-dir""#,
+            Invoke::Once => r#""once""#,
+        })
     }
 }
 
@@ -95,13 +94,14 @@ pub enum PathArgs {
 
 impl fmt::Display for PathArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Is using serde to do this incredibly gross?
-        f.write_str(&toml::to_string(self).unwrap_or_else(|e| {
-            unreachable!(
-                "We should always be able to serialize a PathArgs to TOML: {}",
-                e,
-            )
-        }))
+        f.write_str(match self {
+            PathArgs::File => r#""file""#,
+            PathArgs::Dir => r#""dir""#,
+            PathArgs::None => r#""none""#,
+            PathArgs::Dot => r#""dot""#,
+            PathArgs::AbsoluteFile => r#""absolute-file""#,
+            PathArgs::AbsoluteDir => r#""absolute-dir""#,
+        })
     }
 }
 
