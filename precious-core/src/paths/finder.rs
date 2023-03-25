@@ -36,7 +36,7 @@ pub enum FinderError {
     #[error("Found some paths when looking for {mode:} but they were all excluded")]
     AllPathsWereExcluded { mode: Mode },
 
-    #[error("Found a path on the Cli which does not exist: {:}", path.display())]
+    #[error("Path passed on the command line does not exist: {}", path.display())]
     NonExistentPathOnCli { path: PathBuf },
 
     #[error("Could not determine the repo root by running \"git rev-parse --show-toplevel\"")]
