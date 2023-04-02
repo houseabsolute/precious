@@ -28,7 +28,7 @@ precious-core.workspace = true
 
 [workspace.dependencies]
 anyhow = "1.0.70"
-clap = { version = "4.1.13", features = [ "cargo", "derive" ] }
+clap = { version = "4.2.1", features = [ "cargo", "derive" ] }
 clean-path = "0.2.1"
 env_logger = "0.10.0"
 fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }
@@ -47,9 +47,9 @@ precious-testhelper = { version = "0.5.0", path = "./precious-testhelper" }
 pretty_assertions = "1.3.0"
 rayon = "1.7.0"
 regex = "1.7.3"
-serde = { version = "1.0.158", features = ["derive"] }
-serial_test = "1.0.0"
-tempfile = "3.4.0"
+serde = { version = "1.0.159", features = ["derive"] }
+serial_test = "2.0.0"
+tempfile = "3.5.0"
 test-case = "3.0.0"
 thiserror = "1.0.40"
 toml = "0.7.3"
