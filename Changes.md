@@ -1,5 +1,9 @@
 <!-- next-header -->
 
+## 0.5.2
+
+- Help output is now line-wrapped based on your terminal width.
+
 ## 0.5.1 - 2023-03-11
 
 - Added a new labels feature. This allows you to group commands in your config
