@@ -73,6 +73,7 @@ const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 #[clap(author, version)]
 #[clap(propagate_version = true)]
 #[clap(subcommand_required = true, arg_required_else_help = true)]
+#[clap(max_term_width = 100)]
 /// One code quality tool to rule them all
 pub struct App {
     /// Path to the precious config file
