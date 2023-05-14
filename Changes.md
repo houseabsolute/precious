@@ -29,16 +29,13 @@
   warning, and later support will be removed entirely** See [the documentation](README.md) for more
   details. There are also some
   [docs on upgrading from previous versions](docs/upgrade-from-0.3.0-to-0.4.0.md).
-
 - Fixed path handling for `--git` and `--staged` when the project root (the directory containing the
   precious config file) is a subdirectory of the git repo root. Previously this would just attempt
   to run against incorrect paths.
-
 - Precious now supports patterns starting with `!` in `include` and `exclude` keys. This allow you
   to exclude the given pattern, even if matches previous rules in the list. See
   [the Git docs on `.gitignore` patterns](https://git-scm.com/docs/gitignore#_pattern_format) for
   more details. Fixes GH #39.
-
 - When run in GitHub Actions, `precious` will now emit
   [GitHub annotations](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-error-message)
   for linting errors.
@@ -87,7 +84,6 @@
 ## 0.1.6 - 2022-09-02
 
 - All binaries now statically link musl instead of the system libc.
-
 - Added a number of new platforms for released binaries: Linux ARM 32-bit and 64-bit, and macOS ARM
   64-bit.
 
@@ -95,7 +91,6 @@
 
 - When a command unexpectedly prints to stderr the error message we print now includes both stdout
   and stderr from that command. Reported by Greg Oschwald. Fixes #26.
-
 - When a command was configured with the `run_mode` as `files` and `chdir` as `true`, the paths
   passed to the command would still include parent directories. Reported by Greg Oschwald. Fixes
   #25.
