@@ -17,7 +17,7 @@ command. It's features include:
 - One file, `precious.toml`, defines all of your linter and tidier commands, as well as what files
   they operate on.
 - Respects VCS ignore files and allows global and per-command excludes.
-- Works the same way with single- or multi-language projects.
+- Language-agnostic, and it works the same way with single- or multi-language projects.
 - Easy integration with commit hooks and CI systems.
 - Commands are executed in parallel by default, with one process per CPU.
 - Commands can be grouped with labels, for example to just run a subset of commands for commit hooks
