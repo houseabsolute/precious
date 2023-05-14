@@ -1,13 +1,12 @@
 # Upgrading from 0.3.0 to 0.4.0
 
-Some of the command configuration has changed dramatically in this
-release. The old `run_mode` and `chdir` config keys have been replaced by new
-options, `invoke`, `working_dir`, and `path_args`. **The old keys have been
-deprecated. They will continue to work for a while but are no longer
+Some of the command configuration has changed dramatically in this release. The old `run_mode` and
+`chdir` config keys have been replaced by new options, `invoke`, `working_dir`, and `path_args`.
+**The old keys have been deprecated. They will continue to work for a while but are no longer
 documented.**
 
-Here is what the new config looks like for all possible combinations of the
-`run_mode` and `chdir` keys.
+Here is what the new config looks like for all possible combinations of the `run_mode` and `chdir`
+keys.
 
 ---
 
@@ -91,5 +90,5 @@ path_args = "none"
 
 ---
 
-But note that the new config options allow for many other possibilities that
-couldn't be expressed with the old options.
+But note that the new config options allow for many other possibilities that couldn't be expressed
+with the old options.

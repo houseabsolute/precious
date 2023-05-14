@@ -1,11 +1,11 @@
 # Invocation Examples
 
-The following examples illustrate how `precious` executes a command with
-different invocation options.
+The following examples illustrate how `precious` executes a command with different invocation
+options.
 
-For these examples we will assume that the command is configured to execute
-for any file ending in `.go`. The executable is `some-linter` and only takes
-paths as argument. The file tree looks like this:
+For these examples we will assume that the command is configured to execute for any file ending in
+`.go`. The executable is `some-linter` and only takes paths as argument. The file tree looks like
+this:
 
 ```
 example
@@ -117,8 +117,7 @@ cd /example/pkg2/subpkg
 some-linter /example/pkg2/subpkg/subpkg.go
 ```
 
-It's odd to combine `working_dir = "dir"` with `path_args = "absolute-file"`,
-but it will work.
+It's odd to combine `working_dir = "dir"` with `path_args = "absolute-file"`, but it will work.
 
 ---
 
