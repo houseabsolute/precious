@@ -1,7 +1,7 @@
 # Precious - One Code Quality Tool to Rule Them All
 
-Who doesn't love linters and tidiers? I sure love them. I love them so much that in many of my
-projects I might have five or ten!
+Who doesn't love linters and tidiers (aka pretty printers)? I sure love them. I love them so much
+that in many of my projects I might have five or ten!
 
 Wouldn't it be great if you could run all of them with just one command? Wouldn't it be great if
 that command just had one config file to define what tools to run on each part of your project?
