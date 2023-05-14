@@ -1,7 +1,7 @@
 # Precious - One Code Quality Tool to Rule Them All
 
 Who doesn't love linters and tidiers? I sure love them. I love them so much that in many of my
-projects I might easily have five or ten of them enabled!
+projects I might have five or ten!
 
 Wouldn't it be great if you could run all of them with just one command? Wouldn't it be great if
 that command just had one config file to define what tools to run on each part of your project?
@@ -9,15 +9,19 @@ Wouldn't it be great if Sauron were our ruler?
 
 Now with Precious you can say "yes" to all of those questions.
 
-## Why Precious?
+## TLDR
 
-In all seriousness, managing code quality tools can be a bit of a pain. It becomes **much** more
-painful when you have a multi-language project. You may have multiple tools per language, each of
-which runs on some subset of your codebase. Then you need to hook these tools into your commit hooks
-and CI system.
+Precious is a code quality tool that lets you run all of your linters and tidiers with a single
+command. It's features include:
 
-With Precious you can configure all of your code quality tool rules in one place and easily run
-`precious` from your commit hooks and in CI.
+- One file, `precious.toml`, defines all of your linter and tidier commands, as well as what files
+  they operate on.
+- Respects VCS ignore files and allows global and per-command excludes.
+- Works the same way with single- or multi-language projects.
+- Easy integration with commit hooks and CI systems.
+- Commands are executed in parallel by default, with one process per CPU.
+- Commands can be grouped with labels, for example to just run a subset of commands for commit hooks
+  and all commands in CI.
 
 ## Installation
 
