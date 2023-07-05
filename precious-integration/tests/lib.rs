@@ -309,7 +309,7 @@ fn all_invocation_options() -> Result<()> {
     let docs =
         fs::read_to_string(PathBuf::from("../docs/invocation-examples.md"))?.replace("\r\n", "\n");
     let docs_re = Regex::new(
-        r#"(?xsm)
+        r"(?xsm)
             ```toml\n
             \[commands\.some-linter\]\n
             (?P<config>.+?)
@@ -318,7 +318,7 @@ fn all_invocation_options() -> Result<()> {
             ```\n
             (?P<output>.+?)
             ```
-        "#,
+        ",
     )?;
 
     let mut count = 0;
@@ -500,13 +500,13 @@ fn munge_invocation_output(output_dir: PathBuf) -> Result<String> {
     // println!("RAW GOT");
     // println!("{got}");
     let output_re = Regex::new(
-        r#"(?x)
+        r"(?x)
            ----\n
            # We strip off the actual leading path, since on Windows this can
            # end up in a different form from what we expect.
            cwd\ =\ .+?[/\\]precious-testhelper-[^/\\]+?(?:[/\\](?P<cwd>.+?))?\n
            (?P<cmd>some-linter)(?:\ (?P<paths>.+?)?)\n
-        "#,
+        ",
     )?;
 
     #[derive(Debug)]
