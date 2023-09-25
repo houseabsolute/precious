@@ -379,7 +379,7 @@ path_args = "dot" # or "none"
 
 This will cause `precious` to run the command exactly once in the project root.
 
-### Command runs in the same directory as the files it lints and does not accept a path as arguments
+### Command runs in the same directory as the files it lints and does not accept path arguments
 
 If you want to run the command without passing the path being operated on to the command, set
 `invoke = "per-dir"` and `path_args = "none"`:
