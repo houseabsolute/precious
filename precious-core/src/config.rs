@@ -345,10 +345,10 @@ where
 const DEFAULT_LABEL: &str = "default";
 
 impl Config {
-    pub fn new(file: PathBuf) -> Result<Config> {
-        match fs::read(&file) {
+    pub fn new(file: &Path) -> Result<Config> {
+        match fs::read(file) {
             Err(e) => Err(ConfigError::FileCannotBeRead {
-                file,
+                file: file.to_path_buf(),
                 error: e.to_string(),
             }
             .into()),

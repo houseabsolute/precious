@@ -188,8 +188,12 @@ impl App {
     }
 
     pub fn run(self) -> Result<i8> {
+        let (cwd, project_root, _, config) = self.load_config()?;
+
         match self.subcommand {
-            Subcommand::Lint(_) | Subcommand::Tidy(_) => Ok(LintOrTidyRunner::new(self)?.run()),
+            Subcommand::Lint(_) | Subcommand::Tidy(_) => {
+                Ok(LintOrTidyRunner::new(self, cwd, project_root, config)?.run())
+            }
             Subcommand::Config => {
                 //let config = config::Config::load(&self.config)?;
                 //println!("{}", toml::to_string_pretty(&config)?);
@@ -198,88 +202,25 @@ impl App {
             }
         }
     }
-}
 
-#[derive(Debug)]
-pub struct LintOrTidyRunner {
-    mode: paths::mode::Mode,
-    project_root: PathBuf,
-    cwd: PathBuf,
-    config: config::Config,
-    command: Option<String>,
-    chars: chars::Chars,
-    quiet: bool,
-    thread_pool: ThreadPool,
-    should_lint: bool,
-    paths: Vec<PathBuf>,
-    label: Option<String>,
-}
+    // This exists to make writing tests of the runner easier.
+    #[cfg(test)]
+    fn new_lint_or_tidy_runner(self) -> Result<LintOrTidyRunner> {
+        let (cwd, project_root, _, config) = self.load_config()?;
+        LintOrTidyRunner::new(self, cwd, project_root, config)
+    }
 
-impl LintOrTidyRunner {
-    pub fn new(app: App) -> Result<LintOrTidyRunner> {
-        if log::log_enabled!(log::Level::Debug) {
-            if let Some(path) = env::var_os("PATH") {
-                debug!("PATH = {}", path.to_string_lossy());
-            }
-        }
-
-        let c = if app.ascii {
-            chars::BORING_CHARS
-        } else {
-            chars::FUN_CHARS
-        };
-
-        let mode = Self::mode(&app)?;
+    fn load_config(&self) -> Result<(PathBuf, PathBuf, PathBuf, config::Config)> {
         let cwd = env::current_dir()?;
-        let project_root = Self::project_root(app.config.as_ref(), &cwd)?;
-        let config_file = Self::config_file(app.config.as_ref(), &project_root);
-        let config = config::Config::new(config_file)?;
-        let quiet = app.quiet;
-        let jobs = app.jobs;
-        let (should_lint, paths, command, label) = match app.subcommand {
-            Subcommand::Lint(a) => (true, a.paths, a.command, a.label),
-            Subcommand::Tidy(a) => (false, a.paths, a.command, a.label),
-            Subcommand::Config => unreachable!("this is handled in App::run"),
-        };
+        let project_root = self.project_root(&cwd)?;
+        let config_file = self.config_file(&project_root);
+        let config = config::Config::new(&config_file)?;
 
-        Ok(LintOrTidyRunner {
-            mode,
-            project_root,
-            cwd,
-            config,
-            command,
-            chars: c,
-            quiet,
-            thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
-            should_lint,
-            paths,
-            label,
-        })
+        Ok((cwd, project_root, config_file, config))
     }
 
-    fn mode(app: &App) -> Result<paths::mode::Mode> {
-        let common = match &app.subcommand {
-            Subcommand::Lint(c) => c,
-            Subcommand::Tidy(c) => c,
-            Subcommand::Config => unreachable!("this is handled in App::run"),
-        };
-        if common.all {
-            return Ok(paths::mode::Mode::All);
-        } else if common.git {
-            return Ok(paths::mode::Mode::GitModified);
-        } else if common.staged {
-            return Ok(paths::mode::Mode::GitStaged);
-        } else if common.staged_with_stash {
-            return Ok(paths::mode::Mode::GitStagedWithStash);
-        }
-        if common.paths.is_empty() {
-            return Err(PreciousError::NoModeOrPathsInCliArgs.into());
-        }
-        Ok(paths::mode::Mode::FromCli)
-    }
-
-    fn project_root(file: Option<&PathBuf>, cwd: &Path) -> Result<PathBuf> {
-        if let Some(file) = file {
+    fn project_root(&self, cwd: &Path) -> Result<PathBuf> {
+        if let Some(file) = self.config.as_ref() {
             if let Some(p) = file.parent() {
                 return Ok(p.to_path_buf());
             }
@@ -332,8 +273,8 @@ impl LintOrTidyRunner {
         iter.find(|i| pred(i)).unwrap_or(first)
     }
 
-    fn config_file(file: Option<&PathBuf>, dir: &Path) -> PathBuf {
-        if let Some(cf) = file {
+    fn config_file(&self, dir: &Path) -> PathBuf {
+        if let Some(cf) = self.config.as_ref() {
             debug!("Loading config from {} (set via flag)", cf.display());
             return cf.to_path_buf();
         }
@@ -355,6 +296,86 @@ impl LintOrTidyRunner {
             }
         }
         false
+    }
+}
+
+#[derive(Debug)]
+pub struct LintOrTidyRunner {
+    mode: paths::mode::Mode,
+    project_root: PathBuf,
+    cwd: PathBuf,
+    config: config::Config,
+    command: Option<String>,
+    chars: chars::Chars,
+    quiet: bool,
+    thread_pool: ThreadPool,
+    should_lint: bool,
+    paths: Vec<PathBuf>,
+    label: Option<String>,
+}
+
+impl LintOrTidyRunner {
+    pub fn new(
+        app: App,
+        cwd: PathBuf,
+        project_root: PathBuf,
+        config: config::Config,
+    ) -> Result<LintOrTidyRunner> {
+        if log::log_enabled!(log::Level::Debug) {
+            if let Some(path) = env::var_os("PATH") {
+                debug!("PATH = {}", path.to_string_lossy());
+            }
+        }
+
+        let c = if app.ascii {
+            chars::BORING_CHARS
+        } else {
+            chars::FUN_CHARS
+        };
+
+        let mode = Self::mode(&app)?;
+        let quiet = app.quiet;
+        let jobs = app.jobs;
+        let (should_lint, paths, command, label) = match app.subcommand {
+            Subcommand::Lint(a) => (true, a.paths, a.command, a.label),
+            Subcommand::Tidy(a) => (false, a.paths, a.command, a.label),
+            Subcommand::Config => unreachable!("this is handled in App::run"),
+        };
+
+        Ok(LintOrTidyRunner {
+            mode,
+            project_root,
+            cwd,
+            config,
+            command,
+            chars: c,
+            quiet,
+            thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
+            should_lint,
+            paths,
+            label,
+        })
+    }
+
+    fn mode(app: &App) -> Result<paths::mode::Mode> {
+        let common = match &app.subcommand {
+            Subcommand::Lint(c) => c,
+            Subcommand::Tidy(c) => c,
+            Subcommand::Config => unreachable!("this is handled in App::run"),
+        };
+        if common.all {
+            return Ok(paths::mode::Mode::All);
+        } else if common.git {
+            return Ok(paths::mode::Mode::GitModified);
+        } else if common.staged {
+            return Ok(paths::mode::Mode::GitStaged);
+        } else if common.staged_with_stash {
+            return Ok(paths::mode::Mode::GitStagedWithStash);
+        }
+        if common.paths.is_empty() {
+            return Err(PreciousError::NoModeOrPathsInCliArgs.into());
+        }
+        Ok(paths::mode::Mode::FromCli)
     }
 
     fn run(&mut self) -> i8 {
@@ -784,14 +805,9 @@ lint_failure_exit_codes = [1]
             let _pushd = helper.pushd_to_git_root()?;
 
             let app = App::try_parse_from(["precious", "tidy", "--all"])?;
-            let config = app.config.clone();
 
-            let p = LintOrTidyRunner::new(app)?;
-            assert_eq!(p.chars, chars::FUN_CHARS);
-            assert!(!p.quiet);
-
-            let config_file = LintOrTidyRunner::config_file(config.as_ref(), &p.project_root);
-            let mut expect_config_file = p.project_root;
+            let (_, project_root, config_file, _) = app.load_config()?;
+            let mut expect_config_file = project_root;
             expect_config_file.push(name);
             assert_eq!(config_file, expect_config_file);
         }
@@ -808,8 +824,8 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--ascii", "tidy", "--all"])?;
 
-        let p = LintOrTidyRunner::new(app)?;
-        assert_eq!(p.chars, chars::BORING_CHARS);
+        let lt = app.new_lint_or_tidy_runner()?;
+        assert_eq!(lt.chars, chars::BORING_CHARS);
 
         Ok(())
     }
@@ -831,11 +847,9 @@ lint_failure_exit_codes = [1]
             "tidy",
             "--all",
         ])?;
-        let config = app.config.clone();
-        let p = LintOrTidyRunner::new(app)?;
 
-        let config_file = LintOrTidyRunner::config_file(config.as_ref(), &p.project_root);
-        let mut expect_config_file = p.project_root;
+        let (_, project_root, config_file, _) = app.load_config()?;
+        let mut expect_config_file = project_root;
         expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
         assert_eq!(config_file, expect_config_file);
 
@@ -856,8 +870,8 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
-        let p = LintOrTidyRunner::new(app)?;
-        assert_eq!(p.project_root, src_dir);
+        let lt = app.new_lint_or_tidy_runner()?;
+        assert_eq!(lt.project_root, src_dir);
 
         Ok(())
     }
@@ -949,10 +963,10 @@ lint_failure_exit_codes = [1]
         }
         let app = App::try_parse_from(&cmd)?;
 
-        let mut p = LintOrTidyRunner::new(app)?;
+        let mut lt = app.new_lint_or_tidy_runner()?;
 
         assert_eq!(
-            p.finder()?
+            lt.finder()?
                 .files(paths.iter().map(PathBuf::from).collect())?,
             Some(expect.iter().map(PathBuf::from).collect::<Vec<_>>()),
             "finder_uses_project_root: {} [{}]",
@@ -979,8 +993,8 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
-        let mut p = LintOrTidyRunner::new(app)?;
-        let status = p.run();
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let status = lt.run();
 
         assert_eq!(status, 0);
 
@@ -1003,8 +1017,8 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
-        let mut p = LintOrTidyRunner::new(app)?;
-        let status = p.run();
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let status = lt.run();
 
         assert_eq!(status, 1);
 
@@ -1028,8 +1042,8 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "lint", "--all"])?;
 
-        let mut p = LintOrTidyRunner::new(app)?;
-        let status = p.run();
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let status = lt.run();
 
         assert_eq!(status, 0);
 
@@ -1052,8 +1066,8 @@ lint_failure_exit_codes = [1]
             "--all",
         ])?;
 
-        let mut p = LintOrTidyRunner::new(app)?;
-        let status = p.run();
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let status = lt.run();
 
         assert_eq!(status, 0);
 
@@ -1076,8 +1090,8 @@ lint_failure_exit_codes = [1]
             "--all",
         ])?;
 
-        let mut p = LintOrTidyRunner::new(app)?;
-        let status = p.run();
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let status = lt.run();
 
         assert_eq!(status, 1);
 
@@ -1125,8 +1139,7 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "-a"])?;
 
-        let mut p = LintOrTidyRunner::new(app)?;
-        let status = p.run();
+        let status = app.run()?;
 
         assert_eq!(status, 0);
 
