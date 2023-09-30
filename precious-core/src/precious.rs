@@ -106,6 +106,7 @@ pub struct App {
 pub enum Subcommand {
     Lint(CommonArgs),
     Tidy(CommonArgs),
+    Config,
 }
 
 #[derive(Debug, Parser)]
@@ -144,21 +145,6 @@ pub struct CommonArgs {
 
 pub fn app() -> App {
     App::parse()
-}
-
-#[derive(Debug)]
-pub struct Precious {
-    mode: paths::mode::Mode,
-    project_root: PathBuf,
-    cwd: PathBuf,
-    config: config::Config,
-    command: Option<String>,
-    chars: chars::Chars,
-    quiet: bool,
-    thread_pool: ThreadPool,
-    should_lint: bool,
-    paths: Vec<PathBuf>,
-    label: Option<String>,
 }
 
 impl App {
@@ -200,10 +186,37 @@ impl App {
             .chain(std::io::stderr())
             .apply()
     }
+
+    pub fn run(self) -> Result<i8> {
+        match self.subcommand {
+            Subcommand::Lint(_) | Subcommand::Tidy(_) => Ok(LintOrTidyRunner::new(self)?.run()),
+            Subcommand::Config => {
+                //let config = config::Config::load(&self.config)?;
+                //println!("{}", toml::to_string_pretty(&config)?);
+                println!("config");
+                Ok(0)
+            }
+        }
+    }
 }
 
-impl Precious {
-    pub fn new(app: App) -> Result<Precious> {
+#[derive(Debug)]
+pub struct LintOrTidyRunner {
+    mode: paths::mode::Mode,
+    project_root: PathBuf,
+    cwd: PathBuf,
+    config: config::Config,
+    command: Option<String>,
+    chars: chars::Chars,
+    quiet: bool,
+    thread_pool: ThreadPool,
+    should_lint: bool,
+    paths: Vec<PathBuf>,
+    label: Option<String>,
+}
+
+impl LintOrTidyRunner {
+    pub fn new(app: App) -> Result<LintOrTidyRunner> {
         if log::log_enabled!(log::Level::Debug) {
             if let Some(path) = env::var_os("PATH") {
                 debug!("PATH = {}", path.to_string_lossy());
@@ -226,9 +239,10 @@ impl Precious {
         let (should_lint, paths, command, label) = match app.subcommand {
             Subcommand::Lint(a) => (true, a.paths, a.command, a.label),
             Subcommand::Tidy(a) => (false, a.paths, a.command, a.label),
+            Subcommand::Config => unreachable!("this is handled in App::run"),
         };
 
-        Ok(Precious {
+        Ok(LintOrTidyRunner {
             mode,
             project_root,
             cwd,
@@ -247,6 +261,7 @@ impl Precious {
         let common = match &app.subcommand {
             Subcommand::Lint(c) => c,
             Subcommand::Tidy(c) => c,
+            Subcommand::Config => unreachable!("this is handled in App::run"),
         };
         if common.all {
             return Ok(paths::mode::Mode::All);
@@ -342,7 +357,7 @@ impl Precious {
         false
     }
 
-    pub fn run(&mut self) -> i8 {
+    fn run(&mut self) -> i8 {
         match self.run_subcommand() {
             Ok(e) => {
                 debug!("{:?}", e);
@@ -385,7 +400,7 @@ impl Precious {
         self.run_all_commands(
             "tidying",
             tidiers,
-            |self_: &mut Self, files: &[PathBuf], tidier: &command::Command| {
+            |self_: &mut Self, files: &[PathBuf], tidier: &command::LintOrTidyCommand| {
                 self_.run_one_tidier(files, tidier)
             },
         )
@@ -406,7 +421,7 @@ impl Precious {
         self.run_all_commands(
             "linting",
             linters,
-            |self_: &mut Self, files: &[PathBuf], linter: &command::Command| {
+            |self_: &mut Self, files: &[PathBuf], linter: &command::LintOrTidyCommand| {
                 self_.run_one_linter(files, linter)
             },
         )
@@ -415,11 +430,15 @@ impl Precious {
     fn run_all_commands<R>(
         &mut self,
         action: &str,
-        commands: Vec<command::Command>,
+        commands: Vec<command::LintOrTidyCommand>,
         run_command: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, &[PathBuf], &command::Command) -> Result<Option<Vec<ActionFailure>>>,
+        R: Fn(
+            &mut Self,
+            &[PathBuf],
+            &command::LintOrTidyCommand,
+        ) -> Result<Option<Vec<ActionFailure>>>,
     {
         if commands.is_empty() {
             if let Some(c) = &self.command {
@@ -510,7 +529,7 @@ impl Precious {
     fn run_one_tidier(
         &mut self,
         files: &[PathBuf],
-        t: &command::Command,
+        t: &command::LintOrTidyCommand,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
             match t.tidy(files) {
@@ -570,7 +589,7 @@ impl Precious {
     fn run_one_linter(
         &mut self,
         files: &[PathBuf],
-        l: &command::Command,
+        l: &command::LintOrTidyCommand,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
             match l.lint(files) {
@@ -643,7 +662,7 @@ impl Precious {
         &mut self,
         what: &str,
         files: &[PathBuf],
-        c: &command::Command,
+        c: &command::LintOrTidyCommand,
         runner: R,
     ) -> Result<Option<Vec<ActionFailure>>>
     where
@@ -767,11 +786,11 @@ lint_failure_exit_codes = [1]
             let app = App::try_parse_from(["precious", "tidy", "--all"])?;
             let config = app.config.clone();
 
-            let p = Precious::new(app)?;
+            let p = LintOrTidyRunner::new(app)?;
             assert_eq!(p.chars, chars::FUN_CHARS);
             assert!(!p.quiet);
 
-            let config_file = Precious::config_file(config.as_ref(), &p.project_root);
+            let config_file = LintOrTidyRunner::config_file(config.as_ref(), &p.project_root);
             let mut expect_config_file = p.project_root;
             expect_config_file.push(name);
             assert_eq!(config_file, expect_config_file);
@@ -789,7 +808,7 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--ascii", "tidy", "--all"])?;
 
-        let p = Precious::new(app)?;
+        let p = LintOrTidyRunner::new(app)?;
         assert_eq!(p.chars, chars::BORING_CHARS);
 
         Ok(())
@@ -813,9 +832,9 @@ lint_failure_exit_codes = [1]
             "--all",
         ])?;
         let config = app.config.clone();
-        let p = Precious::new(app)?;
+        let p = LintOrTidyRunner::new(app)?;
 
-        let config_file = Precious::config_file(config.as_ref(), &p.project_root);
+        let config_file = LintOrTidyRunner::config_file(config.as_ref(), &p.project_root);
         let mut expect_config_file = p.project_root;
         expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
         assert_eq!(config_file, expect_config_file);
@@ -837,7 +856,7 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
-        let p = Precious::new(app)?;
+        let p = LintOrTidyRunner::new(app)?;
         assert_eq!(p.project_root, src_dir);
 
         Ok(())
@@ -930,7 +949,7 @@ lint_failure_exit_codes = [1]
         }
         let app = App::try_parse_from(&cmd)?;
 
-        let mut p = Precious::new(app)?;
+        let mut p = LintOrTidyRunner::new(app)?;
 
         assert_eq!(
             p.finder()?
@@ -960,7 +979,7 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
-        let mut p = Precious::new(app)?;
+        let mut p = LintOrTidyRunner::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 0);
@@ -984,7 +1003,7 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
 
-        let mut p = Precious::new(app)?;
+        let mut p = LintOrTidyRunner::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 1);
@@ -1009,7 +1028,7 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "lint", "--all"])?;
 
-        let mut p = Precious::new(app)?;
+        let mut p = LintOrTidyRunner::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 0);
@@ -1033,7 +1052,7 @@ lint_failure_exit_codes = [1]
             "--all",
         ])?;
 
-        let mut p = Precious::new(app)?;
+        let mut p = LintOrTidyRunner::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 0);
@@ -1057,7 +1076,7 @@ lint_failure_exit_codes = [1]
             "--all",
         ])?;
 
-        let mut p = Precious::new(app)?;
+        let mut p = LintOrTidyRunner::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 1);
@@ -1106,7 +1125,7 @@ lint_failure_exit_codes = [1]
 
         let app = App::try_parse_from(["precious", "--quiet", "tidy", "-a"])?;
 
-        let mut p = Precious::new(app)?;
+        let mut p = LintOrTidyRunner::new(app)?;
         let status = p.run();
 
         assert_eq!(status, 0);

@@ -9,8 +9,8 @@ fn main() {
         eprintln!("Error creating logger: {e}");
         std::process::exit(1);
     }
-    let status = match precious::Precious::new(app) {
-        Ok(mut p) => p.run(),
+    let status = match app.run() {
+        Ok(s) => s,
         Err(e) => {
             error!("{e}");
             1

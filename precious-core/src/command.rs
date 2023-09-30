@@ -15,7 +15,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum CommandType {
+pub enum LintOrTidyCommandType {
     #[serde(rename = "lint")]
     Lint,
     #[serde(rename = "tidy")]
@@ -24,12 +24,12 @@ pub enum CommandType {
     Both,
 }
 
-impl CommandType {
+impl LintOrTidyCommandType {
     fn what(&self) -> &'static str {
         match self {
-            CommandType::Lint => "linter",
-            CommandType::Tidy => "tidier",
-            CommandType::Both => "linter/tidier",
+            LintOrTidyCommandType::Lint => "linter",
+            LintOrTidyCommandType::Tidy => "tidier",
+            LintOrTidyCommandType::Both => "linter/tidier",
         }
     }
 }
@@ -127,10 +127,10 @@ enum CommandError {
 }
 
 #[derive(Debug)]
-pub struct Command {
+pub struct LintOrTidyCommand {
     project_root: PathBuf,
     pub name: String,
-    typ: CommandType,
+    typ: LintOrTidyCommandType,
     includer: Matcher,
     excluder: Matcher,
     invoke: Invoke,
@@ -147,10 +147,10 @@ pub struct Command {
 }
 
 #[derive(Debug)]
-pub struct CommandParams {
+pub struct LintOrTidyCommandParams {
     pub project_root: PathBuf,
     pub name: String,
-    pub typ: CommandType,
+    pub typ: LintOrTidyCommandType,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub invoke: Invoke,
@@ -196,11 +196,11 @@ struct PathInfo {
 
 // This should be safe because we never mutate the Command struct in any of its
 // methods.
-unsafe impl Sync for Command {}
+unsafe impl Sync for LintOrTidyCommand {}
 
-impl Command {
-    pub fn new(params: CommandParams) -> Result<Command> {
-        if let CommandType::Both = params.typ {
+impl LintOrTidyCommand {
+    pub fn new(params: LintOrTidyCommandParams) -> Result<LintOrTidyCommand> {
+        if let LintOrTidyCommandType::Both = params.typ {
             if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
                 return Err(CommandError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
             }
@@ -225,7 +225,7 @@ impl Command {
 
         let cmd = replace_root(params.cmd, &params.project_root);
         let root = params.project_root.clone();
-        Ok(Command {
+        Ok(LintOrTidyCommand {
             project_root: params.project_root,
             name: params.name,
             typ: params.typ,
@@ -309,7 +309,7 @@ impl Command {
     }
 
     pub fn tidy(&self, files: &[&Path]) -> Result<Option<TidyOutcome>> {
-        self.require_is_not_command_type("tidy", CommandType::Lint)?;
+        self.require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)?;
 
         if !self.should_act_on_files(files)? {
             return Ok(None);
@@ -349,7 +349,7 @@ impl Command {
     }
 
     pub fn lint(&self, files: &[&Path]) -> Result<Option<LintOutcome>> {
-        self.require_is_not_command_type("lint", CommandType::Tidy)?;
+        self.require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)?;
 
         if !self.should_act_on_files(files)? {
             return Ok(None);
@@ -387,7 +387,7 @@ impl Command {
     fn require_is_not_command_type(
         &self,
         method: &'static str,
-        not_allowed: CommandType,
+        not_allowed: LintOrTidyCommandType,
     ) -> Result<()> {
         if not_allowed == self.typ {
             return Err(CommandError::CannotMethodWithCommand {
@@ -769,12 +769,12 @@ mod tests {
         MatcherBuilder::new("/").with(globs)?.build()
     }
 
-    fn default_command() -> Result<Command> {
-        Ok(Command {
+    fn default_command() -> Result<LintOrTidyCommand> {
+        Ok(LintOrTidyCommand {
             // These params will be ignored
             project_root: PathBuf::new(),
             name: String::new(),
-            typ: CommandType::Lint,
+            typ: LintOrTidyCommandType::Lint,
             includer: matcher(&[])?,
             excluder: matcher(&[])?,
             invoke: Invoke::PerFile,
@@ -794,7 +794,7 @@ mod tests {
     #[test]
     #[parallel]
     fn files_to_args_sets_per_file() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
             includer: matcher(&["**/*.go"])?,
             ..default_command()?
@@ -818,7 +818,7 @@ mod tests {
     #[test]
     #[parallel]
     fn files_to_args_sets_per_dir() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerDir,
             includer: matcher(&["**/*.go"])?,
             ..default_command()?
@@ -842,7 +842,7 @@ mod tests {
     #[test]
     #[parallel]
     fn files_to_args_sets_once() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::Once,
             includer: matcher(&["**/*.go"])?,
             ..default_command()?
@@ -866,16 +866,16 @@ mod tests {
     #[test]
     #[parallel]
     fn require_is_not_command_type_with_lint_command() -> Result<()> {
-        let command = Command {
-            typ: CommandType::Lint,
+        let command = LintOrTidyCommand {
+            typ: LintOrTidyCommandType::Lint,
             ..default_command()?
         };
         assert!(command
-            .require_is_not_command_type("lint", CommandType::Tidy)
+            .require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)
             .is_ok());
         assert_eq!(
             command
-                .require_is_not_command_type("tidy", CommandType::Lint)
+                .require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)
                 .unwrap_err()
                 .downcast::<CommandError>()
                 .unwrap(),
@@ -892,16 +892,16 @@ mod tests {
     #[test]
     #[parallel]
     fn require_is_not_command_type_with_tidy_command() -> Result<()> {
-        let command = Command {
-            typ: CommandType::Tidy,
+        let command = LintOrTidyCommand {
+            typ: LintOrTidyCommandType::Tidy,
             ..default_command()?
         };
         assert!(command
-            .require_is_not_command_type("tidy", CommandType::Lint)
+            .require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)
             .is_ok());
         assert_eq!(
             command
-                .require_is_not_command_type("lint", CommandType::Tidy)
+                .require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)
                 .unwrap_err()
                 .downcast::<CommandError>()
                 .unwrap(),
@@ -918,15 +918,15 @@ mod tests {
     #[test]
     #[parallel]
     fn require_is_not_command_type_with_both_command() -> Result<()> {
-        let command = Command {
-            typ: CommandType::Both,
+        let command = LintOrTidyCommand {
+            typ: LintOrTidyCommandType::Both,
             ..default_command()?
         };
         assert!(command
-            .require_is_not_command_type("tidy", CommandType::Lint)
+            .require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)
             .is_ok());
         assert!(command
-            .require_is_not_command_type("lint", CommandType::Tidy)
+            .require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)
             .is_ok());
 
         Ok(())
@@ -935,10 +935,10 @@ mod tests {
     #[test]
     #[parallel]
     fn should_act_on_files_invoke_per_file() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
-            typ: CommandType::Lint,
+            typ: LintOrTidyCommandType::Lint,
             includer: matcher(&["**/*.go", "!this/file.go"])?,
             excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             ..default_command()?
@@ -974,10 +974,10 @@ mod tests {
     #[test]
     #[parallel]
     fn should_act_on_files_invoke_per_dir() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
-            typ: CommandType::Lint,
+            typ: LintOrTidyCommandType::Lint,
             includer: matcher(&["**/*.go", "!this/file.go"])?,
             excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             invoke: Invoke::PerDir,
@@ -1023,10 +1023,10 @@ mod tests {
     #[test]
     #[parallel]
     fn should_act_on_files_invoke_once() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
-            typ: CommandType::Lint,
+            typ: LintOrTidyCommandType::Lint,
             includer: matcher(&["**/*.go", "!this/file.go"])?,
             excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             invoke: Invoke::Once,
@@ -1078,7 +1078,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_file_in_project_root() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::File,
             ..default_command()?
         };
@@ -1100,7 +1100,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_file_in_subdir() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::File,
             ..default_command()?
         };
@@ -1118,7 +1118,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_dir_in_project_root() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::Dir,
             ..default_command()?
         };
@@ -1134,7 +1134,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_dir_in_subdir() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::Dir,
             ..default_command()?
         };
@@ -1153,7 +1153,7 @@ mod tests {
     #[parallel]
     fn operating_on_with_path_args_absolute_file() -> Result<()> {
         let cwd = env::current_dir()?;
-        let command = Command {
+        let command = LintOrTidyCommand {
             project_root: cwd.clone(),
             path_args: PathArgs::AbsoluteFile,
             ..default_command()?
@@ -1180,7 +1180,7 @@ mod tests {
     #[parallel]
     fn operating_on_with_path_args_absolute_file_in_dir() -> Result<()> {
         let cwd = env::current_dir()?;
-        let command = Command {
+        let command = LintOrTidyCommand {
             project_root: cwd.clone(),
             path_args: PathArgs::AbsoluteFile,
             ..default_command()?
@@ -1210,7 +1210,7 @@ mod tests {
     #[parallel]
     fn operating_on_with_path_args_absolute_dir_in_project_root() -> Result<()> {
         let cwd = env::current_dir()?;
-        let command = Command {
+        let command = LintOrTidyCommand {
             project_root: cwd.clone(),
             path_args: PathArgs::AbsoluteDir,
             ..default_command()?
@@ -1234,7 +1234,7 @@ mod tests {
     #[parallel]
     fn operating_on_with_path_args_absolute_dir_in_dir() -> Result<()> {
         let cwd = env::current_dir()?;
-        let command = Command {
+        let command = LintOrTidyCommand {
             project_root: cwd.clone(),
             path_args: PathArgs::AbsoluteDir,
             ..default_command()?
@@ -1260,7 +1260,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_dot_in_project_root() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::Dot,
             ..default_command()?
         };
@@ -1276,7 +1276,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_dot_in_dir() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::Dot,
             ..default_command()?
         };
@@ -1295,7 +1295,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_none_in_project_root() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::None,
             ..default_command()?
         };
@@ -1309,7 +1309,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_none_in_dir() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             path_args: PathArgs::None,
             ..default_command()?
         };
@@ -1326,7 +1326,7 @@ mod tests {
     #[test]
     #[parallel]
     fn maybe_path_metadata_for_per_file() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
             includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             ..default_command()?
@@ -1345,7 +1345,7 @@ mod tests {
     #[test]
     #[parallel]
     fn maybe_path_metadata_for_per_dir() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
             includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             excluder: MatcherBuilder::new("/")
@@ -1378,7 +1378,7 @@ mod tests {
     #[test]
     #[parallel]
     fn maybe_path_metadata_for_once() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::Once,
             ..default_command()?
         };
@@ -1391,7 +1391,7 @@ mod tests {
     #[test]
     #[parallel]
     fn command_for_paths() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             cmd: vec![String::from("test")],
             ..default_command()?
         };
@@ -1416,7 +1416,7 @@ mod tests {
             "one flag",
         );
 
-        let command = Command {
+        let command = LintOrTidyCommand {
             cmd: vec![String::from("test")],
             path_flag: Some(String::from("--path-flag")),
             ..default_command()?
@@ -1443,7 +1443,7 @@ mod tests {
     #[test]
     #[parallel]
     fn paths_were_not_changed_when_only_mtime_changes() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
             includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             excluder: MatcherBuilder::new("/")
@@ -1469,7 +1469,7 @@ mod tests {
     #[test]
     #[parallel]
     fn paths_were_changed_when_size_changes() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
             includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             excluder: MatcherBuilder::new("/")
@@ -1495,7 +1495,7 @@ mod tests {
     #[test]
     #[parallel]
     fn paths_were_changed_when_content_changes() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
             includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             excluder: MatcherBuilder::new("/")
@@ -1524,7 +1524,7 @@ mod tests {
     #[test]
     #[parallel]
     fn paths_were_changed_when_dir_has_new_file() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerDir,
             includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             excluder: MatcherBuilder::new("/")
@@ -1567,7 +1567,7 @@ mod tests {
     #[test]
     #[parallel]
     fn paths_were_changed_when_dir_has_file_deleted() -> Result<()> {
-        let command = Command {
+        let command = LintOrTidyCommand {
             invoke: Invoke::PerDir,
             includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             excluder: MatcherBuilder::new("/")
