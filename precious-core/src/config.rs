@@ -14,52 +14,52 @@ use thiserror::Error;
 #[derive(Clone, Debug, Deserialize)]
 pub struct CommandConfig {
     #[serde(rename = "type")]
-    typ: LintOrTidyCommandType,
+    pub(crate) typ: LintOrTidyCommandType,
     #[serde(deserialize_with = "string_or_seq_string")]
-    include: Vec<String>,
+    pub(crate) include: Vec<String>,
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
-    exclude: Vec<String>,
+    pub(crate) exclude: Vec<String>,
     #[serde(default)]
-    invoke: Option<Invoke>,
+    pub(crate) invoke: Option<Invoke>,
     #[serde(default)]
     #[serde(deserialize_with = "working_dir")]
-    working_dir: Option<WorkingDir>,
+    pub(crate) working_dir: Option<WorkingDir>,
     #[serde(default)]
-    path_args: Option<PathArgs>,
+    pub(crate) path_args: Option<PathArgs>,
     #[serde(default)]
-    run_mode: Option<OldRunMode>,
+    pub(crate) run_mode: Option<OldRunMode>,
     #[serde(default)]
-    chdir: Option<bool>,
+    pub(crate) chdir: Option<bool>,
     #[serde(deserialize_with = "string_or_seq_string")]
-    cmd: Vec<String>,
+    pub(crate) cmd: Vec<String>,
     #[serde(default)]
-    env: HashMap<String, String>,
-    #[serde(default)]
-    #[serde(deserialize_with = "string_or_seq_string")]
-    lint_flags: Vec<String>,
+    pub(crate) env: HashMap<String, String>,
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
-    tidy_flags: Vec<String>,
+    pub(crate) lint_flags: Vec<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "string_or_seq_string")]
+    pub(crate) tidy_flags: Vec<String>,
     #[serde(default = "empty_string")]
-    path_flag: String,
+    pub(crate) path_flag: String,
     #[serde(deserialize_with = "u8_or_seq_u8")]
-    ok_exit_codes: Vec<u8>,
+    pub(crate) ok_exit_codes: Vec<u8>,
     #[serde(default)]
     #[serde(deserialize_with = "u8_or_seq_u8")]
-    lint_failure_exit_codes: Vec<u8>,
+    pub(crate) lint_failure_exit_codes: Vec<u8>,
     #[serde(default)]
-    expect_stderr: bool,
+    pub(crate) expect_stderr: bool,
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
-    ignore_stderr: Vec<String>,
+    pub(crate) ignore_stderr: Vec<String>,
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
-    labels: Vec<String>,
+    pub(crate) labels: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum OldRunMode {
+pub(crate) enum OldRunMode {
     #[serde(rename = "files")]
     Files,
     #[serde(rename = "dirs")]
@@ -76,12 +76,12 @@ fn empty_string() -> String {
 pub struct Config {
     #[serde(default)]
     #[serde(deserialize_with = "string_or_seq_string")]
-    pub exclude: Vec<String>,
+    pub(crate) exclude: Vec<String>,
     commands: IndexMap<String, CommandConfig>,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub enum ConfigError {
+pub(crate) enum ConfigError {
     #[error("File at {} cannot be read: {error:}", file.display())]
     FileCannotBeRead { file: PathBuf, error: String },
     #[error(
@@ -345,7 +345,7 @@ where
 const DEFAULT_LABEL: &str = "default";
 
 impl Config {
-    pub fn new(file: &Path) -> Result<Config> {
+    pub(crate) fn new(file: &Path) -> Result<Config> {
         match fs::read(file) {
             Err(e) => Err(ConfigError::FileCannotBeRead {
                 file: file.to_path_buf(),
@@ -359,7 +359,7 @@ impl Config {
         }
     }
 
-    pub fn into_tidy_commands(
+    pub(crate) fn into_tidy_commands(
         self,
         project_root: &Path,
         command: Option<&str>,
@@ -368,7 +368,7 @@ impl Config {
         self.into_commands(project_root, command, label, LintOrTidyCommandType::Tidy)
     }
 
-    pub fn into_lint_commands(
+    pub(crate) fn into_lint_commands(
         self,
         project_root: &Path,
         command: Option<&str>,
@@ -404,6 +404,10 @@ impl Config {
         }
 
         Ok(commands)
+    }
+
+    pub(crate) fn command_info(self) -> Vec<(String, CommandConfig)> {
+        self.commands.into_iter().collect()
     }
 }
 

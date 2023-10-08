@@ -34,6 +34,16 @@ impl LintOrTidyCommandType {
     }
 }
 
+impl fmt::Display for LintOrTidyCommandType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            LintOrTidyCommandType::Lint => "lint",
+            LintOrTidyCommandType::Tidy => "tidy",
+            LintOrTidyCommandType::Both => "both",
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Invoke {
     #[serde(rename = "per-file")]

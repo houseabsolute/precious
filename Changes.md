@@ -3,6 +3,8 @@
 ## 0.5.2
 
 - Help output is now line-wrapped based on your terminal width.
+- Added a new `precious config list` command that prints a table showing all the commands in your
+  config file. Requested by Olaf Alders. GH #52.
 
 ## 0.5.1 - 2023-03-11
 

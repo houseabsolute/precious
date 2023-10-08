@@ -229,8 +229,8 @@ You can disable parallel execution by passing `--jobs 1`.
 
 ### Subcommands
 
-The `precious` command has two subcommands, `lint` and `tidy`. You must always specify one of these.
-These subcommands take the same options.
+The `precious` command has three subcommands, `lint`, `tidy`, and `config`. You must always specify
+one of these. The `lint` and `tidy` commands take the same options:
 
 #### Selecting Paths to Operate On
 
@@ -314,6 +314,29 @@ When `precious` runs it does the following to determine which commands apply to 
     be run on that directory.
   - If `invoke` is `once`, then the rules are applied to all of the files at once. If any one of
     those files matches the include rule, the command will be run.
+
+### The `config` Subcommand
+
+Right now this command only takes one option, which is an additional subcommand, `list`. This prints
+a Unicode table describing the commands in your config file.
+
+```
+Found config file at: /home/autarch/projects/precious/precious.toml
+
+┌─────────────────────┬──────┬────────────────────────────────────────────────────────┐
+│ Name                ┆ Type ┆ Runs                                                   │
+╞═════════════════════╪══════╪════════════════════════════════════════════════════════╡
+│ rustfmt             ┆ both ┆ rustfmt --edition 2021                                 │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ clippy              ┆ lint ┆ cargo clippy --locked --all-targets --all-features     │
+│                     ┆      ┆ --workspace -- -D clippy::all                          │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ prettier            ┆ both ┆ ./node_modules/.bin/prettier --no-config --print-width │
+│                     ┆      ┆ 100 --prose-wrap always                                │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ omegasort-gitignore ┆ both ┆ omegasort --sort path --unique                         │
+└─────────────────────┴──────┴────────────────────────────────────────────────────────┘
+```
 
 ## Configuration Recommendations
 

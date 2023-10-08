@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{Error, Result};
 use clap::{ArgGroup, Parser};
+use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
@@ -16,6 +17,8 @@ use log::{debug, error, info};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
     env,
+    io::stdout,
+    io::Write,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -106,7 +109,7 @@ pub struct App {
 pub enum Subcommand {
     Lint(CommonArgs),
     Tidy(CommonArgs),
-    Config,
+    Config(ConfigArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -141,6 +144,17 @@ pub struct CommonArgs {
     /// A list of paths on which to operate
     #[clap(value_parser)]
     paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+pub struct ConfigArgs {
+    #[clap(subcommand)]
+    subcommand: ConfigSubcommand,
+}
+
+#[derive(Debug, Parser)]
+enum ConfigSubcommand {
+    List,
 }
 
 pub fn app() -> App {
@@ -188,16 +202,28 @@ impl App {
     }
 
     pub fn run(self) -> Result<i8> {
-        let (cwd, project_root, _, config) = self.load_config()?;
+        self._run(stdout())
+    }
+
+    #[cfg(test)]
+    fn run_with_output(self, output: impl Write) -> Result<i8> {
+        self._run(output)
+    }
+
+    fn _run(self, output: impl Write) -> Result<i8> {
+        let (cwd, project_root, config_file, config) = self.load_config()?;
 
         match self.subcommand {
             Subcommand::Lint(_) | Subcommand::Tidy(_) => {
                 Ok(LintOrTidyRunner::new(self, cwd, project_root, config)?.run())
             }
-            Subcommand::Config => {
-                //let config = config::Config::load(&self.config)?;
-                //println!("{}", toml::to_string_pretty(&config)?);
-                println!("config");
+            Subcommand::Config(args) => {
+                match args.subcommand {
+                    ConfigSubcommand::List => {
+                        print_config(output, &config_file, config)?;
+                    }
+                }
+
                 Ok(0)
             }
         }
@@ -299,6 +325,32 @@ impl App {
     }
 }
 
+fn print_config(mut output: impl Write, config_file: &Path, config: config::Config) -> Result<()> {
+    writeln!(output, "Found config file at: {}", config_file.display())?;
+    writeln!(output)?;
+
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("Name"),
+            Cell::new("Type"),
+            Cell::new("Runs"),
+        ]);
+
+    for (name, c) in config.command_info() {
+        table.add_row(vec![
+            Cell::new(name),
+            Cell::new(c.typ),
+            Cell::new(c.cmd.join(" ")),
+        ]);
+    }
+    writeln!(output, "{table}")?;
+
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct LintOrTidyRunner {
     mode: paths::mode::Mode,
@@ -339,7 +391,7 @@ impl LintOrTidyRunner {
         let (should_lint, paths, command, label) = match app.subcommand {
             Subcommand::Lint(a) => (true, a.paths, a.command, a.label),
             Subcommand::Tidy(a) => (false, a.paths, a.command, a.label),
-            Subcommand::Config => unreachable!("this is handled in App::run"),
+            Subcommand::Config(_) => unreachable!("this is handled in App::run"),
         };
 
         Ok(LintOrTidyRunner {
@@ -361,7 +413,7 @@ impl LintOrTidyRunner {
         let common = match &app.subcommand {
             Subcommand::Lint(c) => c,
             Subcommand::Tidy(c) => c,
-            Subcommand::Config => unreachable!("this is handled in App::run"),
+            Subcommand::Config(_) => unreachable!("this is handled in App::run"),
         };
         if common.all {
             return Ok(paths::mode::Mode::All);
@@ -1145,6 +1197,58 @@ lint_failure_exit_codes = [1]
 
         let content = helper.read_file(test_replace.as_ref())?;
         assert_eq!(content, "The letter b".to_string());
+
+        Ok(())
+    }
+
+    #[test]
+    fn print_config() -> Result<()> {
+        let config = r#"
+            [commands.foo]
+            type    = "lint"
+            include = "*.foo"
+            cmd     = ["foo", "--lint", "--with-vigor"]
+            ok_exit_codes = [0]
+
+            [commands.bar]
+            type    = "tidy"
+            include = "*.bar"
+            cmd     = ["bar", "--fix-broken-things", "--aggressive"]
+            ok_exit_codes = [0]
+
+            [commands.baz]
+            type    = "both"
+            include = "*.baz"
+            cmd     = ["baz", "--fast-mode", "--no-verify"]
+            lint_flags = "--lint"
+            ok_exit_codes = [0]
+        "#;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let _pushd = helper.pushd_to_git_root()?;
+
+        let app = App::try_parse_from(["precious", "config", "list"])?;
+        let mut buffer = Vec::new();
+        let status = app.run_with_output(&mut buffer)?;
+
+        assert_eq!(status, 0);
+
+        let output = String::from_utf8(buffer)?;
+        let expect = format!(
+            r#"Found config file at: {}
+
+┌──────┬──────┬──────────────────────────────────────┐
+│ Name ┆ Type ┆ Runs                                 │
+╞══════╪══════╪══════════════════════════════════════╡
+│ foo  ┆ lint ┆ foo --lint --with-vigor              │
+├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ bar  ┆ tidy ┆ bar --fix-broken-things --aggressive │
+├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ baz  ┆ both ┆ baz --fast-mode --no-verify          │
+└──────┴──────┴──────────────────────────────────────┘
+"#,
+            helper.config_file(DEFAULT_CONFIG_FILE_NAME).display(),
+        );
+        assert_eq!(output, expect);
 
         Ok(())
     }
