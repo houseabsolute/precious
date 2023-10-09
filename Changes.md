@@ -1,6 +1,6 @@
 <!-- next-header -->
 
-## 0.5.2
+## 0.5.2 - 2023-10-09
 
 - Help output is now line-wrapped based on your terminal width.
 - Added a new `precious config list` command that prints a table showing all the commands in your
