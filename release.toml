@@ -3,18 +3,18 @@ shared-version = true
 sign-commit = true
 sign-tag = true
 
-[[pre-release-replacements]]
-file = "Changes.md"
-search = "<!-- next-header -->"
-replace = "<!-- next-header -->\n\n## {{Unreleased}} - {{ReleaseDate}}\n"
-exactly = 1
+# [[pre-release-replacements]]
+# file = "Changes.md"
+# search = "<!-- next-header -->"
+# replace = "<!-- next-header -->\n\n## {{Unreleased}} - {{ReleaseDate}}\n"
+# exactly = 1
 
-[[pre-release-replacements]]
-file = "Changes.md"
-search = "{{Unreleased}}"
-replace = "{{version}}"
+# [[pre-release-replacements]]
+# file = "Changes.md"
+# search = "{{Unreleased}}"
+# replace = "{{version}}"
 
-[[pre-release-replacements]]
-file = "Changes.md"
-search = "{{ReleaseDate}}"
-replace = "{{date}}"
+# [[pre-release-replacements]]
+# file = "Changes.md"
+# search = "{{ReleaseDate}}"
+# replace = "{{date}}"
