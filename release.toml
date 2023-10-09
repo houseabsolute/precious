@@ -1,6 +1,4 @@
 allow-branch = ["master"]
-consolidate-commits = true
-consolidate-pushes = true
 shared-version = true
 sign-commit = true
 sign-tag = true
