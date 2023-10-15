@@ -48,13 +48,51 @@ You can also install this via `cargo` by running `cargo install precious`. See
 [the cargo documentation](https://doc.rust-lang.org/cargo/commands/cargo-install.html) to understand
 where the binary will be installed.
 
-## Examples
+## Getting Started
 
-Check out this repo's [examples directory](examples), which has `precious.toml` config files for
-several languages. Contributions for other languages are welcome!
+The `precious` binary has a `config init` subcommand that will generate a config file for you. This
+subcommand takes the following flags:
 
-Also check out [the example `install-dev-tools.sh`](examples/bin/install-dev-tools.sh) script. You
-can customize this as needed to install only the tools you need for your project.
+| Flag                              | Description                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `-c`, `--component` `<COMPONENT>` | The component(s) to generate config for (see below)                                |
+| `-p`, `--path` `<PATH>`           | The path to which the config file should be written. Defaults to `./precious.toml` |
+
+Here's an example for a Rust project:
+
+```
+$> precious config init --component rust --component gitignore --component yaml
+```
+
+### Components
+
+The following components are supported:
+
+- `go` - Generates config for a Go project which uses [`golangci-lint`](https://golangci-lint.run/)
+  for linting and tidying.
+- `perl` - Generates config for a Perl project which uses a variety of tools, including
+  [`perlcritic`](https://metacpan.org/dist/Perl-Critic) and
+  [`perltidy`](https://metacpan.org/dist/Perl-Tidy).
+- `rust` - Generates config for a Rust project which uses
+  [`rustfmt`](https://rust-lang.github.io/rustfmt/) for tidying and
+  [`clippy`](https://doc.rust-lang.org/stable/clippy/) for linting.
+- `gitignore` - Generates config to lint and tidy (by sorting) `.gitignore` files using
+  [`omegasort`](https://github.com/houseabsolute/omegasort).
+- `markdown` - Generates config to lint and tidy Markdown files using
+  [`prettier`](https://prettier.io/).
+- `yaml` - Generates config to lint and tidy YAML files using [`prettier`](https://prettier.io/).
+
+### Examples
+
+This repo's [examples directory](examples) has `precious.toml` config files for several languages.
+Contributions for other languages are welcome!
+
+The config in the examples matches what `precious config init` generates, and there are comments in
+the files with more details about how you might change this configuration.
+
+Also check out [the example `install-dev-tools.sh`](examples/bin/install-dev-tools.sh) script for a
+tool to install all of your project's linting and tidying dependencies. You can customize this as
+needed to install only the tools you need for your project.
 
 ## Configuration
 
@@ -317,8 +355,8 @@ When `precious` runs it does the following to determine which commands apply to 
 
 ### The `config` Subcommand
 
-Right now this command only takes one option, which is an additional subcommand, `list`. This prints
-a Unicode table describing the commands in your config file.
+In addition to the `init` subcommand, this command has a `list` subcommand. This prints a Unicode
+table describing the commands in your config file.
 
 ```
 Found config file at: /home/autarch/projects/precious/precious.toml

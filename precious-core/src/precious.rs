@@ -1,22 +1,25 @@
 use crate::{
     chars,
     command::{self, TidyOutcome},
-    config,
+    config, config_init,
     paths::{self, finder::Finder},
     vcs,
 };
 use anyhow::{Error, Result};
-use clap::{ArgGroup, Parser};
+use clap::{ArgGroup, Parser, ValueEnum};
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
 };
+use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use log::{debug, error, info};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
+    collections::{HashMap, HashSet},
     env,
+    fs::{create_dir_all, File},
     io::stdout,
     io::Write,
     path::{Path, PathBuf},
@@ -43,6 +46,9 @@ enum PreciousError {
 
     #[error("No {what:} commands match the given label, {label:}")]
     NoCommandsMatchLabel { what: String, label: String },
+
+    #[error("There is already a precious.toml file in this directory")]
+    ConfigFileExists,
 }
 
 #[derive(Debug)]
@@ -68,8 +74,6 @@ struct ActionFailure {
     config_key: String,
     paths: Vec<PathBuf>,
 }
-
-const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 
 #[derive(Debug, Parser)]
 #[clap(name = "precious")]
@@ -155,6 +159,25 @@ pub struct ConfigArgs {
 #[derive(Debug, Parser)]
 enum ConfigSubcommand {
     List,
+    Init(ConfigInitArgs),
+}
+
+#[derive(Debug, Parser)]
+pub struct ConfigInitArgs {
+    #[clap(long, short, value_enum)]
+    component: Vec<InitComponent>,
+    #[clap(long, short, default_value = "./precious.toml")]
+    path: PathBuf,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum InitComponent {
+    Go,
+    Perl,
+    Rust,
+    Gitignore,
+    Markdown,
+    YAML,
 }
 
 pub fn app() -> App {
@@ -211,6 +234,13 @@ impl App {
     }
 
     fn _run(self, output: impl Write) -> Result<i8> {
+        if let Subcommand::Config(config_args) = &self.subcommand {
+            if let ConfigSubcommand::Init(init_args) = &config_args.subcommand {
+                init_config(&init_args.component, &init_args.path)?;
+                return Ok(0);
+            }
+        }
+
         let (cwd, project_root, config_file, config) = self.load_config()?;
 
         match self.subcommand {
@@ -221,6 +251,9 @@ impl App {
                 match args.subcommand {
                     ConfigSubcommand::List => {
                         print_config(output, &config_file, config)?;
+                    }
+                    ConfigSubcommand::Init(_) => {
+                        unreachable!("This is handled earlier")
                     }
                 }
 
@@ -238,65 +271,11 @@ impl App {
 
     fn load_config(&self) -> Result<(PathBuf, PathBuf, PathBuf, config::Config)> {
         let cwd = env::current_dir()?;
-        let project_root = self.project_root(&cwd)?;
+        let project_root = project_root(self.config.as_ref(), &cwd)?;
         let config_file = self.config_file(&project_root);
         let config = config::Config::new(&config_file)?;
 
         Ok((cwd, project_root, config_file, config))
-    }
-
-    fn project_root(&self, cwd: &Path) -> Result<PathBuf> {
-        if let Some(file) = self.config.as_ref() {
-            if let Some(p) = file.parent() {
-                return Ok(p.to_path_buf());
-            }
-            return Err(PreciousError::ConfigFileHasNoParent { file: file.clone() }.into());
-        }
-
-        if Self::has_config_file(cwd) {
-            return Ok(cwd.into());
-        }
-
-        for anc in cwd.ancestors() {
-            if Self::is_checkout_root(anc) {
-                return Ok(anc.to_owned());
-            }
-        }
-
-        Err(PreciousError::CannotFindRoot {
-            cwd: cwd.to_string_lossy().to_string(),
-        }
-        .into())
-    }
-
-    fn has_config_file(dir: &Path) -> bool {
-        Self::default_config_file(dir).exists()
-    }
-
-    fn default_config_file(dir: &Path) -> PathBuf {
-        // It'd be nicer to use the version of this provided by itertools, but
-        // that requires itertools 0.10.1, and we want to keep the version at
-        // 0.9.0 for the benefit of Debian.
-        Self::find_or_first(
-            CONFIG_FILE_NAMES.iter().map(|n| {
-                let mut path = dir.to_path_buf();
-                path.push(n);
-                path
-            }),
-            |p| p.exists(),
-        )
-    }
-
-    fn find_or_first<I, P>(mut iter: I, pred: P) -> PathBuf
-    where
-        I: Iterator<Item = PathBuf>,
-        P: Fn(&Path) -> bool,
-    {
-        let first = iter.next().unwrap();
-        if pred(&first) {
-            return first;
-        }
-        iter.find(|i| pred(i)).unwrap_or(first)
     }
 
     fn config_file(&self, dir: &Path) -> PathBuf {
@@ -305,24 +284,83 @@ impl App {
             return cf.to_path_buf();
         }
 
-        let default = Self::default_config_file(dir);
+        let default = default_config_file(dir);
         debug!(
             "Loading config from {} (default location)",
             default.display()
         );
         default
     }
+}
 
-    fn is_checkout_root(dir: &Path) -> bool {
-        for subdir in vcs::DIRS {
-            let mut poss = PathBuf::from(dir);
-            poss.push(subdir);
-            if poss.exists() {
-                return true;
-            }
+fn project_root(config_file: Option<&PathBuf>, cwd: &Path) -> Result<PathBuf> {
+    if let Some(file) = config_file {
+        if let Some(p) = file.parent() {
+            return Ok(p.to_path_buf());
         }
-        false
+        return Err(PreciousError::ConfigFileHasNoParent {
+            file: file.to_path_buf(),
+        }
+        .into());
     }
+
+    if has_config_file(cwd) {
+        return Ok(cwd.into());
+    }
+
+    for anc in cwd.ancestors() {
+        if is_checkout_root(anc) {
+            return Ok(anc.to_owned());
+        }
+    }
+
+    Err(PreciousError::CannotFindRoot {
+        cwd: cwd.to_string_lossy().to_string(),
+    }
+    .into())
+}
+
+fn has_config_file(dir: &Path) -> bool {
+    default_config_file(dir).exists()
+}
+
+const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
+
+fn default_config_file(dir: &Path) -> PathBuf {
+    // It'd be nicer to use the version of this provided by itertools, but
+    // that requires itertools 0.10.1, and we want to keep the version at
+    // 0.9.0 for the benefit of Debian.
+    find_or_first(
+        CONFIG_FILE_NAMES.iter().map(|n| {
+            let mut path = dir.to_path_buf();
+            path.push(n);
+            path
+        }),
+        |p| p.exists(),
+    )
+}
+
+fn find_or_first<I, P>(mut iter: I, pred: P) -> PathBuf
+where
+    I: Iterator<Item = PathBuf>,
+    P: Fn(&Path) -> bool,
+{
+    let first = iter.next().unwrap();
+    if pred(&first) {
+        return first;
+    }
+    iter.find(|i| pred(i)).unwrap_or(first)
+}
+
+fn is_checkout_root(dir: &Path) -> bool {
+    for subdir in vcs::DIRS {
+        let mut poss = PathBuf::from(dir);
+        poss.push(subdir);
+        if poss.exists() {
+            return true;
+        }
+    }
+    false
 }
 
 fn print_config(mut output: impl Write, config_file: &Path, config: config::Config) -> Result<()> {
@@ -347,6 +385,106 @@ fn print_config(mut output: impl Write, config_file: &Path, config: config::Conf
         ]);
     }
     writeln!(output, "{table}")?;
+
+    Ok(())
+}
+
+fn init_config(components: &[InitComponent], path: &Path) -> Result<()> {
+    if has_config_file(&env::current_dir()?) {
+        return Err(PreciousError::ConfigFileExists.into());
+    }
+
+    let mut excludes: HashSet<&'static str> = HashSet::new();
+    let mut commands = IndexMap::new();
+    let mut extra_files = HashMap::new();
+    let mut tool_urls: IndexSet<&'static str> = IndexSet::new();
+
+    for l in components {
+        let init = match l {
+            InitComponent::Go => config_init::go_init(),
+            InitComponent::Perl => config_init::perl_init(),
+            InitComponent::Rust => config_init::rust_init(),
+            InitComponent::Gitignore => config_init::gitignore_init(),
+            InitComponent::Markdown => config_init::markdown_init(),
+            InitComponent::YAML => config_init::yaml_init(),
+        };
+        excludes.extend(init.excludes);
+        for (name, c) in init.commands {
+            commands.insert(name, c);
+        }
+        for (name, c) in init.extra_files {
+            extra_files.insert(name, c);
+        }
+        tool_urls.extend(init.tool_urls);
+    }
+
+    let mut toml = String::new();
+    if !excludes.is_empty() {
+        toml.push_str(&format!(
+            "excludes = [\n{}\n]",
+            excludes
+                .iter()
+                .sorted()
+                .map(|e| format!(r#"    "{e}","#))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
+
+    if !toml.is_empty() {
+        toml.push_str("\n\n");
+    }
+
+    let mut command_strs: Vec<String> = Vec::new();
+
+    for (name, c) in commands {
+        let name_str = if name.contains(' ') {
+            format!(r#""{name}""#)
+        } else {
+            name.to_string()
+        };
+        command_strs.push(format!("[commands.{name_str}]\n{}\n", c.trim()));
+    }
+
+    toml.push_str(&command_strs.join("\n"));
+
+    println!();
+    println!("Writing {}", path.display());
+
+    let mut precious_toml = File::create(path)?;
+    precious_toml.write_all(toml.as_bytes())?;
+
+    if !extra_files.is_empty() {
+        println!();
+        println!("Generating support files");
+        println!();
+
+        let paths = extra_files.keys().sorted().collect::<Vec<_>>();
+
+        for p in paths {
+            print!("{} ...", p.display());
+            if p.exists() {
+                println!(
+                    "  already exists, skipping - delete this file if you want to regenerate it"
+                );
+                continue;
+            }
+            println!(" generated");
+
+            if let Some(parent) = p.parent() {
+                create_dir_all(parent)?;
+            }
+            let mut file = File::create(p)?;
+            file.write_all(extra_files.get(p).unwrap().trim_start().as_bytes())?;
+        }
+    }
+
+    println!();
+    println!("The generated precious.toml requires the following tools to be installed:");
+    for u in tool_urls {
+        println!("  {u}");
+    }
+    println!();
 
     Ok(())
 }
