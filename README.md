@@ -242,7 +242,7 @@ The `$PRECIOUS_ROOT` string will be replaced by the absolute path to the project
 
 To get help run `precious --help`.
 
-The root command takes the following options:
+The root command takes the following flags:
 
 | Flag                        | Description                                                         |
 | --------------------------- | ------------------------------------------------------------------- |
@@ -268,20 +268,19 @@ You can disable parallel execution by passing `--jobs 1`.
 ### Subcommands
 
 The `precious` command has three subcommands, `lint`, `tidy`, and `config`. You must always specify
-one of these. The `lint` and `tidy` commands take the same options:
+one of these. The `lint` and `tidy` commands take the same flags:
 
 #### Selecting Paths to Operate On
 
-When you run `precious` you must tell it what paths to operate on. There are several options for
-this:
+When you run `precious` you must tell it what paths to operate on. There are several flags for this:
 
-| Mode                                                         | Flag                  | Description                                                                                                                                                                                                                                                                                                      |
-| ------------------------------------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| All paths                                                    | `-a`, `--all`         | Run on all files under the project root (the directory containing the precious config file).                                                                                                                                                                                                                     |
-| Modified files according to git                              | `-g`, `--git`         | Run on all files that git reports as having been modified, including staged files.                                                                                                                                                                                                                               |
-| Staged files according to git                                | `-s`, `--staged`      | Run on all files that git reports as having been staged.                                                                                                                                                                                                                                                         |
-| Staged files according to git, with unstaged changes stashed | `--staged-with-stash` | This is like `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this option. |
-| Paths given on CLI                                           |                       | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other options. If any of these paths are directories then that entire directory tree will be included.                                                                         |
+| Mode                                                         | Flag                  | Description                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All paths                                                    | `-a`, `--all`         | Run on all files under the project root (the directory containing the precious config file).                                                                                                                                                                                                                   |
+| Modified files according to git                              | `-g`, `--git`         | Run on all files that git reports as having been modified, including staged files.                                                                                                                                                                                                                             |
+| Staged files according to git                                | `-s`, `--staged`      | Run on all files that git reports as having been staged.                                                                                                                                                                                                                                                       |
+| Staged files according to git, with unstaged changes stashed | `--staged-with-stash` | This is like `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this flag. |
+| Paths given on CLI                                           |                       | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other flags. If any of these paths are directories then that entire directory tree will be included.                                                                         |
 
 #### Running One Command
 
@@ -335,7 +334,7 @@ Finally, you can specify per-command `include` and `exclude` keys.
 
 When `precious` runs it does the following to determine which commands apply to which paths.
 
-- The base files to operate on are selected based on the command line option specified. This is one
+- The base files to operate on are selected based on the command line flag specified. This is one
   of:
   - `--all` - All files under the project root (the directory containing the precious config file).
   - `--git` - All files in the git repo that have been modified, including staged files.
