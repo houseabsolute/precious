@@ -18,7 +18,7 @@ exclude = [
 [commands.rustfmt]
 type    = "both"
 include = "**/*.rs"
-cmd     = "rustfmt"
+cmd     = [ "rustfmt", "--edition", "2021" ]
 lint_flags = "--check"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
@@ -40,18 +40,17 @@ cmd = [
 ]
 ok_exit_codes = 0
 lint_failure_exit_codes = 101
-ignore_stderr = "Finished dev"
+ignore_stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
 
 [commands.omegasort-gitignore]
-type        = "both"
-include     = "**/.gitignore"
-cmd         = [ "omegasort", "--sort=path" ]
-lint_flags  = "--check"
-tidy_flags  = "--in-place"
+type = "both"
+include = "**/.gitignore"
+cmd = [ "omegasort", "--sort", "path", "--unique" ]
+lint_flags = "--check"
+tidy_flags = "--in-place"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
 ignore_stderr = [
     "The .+ file is not sorted",
     "The .+ file is not unique",
 ]
-

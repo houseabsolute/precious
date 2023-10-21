@@ -2,9 +2,10 @@
 # of the tools needed by this config. You can copy it into your project and
 # modify it as needed to only install the tools you need.
 [commands.golangci-lint]
-type     = "lint"
-include  = "**/*.go"
-invoke   = "per-dir"
+type = "lint"
+include = "**/*.go"
+invoke = "once"
+path_args = "dir"
 cmd = [
     "golangci-lint",
     "run",
@@ -27,14 +28,15 @@ env = { "FAIL_ON_WARNINGS" = "1" }
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 
-[commands.goimports]
-type     = "tidy"
-include  = "**/*.go"
+[commands."tidy go files"]
+type = "tidy"
+include = "**/*.go"
 cmd = [
     "golangci-lint",
     "run",
     "--fix",
     "--disable-all",
+    "--enable", "gci",
     "--enable", "goimports",
     "--allow-parallel-runners",
 ]
@@ -42,20 +44,20 @@ ok_exit_codes = [0]
 
 # See check-go-mod.sh in helpers dir
 [commands.check-go-mod]
-type      = "lint"
-include   = "**/*.go"
-invoke    = "once"
+type = "lint"
+include = "**/*.go"
+invoke = "once"
 path_args = "none"
-cmd       = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
+cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
 ok_exit_codes = [0]
 lint_failure_exit_codes = [1]
 
 [commands.omegasort-gitignore]
-type        = "both"
-include     = "**/.gitignore"
-cmd         = [ "omegasort", "--sort", "path" ]
-lint_flags  = "--check"
-tidy_flags  = "--in-place"
+type = "both"
+include = "**/.gitignore"
+cmd = [ "omegasort", "--sort", "path", "--unique" ]
+lint_flags = "--check"
+tidy_flags = "--in-place"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
 ignore_stderr = [
