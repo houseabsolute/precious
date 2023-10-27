@@ -1,0 +1,19 @@
+name: PR Conflict Checker
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  check_pr_conflicts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Run PR Conflict Checker
+        uses: depandabot/conflict-bot@v1
+        with:
+          github-token: ${{ secrets.CONFLICT_BOT_ACCESS_TOKEN }}
+          main-branch: main
+          quiet: true
