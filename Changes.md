@@ -1,5 +1,10 @@
 <!-- next-header -->
 
+## 0.6.0 - 2023-10-29
+
+- Added a new `precious config init` command that can generate `precious.toml` for you. Suggested by
+  Olaf Alders. GH #53.
+
 ## 0.5.2 - 2023-10-09
 
 - Help output is now line-wrapped based on your terminal width.
