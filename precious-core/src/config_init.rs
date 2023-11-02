@@ -113,7 +113,7 @@ exit 0
 
 pub(crate) fn go_init() -> Init {
     Init {
-        excludes: &[],
+        excludes: &["vendor/**/*"],
         commands: &GO_COMMANDS,
         extra_files: vec![ConfigInitFile {
             path: PathBuf::from("dev/bin/check-go-mod.sh"),
