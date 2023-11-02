@@ -2,6 +2,8 @@
 
 - The `dev/bin/check-go-mod.sh` script created when running `precious config init --component go` is
   now executable. Reported by Olaf Olders. GH #56.
+- The generated config for Go now excludes the `vendor` directory for all commands. Implemented by
+  Olaf Alders. GH #57.
 - As of this release there are no longer binaries built for MIPS on Linux. These targets have been
   demoted to tier 3 support by the Rust compiler.
 
