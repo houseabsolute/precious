@@ -1,5 +1,8 @@
 <!-- next-header -->
 
+- As of this release there are no longer binaries built for MIPS on Linux. These targets have been
+  demoted to tier 3 support by the Rust compiler.
+
 ## 0.6.0 - 2023-10-29
 
 - Added a new `precious config init` command that can generate `precious.toml` for you. Suggested by
