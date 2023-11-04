@@ -64,6 +64,11 @@ const CHECK_GO_MOD: &str = r#"
 set -e
 
 ROOT=$( git rev-parse --show-toplevel )
+
+if [ ! -f "$ROOT/go.sum" ]; then
+    exit 0
+fi
+
 BEFORE_MOD=$( md5sum "$ROOT/go.mod" )
 BEFORE_SUM=$( md5sum "$ROOT/go.sum" )
 
