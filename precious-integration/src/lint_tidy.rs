@@ -1,3 +1,4 @@
+use crate::shared::{compile_precious, precious_path};
 use anyhow::{Context, Result};
 use itertools::Itertools;
 use precious_helpers::exec;
@@ -46,7 +47,7 @@ fn good_func() {
 #[test]
 #[serial]
 fn all() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
 
     let precious = precious_path()?;
     let env = HashMap::new();
@@ -73,7 +74,7 @@ fn all() -> Result<()> {
 #[test]
 #[serial]
 fn git() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     helper.modify_files()?;
 
     let precious = precious_path()?;
@@ -101,7 +102,7 @@ fn git() -> Result<()> {
 #[test]
 #[serial]
 fn staged() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     helper.modify_files()?;
     helper.stage_all()?;
 
@@ -130,7 +131,7 @@ fn staged() -> Result<()> {
 #[test]
 #[serial]
 fn cli_paths() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     let files = helper.modify_files()?;
 
     let precious = precious_path()?;
@@ -163,7 +164,7 @@ fn cli_paths() -> Result<()> {
 #[test]
 #[serial]
 fn all_in_subdir() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
 
     let precious = precious_path()?;
     let env = HashMap::new();
@@ -180,7 +181,7 @@ fn all_in_subdir() -> Result<()> {
 #[test]
 #[serial]
 fn git_in_subdir() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     helper.modify_files()?;
 
     let precious = precious_path()?;
@@ -198,7 +199,7 @@ fn git_in_subdir() -> Result<()> {
 #[test]
 #[serial]
 fn staged_in_subdir() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     helper.modify_files()?;
     helper.stage_all()?;
 
@@ -231,7 +232,7 @@ fn staged_in_subdir() -> Result<()> {
 #[test]
 #[serial]
 fn cli_paths_in_subdir() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     helper.modify_files()?;
 
     let precious = precious_path()?;
@@ -263,7 +264,7 @@ fn cli_paths_in_subdir() -> Result<()> {
 #[test]
 #[serial]
 fn one_command() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     let content = r#"
 fn foo() -> u8   {
     42
@@ -302,7 +303,7 @@ fn foo() -> u8   {
 #[test]
 #[serial]
 fn all_invocation_options() -> Result<()> {
-    let helper = do_test_setup()?;
+    let helper = set_up_for_tests()?;
     write_perl_script(&helper)?;
     create_file_tree(&helper)?;
 
@@ -563,26 +564,8 @@ fn munge_invocation_output(output_dir: PathBuf) -> Result<String> {
         .join(""))
 }
 
-fn precious_path() -> Result<String> {
-    let mut precious = env::current_dir()?;
-    precious.push("..");
-    precious.push("target");
-    precious.push("debug");
-    precious.push("precious");
-    Ok(precious.to_string_lossy().to_string())
-}
-
-fn do_test_setup() -> Result<TestHelper> {
-    let cargo_build_re = Regex::new("Finished.+dev.+target")?;
-    let env = HashMap::new();
-    exec::run(
-        "cargo",
-        &["build", "--package", "precious"],
-        &env,
-        &[0],
-        Some(&[cargo_build_re]),
-        Some(&PathBuf::from("..")),
-    )?;
+pub(crate) fn set_up_for_tests() -> Result<TestHelper> {
+    compile_precious()?;
 
     let helper = TestHelper::new()?
         .with_git_repo()?

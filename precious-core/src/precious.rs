@@ -27,6 +27,9 @@ use std::{
 };
 use thiserror::Error;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 #[derive(Debug, Error)]
 enum PreciousError {
     #[error("No mode or paths were provided in the command line args")]
@@ -412,8 +415,8 @@ fn init_config(components: &[InitComponent], path: &Path) -> Result<()> {
         for (name, c) in init.commands {
             commands.insert(name, c);
         }
-        for (name, c) in init.extra_files {
-            extra_files.insert(name, c);
+        for f in init.extra_files {
+            extra_files.insert(f.path.clone(), f);
         }
         tool_urls.extend(init.tool_urls);
     }
@@ -475,7 +478,15 @@ fn init_config(components: &[InitComponent], path: &Path) -> Result<()> {
                 create_dir_all(parent)?;
             }
             let mut file = File::create(p)?;
-            file.write_all(extra_files.get(p).unwrap().trim_start().as_bytes())?;
+            let f = extra_files.get(p).unwrap();
+            file.write_all(f.content.trim_start().as_bytes())?;
+
+            #[cfg(unix)]
+            if f.is_executable {
+                let mut perms = file.metadata()?.permissions();
+                perms.set_mode(0o755);
+                file.set_permissions(perms)?;
+            }
         }
     }
 

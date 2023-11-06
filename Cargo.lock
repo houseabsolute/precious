@@ -672,6 +672,7 @@ dependencies = [
  "precious-helpers",
  "precious-testhelper",
  "pretty_assertions",
+ "pushd",
  "regex",
  "serial_test",
  "tempfile",

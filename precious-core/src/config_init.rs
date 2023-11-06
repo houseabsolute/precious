@@ -3,8 +3,14 @@ use std::path::PathBuf;
 pub(crate) struct Init {
     pub(crate) excludes: &'static [&'static str],
     pub(crate) commands: &'static [(&'static str, &'static str)],
-    pub(crate) extra_files: Vec<(PathBuf, &'static str)>,
+    pub(crate) extra_files: Vec<ConfigInitFile>,
     pub(crate) tool_urls: &'static [&'static str],
+}
+
+pub(crate) struct ConfigInitFile {
+    pub(crate) path: PathBuf,
+    pub(crate) content: &'static str,
+    pub(crate) is_executable: bool,
 }
 
 const GO_COMMANDS: [(&str, &str); 3] = [
@@ -109,7 +115,11 @@ pub(crate) fn go_init() -> Init {
     Init {
         excludes: &[],
         commands: &GO_COMMANDS,
-        extra_files: vec![(PathBuf::from("dev/bin/check-go-mod.sh"), CHECK_GO_MOD)],
+        extra_files: vec![ConfigInitFile {
+            path: PathBuf::from("dev/bin/check-go-mod.sh"),
+            content: CHECK_GO_MOD,
+            is_executable: true,
+        }],
         tool_urls: &["https://golangci-lint.run/"],
     }
 }

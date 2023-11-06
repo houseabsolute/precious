@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+- The `dev/bin/check-go-mod.sh` script created when running `precious config init --component go` is
+  now executable. Reported by Olaf Olders. GH #56.
 - As of this release there are no longer binaries built for MIPS on Linux. These targets have been
   demoted to tier 3 support by the Rust compiler.
 
