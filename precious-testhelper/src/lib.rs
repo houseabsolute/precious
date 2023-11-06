@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use log::debug;
 use once_cell::sync::{Lazy, OnceCell};
-use precious_helpers::{exec, pushd::Pushd};
+use precious_helpers::exec;
+use pushd::Pushd;
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -118,7 +119,7 @@ impl TestHelper {
     }
 
     pub fn pushd_to_git_root(&self) -> Result<Pushd> {
-        pushd_to(self.git_root.clone())
+        Ok(Pushd::new(self.git_root.clone())?)
     }
 
     pub fn git_root(&self) -> PathBuf {
@@ -276,10 +277,6 @@ generated.*
 
         Ok(content)
     }
-}
-
-pub fn pushd_to(to: PathBuf) -> Result<Pushd> {
-    Pushd::new(to)
 }
 
 fn is_rust_file(p: &Path) -> bool {

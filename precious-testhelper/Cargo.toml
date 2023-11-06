@@ -14,5 +14,6 @@ env_logger.workspace = true
 log.workspace = true
 once_cell.workspace = true
 precious-helpers.workspace = true
+pushd.workspace = true
 regex.workspace = true
 tempfile.workspace = true

@@ -35,5 +35,6 @@ which.workspace = true
 filetime.workspace = true
 precious-testhelper.workspace = true
 pretty_assertions.workspace = true
+pushd.workspace = true
 serial_test.workspace = true
 test-case.workspace = true

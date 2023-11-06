@@ -963,9 +963,9 @@ fn format_duration(d: &Duration) -> String {
 mod tests {
     use super::*;
     use itertools::Itertools;
-    use precious_helpers::pushd::Pushd;
     use precious_testhelper::TestHelper;
     use pretty_assertions::assert_eq;
+    use pushd::Pushd;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
     #[cfg(not(target_os = "windows"))]
