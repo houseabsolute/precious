@@ -64,6 +64,69 @@ lint_failure_exit_codes = [1]
     ),
 ];
 
+const GOLANGCI_LINT_YML: &str = r#"
+linters:
+  disable-all: true
+  enable:
+    - bidichk
+    - bodyclose
+    - decorder
+    - dupl
+    - dupword
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - gci
+    - gocheckcompilerdirectives
+    - goconst
+    - gocritic
+    - godot
+    - gofumpt
+    - gomnd
+    - gosimple
+    - govet
+    - importas
+    - ineffassign
+    - misspell
+    - nolintlint
+    - lll
+    - mirror
+    - nonamedreturns
+    - paralleltest
+    - revive
+    - rowserrcheck
+    - sloglint
+    - sqlclosecheck
+    - staticcheck
+    - tenv
+    - testifylint
+    - thelper
+    - typecheck
+    - unconvert
+    - unused
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+    - wrapcheck
+  fast: false
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+  gci:
+    sections:
+      - standard
+      - default
+  govet:
+    check-shadowing: true
+  importas:
+    no-extra-aliases: true
+"#;
+
 const CHECK_GO_MOD: &str = r#"
 #!/bin/bash
 
@@ -115,11 +178,18 @@ pub(crate) fn go_init() -> Init {
     Init {
         excludes: &["vendor/**/*"],
         commands: &GO_COMMANDS,
-        extra_files: vec![ConfigInitFile {
-            path: PathBuf::from("dev/bin/check-go-mod.sh"),
-            content: CHECK_GO_MOD,
-            is_executable: true,
-        }],
+        extra_files: vec![
+            ConfigInitFile {
+                path: PathBuf::from("dev/bin/check-go-mod.sh"),
+                content: CHECK_GO_MOD,
+                is_executable: true,
+            },
+            ConfigInitFile {
+                path: PathBuf::from("golangci-lint.yml"),
+                content: GOLANGCI_LINT_YML,
+                is_executable: false,
+            },
+        ],
         tool_urls: &["https://golangci-lint.run/"],
     }
 }

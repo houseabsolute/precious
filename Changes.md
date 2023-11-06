@@ -7,6 +7,8 @@
 - When running `precious config init`, it would overwrite an existing file if it was given a
   `--path` argument, but not if the argument was left unset. Now it will always error out instead of
   overwriting an existing file. Reported by Olaf Alders. GH #58.
+- When running `precious config init --component go` a `golangci-lint.yml` file will also be
+  created. GH #59.
 - As of this release there are no longer binaries built for MIPS on Linux. These targets have been
   demoted to tier 3 support by the Rust compiler.
 
