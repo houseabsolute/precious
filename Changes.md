@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.6.1 2023-11-06
+
 - The `dev/bin/check-go-mod.sh` script created when running `precious config init --component go` is
   now executable. Reported by Olaf Olders. GH #56.
 - The generated config for Go now excludes the `vendor` directory for all commands. Implemented by

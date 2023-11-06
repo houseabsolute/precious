@@ -15,7 +15,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/houseabsolute/precious"
-version = "0.6.0"
+version = "0.6.1"
 
 [[bin]]
 name = "precious"
@@ -42,9 +42,9 @@ log = "0.4.20"
 md5 = "0.7.0"
 once_cell = "1.18.0"
 pathdiff = "0.2.1"
-precious-core = { version = "0.6.0", path = "./precious-core" }
-precious-helpers = { version = "0.6.0", path = "./precious-helpers" }
-precious-testhelper = { version = "0.6.0", path = "./precious-testhelper" }
+precious-core = { version = "0.6.1", path = "./precious-core" }
+precious-helpers = { version = "0.6.1", path = "./precious-helpers" }
+precious-testhelper = { version = "0.6.1", path = "./precious-testhelper" }
 pretty_assertions = "1.4.0"
 prettytable = "0.10.0"
 pushd = "0.0.1"
