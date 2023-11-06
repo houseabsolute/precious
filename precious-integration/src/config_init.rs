@@ -2,16 +2,22 @@ use crate::shared::{compile_precious, precious_path};
 use anyhow::Result;
 use precious_helpers::exec::{self, ExecOutput};
 use pushd::Pushd;
+use regex::Regex;
 use serial_test::serial;
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, fs::File, path::Path};
 use tempfile::TempDir;
 
 #[test]
 #[serial]
 fn init_go() -> Result<()> {
-    let (_td, _pd, output) = init_with_components(&["go"])?;
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(&["go"], None)?;
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.stderr.is_none());
 
     assert_file_exists("precious.toml")?;
     assert_file_contains("precious.toml", &["golangci-lint", "check-go-mod.sh"])?;
@@ -22,7 +28,6 @@ fn init_go() -> Result<()> {
     let stdout = output.stdout.unwrap();
     assert!(stdout.contains("dev/bin/check-go-mod.sh"));
     assert!(stdout.contains("https://golangci-lint.run"));
-    assert!(output.stderr.is_none());
 
     Ok(())
 }
@@ -30,14 +35,18 @@ fn init_go() -> Result<()> {
 #[test]
 #[serial]
 fn init_rust() -> Result<()> {
-    let (_td, _pd, output) = init_with_components(&["rust"])?;
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(&["rust"], None)?;
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.stderr.is_none());
 
     assert_file_exists("precious.toml")?;
     assert_file_contains("precious.toml", &["clippy", "rustfmt"])?;
 
     let stdout = output.stdout.unwrap();
     assert!(stdout.contains("clippy"));
-    assert!(output.stderr.is_none());
 
     Ok(())
 }
@@ -45,26 +54,69 @@ fn init_rust() -> Result<()> {
 #[test]
 #[serial]
 fn init_perl() -> Result<()> {
-    let (_td, _pd, output) = init_with_components(&["perl"])?;
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(&["perl"], None)?;
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.stderr.is_none());
 
     assert_file_exists("precious.toml")?;
     assert_file_contains("precious.toml", &["perlcritic", "perlimports", "perltidy"])?;
 
     let stdout = output.stdout.unwrap();
     assert!(stdout.contains("App-perlimports"));
-    assert!(output.stderr.is_none());
 
     Ok(())
 }
 
-fn init_with_components(components: &[&str]) -> Result<(TempDir, Pushd, ExecOutput)> {
+#[test]
+#[serial]
+fn init_does_not_overwrite_existing_file() -> Result<()> {
     compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
 
+    File::create("precious.toml")?;
+    let output = init_with_components(&["rust"], None)?;
+
+    assert_eq!(output.exit_code, 1);
+    assert!(output.stderr.is_some());
+    assert!(output
+        .stderr
+        .unwrap()
+        .contains("A file already exists at the given path: precious.toml"));
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn init_does_not_overwrite_existing_file_with_nonstandard_name() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+
+    File::create("my-precious.toml")?;
+    let output = init_with_components(&["rust"], Some("my-precious.toml"))?;
+
+    assert_eq!(output.exit_code, 1);
+    assert!(output.stderr.is_some());
+    assert!(output
+        .stderr
+        .unwrap()
+        .contains("A file already exists at the given path: my-precious.toml"));
+
+    Ok(())
+}
+
+fn chdir_to_tempdir() -> Result<(TempDir, Pushd)> {
     let td = tempfile::Builder::new()
         .prefix("precious-integration-")
         .tempdir()?;
     let pd = Pushd::new(td.path())?;
+    Ok((td, pd))
+}
 
+fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<ExecOutput> {
     let precious = precious_path()?;
     let env = HashMap::new();
     let mut args = vec!["config", "init"];
@@ -72,8 +124,18 @@ fn init_with_components(components: &[&str]) -> Result<(TempDir, Pushd, ExecOutp
         args.push("--component");
         args.push(c);
     }
-    let output = exec::run(&precious, &args, &env, &[0], None, None)?;
-    Ok((td, pd, output))
+    if let Some(p) = init_path {
+        args.push("--path");
+        args.push(p);
+    }
+    exec::run(
+        &precious,
+        &args,
+        &env,
+        &[0, 1],
+        Some(&[Regex::new(".*")?]),
+        None,
+    )
 }
 
 fn assert_file_exists(path: impl AsRef<Path>) -> Result<()> {

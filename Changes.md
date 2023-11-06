@@ -4,6 +4,9 @@
   now executable. Reported by Olaf Olders. GH #56.
 - The generated config for Go now excludes the `vendor` directory for all commands. Implemented by
   Olaf Alders. GH #57.
+- When running `precious config init`, it would overwrite an existing file if it was given a
+  `--path` argument, but not if the argument was left unset. Now it will always error out instead of
+  overwriting an existing file. Reported by Olaf Alders. GH #58.
 - As of this release there are no longer binaries built for MIPS on Linux. These targets have been
   demoted to tier 3 support by the Rust compiler.
 

@@ -50,8 +50,8 @@ enum PreciousError {
     #[error("No {what:} commands match the given label, {label:}")]
     NoCommandsMatchLabel { what: String, label: String },
 
-    #[error("There is already a precious.toml file in this directory")]
-    ConfigFileExists,
+    #[error("A file already exists at the given path: {path}")]
+    ConfigFileExists { path: PathBuf },
 }
 
 #[derive(Debug)]
@@ -169,7 +169,7 @@ enum ConfigSubcommand {
 pub struct ConfigInitArgs {
     #[clap(long, short, value_enum)]
     component: Vec<InitComponent>,
-    #[clap(long, short, default_value = "./precious.toml")]
+    #[clap(long, short, default_value = "precious.toml")]
     path: PathBuf,
 }
 
@@ -393,8 +393,11 @@ fn print_config(mut output: impl Write, config_file: &Path, config: config::Conf
 }
 
 fn init_config(components: &[InitComponent], path: &Path) -> Result<()> {
-    if has_config_file(&env::current_dir()?) {
-        return Err(PreciousError::ConfigFileExists.into());
+    if env::current_dir()?.join(path).exists() {
+        return Err(PreciousError::ConfigFileExists {
+            path: path.to_owned(),
+        }
+        .into());
     }
 
     let mut excludes: HashSet<&'static str> = HashSet::new();
