@@ -761,10 +761,10 @@ impl LintOrTidyRunner {
                 Ok(Some(TidyOutcome::Changed)) => {
                     if !s.quiet {
                         println!(
-                            "{} Tidied by {}:    [{}]",
+                            "{} Tidied by {}:    {}",
                             s.chars.tidied,
                             t.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                            t.files_summary(files),
                         );
                     }
                     Some(Ok(()))
@@ -772,10 +772,10 @@ impl LintOrTidyRunner {
                 Ok(Some(TidyOutcome::Unchanged)) => {
                     if !s.quiet {
                         println!(
-                            "{} Unchanged by {}: [{}]",
+                            "{} Unchanged by {}: {}",
                             s.chars.unchanged,
                             t.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                            t.files_summary(files),
                         );
                     }
                     Some(Ok(()))
@@ -783,10 +783,10 @@ impl LintOrTidyRunner {
                 Ok(Some(TidyOutcome::Unknown)) => {
                     if !s.quiet {
                         println!(
-                            "{} Maybe changed by {}: [{}]",
+                            "{} Maybe changed by {}: {}",
                             s.chars.unknown,
                             t.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                            t.files_summary(files),
                         );
                     }
                     Some(Ok(()))
@@ -794,10 +794,10 @@ impl LintOrTidyRunner {
                 Ok(None) => None,
                 Err(e) => {
                     println!(
-                        "{} Error from {}: [{}]",
+                        "{} Error from {}: {}",
                         s.chars.execution_error,
                         t.name,
-                        files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        t.files_summary(files),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
@@ -825,7 +825,7 @@ impl LintOrTidyRunner {
                                 "{} Passed {}: {}",
                                 s.chars.lint_free,
                                 l.name,
-                                files.iter().map(|p| p.to_string_lossy()).join(" "),
+                                l.files_summary(files),
                             );
                         }
                         Some(Ok(()))
@@ -834,7 +834,7 @@ impl LintOrTidyRunner {
                             "{} Failed {}: {}",
                             s.chars.lint_dirty,
                             l.name,
-                            files.iter().map(|p| p.to_string_lossy()).join(" "),
+                            l.files_summary(files),
                         );
                         if let Some(s) = lo.stdout {
                             println!("{s}");
@@ -869,7 +869,7 @@ impl LintOrTidyRunner {
                         "{} error {}: {}",
                         s.chars.execution_error,
                         l.name,
-                        files.iter().map(|p| p.to_string_lossy()).join(" "),
+                        l.files_summary(files),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),

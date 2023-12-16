@@ -142,6 +142,7 @@ pub struct LintOrTidyCommand {
     pub name: String,
     typ: LintOrTidyCommandType,
     includer: Matcher,
+    include: Vec<String>,
     excluder: Matcher,
     invoke: Invoke,
     working_dir: WorkingDir,
@@ -240,6 +241,7 @@ impl LintOrTidyCommand {
             name: params.name,
             typ: params.typ,
             includer: MatcherBuilder::new(&root).with(&params.include)?.build()?,
+            include: params.include,
             excluder: MatcherBuilder::new(&root).with(&params.exclude)?.build()?,
             invoke: params.invoke,
             working_dir: params.working_dir,
@@ -665,6 +667,36 @@ impl LintOrTidyCommand {
         Ok(cmd)
     }
 
+    pub(crate) fn files_summary(&self, paths: &[&Path]) -> String {
+        let all = paths
+            .iter()
+            .sorted()
+            .map(|p| p.to_string_lossy().to_string())
+            .join(" ");
+        if paths.len() <= 3 {
+            return all;
+        }
+
+        match self.invoke {
+            Invoke::Once => {
+                let initial = paths
+                    .iter()
+                    .take(2)
+                    .sorted()
+                    .map(|p| p.to_string_lossy())
+                    .join(" ");
+                format!(
+                    "{} files matching {}, starting with {}",
+                    paths.len(),
+                    self.include.join(" "),
+                    initial
+                )
+            }
+            Invoke::PerDir => format!("{} files in {}", paths.len(), all,),
+            Invoke::PerFile => format!("{} files: {}", paths.len(), all,),
+        }
+    }
+
     fn paths_were_changed(&self, prev: PathMetadata) -> Result<bool> {
         for (prev_file, prev_meta) in &prev.path_map {
             debug!("Checking {} for changes", prev_file.display());
@@ -786,6 +818,7 @@ mod tests {
             name: String::new(),
             typ: LintOrTidyCommandType::Lint,
             includer: matcher(&[])?,
+            include: vec![],
             excluder: matcher(&[])?,
             invoke: Invoke::PerFile,
             working_dir: WorkingDir::Root,
@@ -1611,6 +1644,98 @@ mod tests {
 
         fs::remove_file(files.pop().unwrap())?;
         assert!(command.paths_were_changed(prev)?);
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn files_summary() -> Result<()> {
+        struct TestCase {
+            invoke: Invoke,
+            include: Vec<String>,
+            paths: Vec<&'static Path>,
+            expect: &'static str,
+        }
+
+        let tests = vec![
+            TestCase {
+                invoke: Invoke::Once,
+                include: vec![String::from("**/*.go")],
+                paths: vec![Path::new("foo.go")],
+                expect: "foo.go",
+            },
+            TestCase {
+                invoke: Invoke::Once,
+                include: vec![String::from("**/*.go")],
+                paths: ["foo.go", "bar.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "bar.go foo.go",
+            },
+            TestCase {
+                invoke: Invoke::Once,
+                include: vec![String::from("**/*.go")],
+                paths: ["foo.go", "bar.go", "baz.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "bar.go baz.go foo.go",
+            },
+            TestCase {
+                invoke: Invoke::Once,
+                include: vec![String::from("**/*.go")],
+                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "4 files matching **/*.go, starting with bar.go foo.go",
+            },
+            TestCase {
+                invoke: Invoke::Once,
+                include: ["**/*.go", "!food.go"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
+                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "4 files matching **/*.go !food.go, starting with bar.go foo.go",
+            },
+            TestCase {
+                invoke: Invoke::PerDir,
+                include: ["**/*.go", "!food.go"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
+                paths: vec![Path::new("foo")],
+                expect: "foo",
+            },
+            TestCase {
+                invoke: Invoke::PerFile,
+                include: ["**/*.go", "!food.go"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
+                paths: vec![Path::new("foo.go")],
+                expect: "foo.go",
+            },
+        ];
+
+        for t in tests.into_iter() {
+            let command = LintOrTidyCommand {
+                name: String::from("Test"),
+                invoke: t.invoke,
+                include: t.include,
+                ..default_command()?
+            };
+
+            {
+                assert_eq!(command.files_summary(&t.paths), t.expect);
+            }
+        }
 
         Ok(())
     }
