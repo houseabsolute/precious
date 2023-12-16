@@ -1,5 +1,8 @@
 <!-- next-header -->
 
+- When printing the results of running a command that was invoked with a long list of paths, the
+  output will now summarize the paths affected instead of always printing all of them. GH #60.
+
 ## 0.6.1 2023-11-06
 
 - The `dev/bin/check-go-mod.sh` script created when running `precious config init --component go` is

@@ -764,7 +764,7 @@ impl LintOrTidyRunner {
                             "{} Tidied by {}:    {}",
                             s.chars.tidied,
                             t.name,
-                            t.files_summary(files),
+                            t.paths_summary(files),
                         );
                     }
                     Some(Ok(()))
@@ -775,7 +775,7 @@ impl LintOrTidyRunner {
                             "{} Unchanged by {}: {}",
                             s.chars.unchanged,
                             t.name,
-                            t.files_summary(files),
+                            t.paths_summary(files),
                         );
                     }
                     Some(Ok(()))
@@ -786,7 +786,7 @@ impl LintOrTidyRunner {
                             "{} Maybe changed by {}: {}",
                             s.chars.unknown,
                             t.name,
-                            t.files_summary(files),
+                            t.paths_summary(files),
                         );
                     }
                     Some(Ok(()))
@@ -797,7 +797,7 @@ impl LintOrTidyRunner {
                         "{} Error from {}: {}",
                         s.chars.execution_error,
                         t.name,
-                        t.files_summary(files),
+                        t.paths_summary(files),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
@@ -825,7 +825,7 @@ impl LintOrTidyRunner {
                                 "{} Passed {}: {}",
                                 s.chars.lint_free,
                                 l.name,
-                                l.files_summary(files),
+                                l.paths_summary(files),
                             );
                         }
                         Some(Ok(()))
@@ -834,7 +834,7 @@ impl LintOrTidyRunner {
                             "{} Failed {}: {}",
                             s.chars.lint_dirty,
                             l.name,
-                            l.files_summary(files),
+                            l.paths_summary(files),
                         );
                         if let Some(s) = lo.stdout {
                             println!("{s}");
@@ -869,7 +869,7 @@ impl LintOrTidyRunner {
                         "{} error {}: {}",
                         s.chars.execution_error,
                         l.name,
-                        l.files_summary(files),
+                        l.paths_summary(files),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),

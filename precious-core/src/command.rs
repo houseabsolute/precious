@@ -667,7 +667,7 @@ impl LintOrTidyCommand {
         Ok(cmd)
     }
 
-    pub(crate) fn files_summary(&self, paths: &[&Path]) -> String {
+    pub(crate) fn paths_summary(&self, paths: &[&Path]) -> String {
         let all = paths
             .iter()
             .sorted()
@@ -678,11 +678,11 @@ impl LintOrTidyCommand {
         }
 
         match self.invoke {
-            Invoke::Once => {
+            Invoke::Once | Invoke::PerDir => {
                 let initial = paths
                     .iter()
-                    .take(2)
                     .sorted()
+                    .take(2)
                     .map(|p| p.to_string_lossy())
                     .join(" ");
                 format!(
@@ -692,7 +692,6 @@ impl LintOrTidyCommand {
                     initial
                 )
             }
-            Invoke::PerDir => format!("{} files in {}", paths.len(), all,),
             Invoke::PerFile => format!("{} files: {}", paths.len(), all,),
         }
     }
@@ -1650,7 +1649,7 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn files_summary() -> Result<()> {
+    fn paths_summary() -> Result<()> {
         struct TestCase {
             invoke: Invoke,
             include: Vec<String>,
@@ -1706,12 +1705,48 @@ mod tests {
             },
             TestCase {
                 invoke: Invoke::PerDir,
+                include: vec![String::from("**/*.go")],
+                paths: vec![Path::new("foo.go")],
+                expect: "foo.go",
+            },
+            TestCase {
+                invoke: Invoke::PerDir,
+                include: vec![String::from("**/*.go")],
+                paths: ["foo.go", "bar.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "bar.go foo.go",
+            },
+            TestCase {
+                invoke: Invoke::PerDir,
+                include: vec![String::from("**/*.go")],
+                paths: ["foo.go", "bar.go", "baz.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "bar.go baz.go foo.go",
+            },
+            TestCase {
+                invoke: Invoke::PerDir,
+                include: vec![String::from("**/*.go")],
+                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "4 files matching **/*.go, starting with bar.go foo.go",
+            },
+            TestCase {
+                invoke: Invoke::PerDir,
                 include: ["**/*.go", "!food.go"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>(),
-                paths: vec![Path::new("foo")],
-                expect: "foo",
+                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
+                    .iter()
+                    .map(Path::new)
+                    .collect::<Vec<_>>(),
+                expect: "4 files matching **/*.go !food.go, starting with bar.go foo.go",
             },
             TestCase {
                 invoke: Invoke::PerFile,
@@ -1733,7 +1768,7 @@ mod tests {
             };
 
             {
-                assert_eq!(command.files_summary(&t.paths), t.expect);
+                assert_eq!(command.paths_summary(&t.paths), t.expect);
             }
         }
 
