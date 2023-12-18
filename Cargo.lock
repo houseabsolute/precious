@@ -608,7 +608,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "precious"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "log",
  "precious-core",
@@ -616,7 +616,7 @@ dependencies = [
 
 [[package]]
 name = "precious-core"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -649,7 +649,7 @@ dependencies = [
 
 [[package]]
 name = "precious-helpers"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "itertools",
@@ -664,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "precious-integration"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "itertools",
@@ -680,7 +680,7 @@ dependencies = [
 
 [[package]]
 name = "precious-testhelper"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "anyhow",
  "env_logger",
