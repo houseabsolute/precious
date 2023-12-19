@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     #[parallel]
-    fn run_wth_env() -> Result<()> {
+    fn run_with_env() -> Result<()> {
         let env_key = "PRECIOUS_ENV_TEST";
         let mut env = HashMap::new();
         env.insert(String::from(env_key), String::from("foo"));

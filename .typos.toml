@@ -1,0 +1,4 @@
+[default.extend-words]
+# These are golangci-lint imports
+decorder = "decorder"
+importas = "importas"

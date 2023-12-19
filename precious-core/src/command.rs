@@ -416,7 +416,7 @@ impl LintOrTidyCommand {
         match self.invoke {
             Invoke::PerFile => {
                 let f = &files[0];
-                // This check isn't stricly necessary since we default to not
+                // This check isn't strictly necessary since we default to not
                 // matching, but the debug output is helpful.
                 if self.excluder.path_matches(f, false) {
                     debug!(
