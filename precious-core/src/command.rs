@@ -804,6 +804,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
     use std::env;
+    use test_case::test_case;
     use testhelper::TestHelper;
 
     fn matcher(globs: &[&str]) -> Result<Matcher> {
@@ -1647,130 +1648,96 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[test_case(
+        Invoke::Once,
+        &["**/*.go"],
+        &["foo.go"],
+        "foo.go";
+        "invoke = once with one path"
+    )]
+    #[test_case(
+        Invoke::Once,
+        &["**/*.go"],
+        &["foo.go", "bar.go"],
+        "bar.go foo.go";
+        "invoke = once with two paths"
+    )]
+    #[test_case(
+        Invoke::Once,
+        &["**/*.go"],
+        &["foo.go", "bar.go", "baz.go"],
+        "bar.go baz.go foo.go";
+        "invoke = once with three paths"
+    )]
+    #[test_case(
+        Invoke::Once,
+        &["**/*.go"],
+        &["foo.go", "bar.go", "baz.go", "quux.go"],
+        "4 files matching **/*.go, starting with bar.go baz.go";
+        "invoke = once with four paths"
+    )]
+    #[test_case(
+        Invoke::Once,
+        &["**/*.go", "!food.go"],
+        &["foo.go", "bar.go", "baz.go", "quux.go"],
+        "4 files matching **/*.go !food.go, starting with bar.go baz.go";
+        "invoke = once with four paths and two includes"
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        &["**/*.go"],
+        &["foo.go"],
+        "foo.go";
+        "invoke = dir with one path"
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        &["**/*.go"],
+        &["foo.go", "bar.go"],
+        "bar.go foo.go";
+        "invoke = dir with two paths"
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        &["**/*.go"],
+        &["foo.go", "bar.go", "baz.go"],
+        "bar.go baz.go foo.go";
+        "invoke = dir with three paths"
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        &["**/*.go"],
+        &["foo.go", "bar.go", "baz.go", "quux.go"],
+        "4 files matching **/*.go, starting with bar.go baz.go";
+        "invoke = dir with four paths"
+    )]
+    #[test_case(
+        Invoke::PerDir,
+        &["**/*.go", "!food.go"],
+        &["foo.go", "bar.go", "baz.go", "quux.go"],
+        "4 files matching **/*.go !food.go, starting with bar.go baz.go";
+        "invoke = dir with four paths and two includes"
+    )]
+    #[test_case(
+        Invoke::PerFile,
+        &["**/*.go", "!food.go"],
+        &["foo.go"],
+        "foo.go";
+        "invoke = file"
+    )]
     #[parallel]
-    fn paths_summary() -> Result<()> {
-        struct TestCase {
-            invoke: Invoke,
-            include: Vec<String>,
-            paths: Vec<&'static Path>,
-            expect: &'static str,
-        }
+    fn paths_summary(invoke: Invoke, include: &[&str], paths: &[&str], expect: &str) -> Result<()> {
+        let command = LintOrTidyCommand {
+            name: String::from("Test"),
+            invoke,
+            include: include.iter().map(|i| i.to_string()).collect(),
+            ..default_command()?
+        };
 
-        let tests = vec![
-            TestCase {
-                invoke: Invoke::Once,
-                include: vec![String::from("**/*.go")],
-                paths: vec![Path::new("foo.go")],
-                expect: "foo.go",
-            },
-            TestCase {
-                invoke: Invoke::Once,
-                include: vec![String::from("**/*.go")],
-                paths: ["foo.go", "bar.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "bar.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::Once,
-                include: vec![String::from("**/*.go")],
-                paths: ["foo.go", "bar.go", "baz.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "bar.go baz.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::Once,
-                include: vec![String::from("**/*.go")],
-                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "4 files matching **/*.go, starting with bar.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::Once,
-                include: ["**/*.go", "!food.go"]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>(),
-                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "4 files matching **/*.go !food.go, starting with bar.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::PerDir,
-                include: vec![String::from("**/*.go")],
-                paths: vec![Path::new("foo.go")],
-                expect: "foo.go",
-            },
-            TestCase {
-                invoke: Invoke::PerDir,
-                include: vec![String::from("**/*.go")],
-                paths: ["foo.go", "bar.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "bar.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::PerDir,
-                include: vec![String::from("**/*.go")],
-                paths: ["foo.go", "bar.go", "baz.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "bar.go baz.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::PerDir,
-                include: vec![String::from("**/*.go")],
-                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "4 files matching **/*.go, starting with bar.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::PerDir,
-                include: ["**/*.go", "!food.go"]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>(),
-                paths: ["foo.go", "bar.go", "baz.go", "quux.go"]
-                    .iter()
-                    .map(Path::new)
-                    .collect::<Vec<_>>(),
-                expect: "4 files matching **/*.go !food.go, starting with bar.go foo.go",
-            },
-            TestCase {
-                invoke: Invoke::PerFile,
-                include: ["**/*.go", "!food.go"]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>(),
-                paths: vec![Path::new("foo.go")],
-                expect: "foo.go",
-            },
-        ];
-
-        for t in tests.into_iter() {
-            let command = LintOrTidyCommand {
-                name: String::from("Test"),
-                invoke: t.invoke,
-                include: t.include,
-                ..default_command()?
-            };
-
-            {
-                assert_eq!(command.paths_summary(&t.paths), t.expect);
-            }
-        }
+        assert_eq!(
+            &command.paths_summary(&paths.iter().map(Path::new).collect::<Vec<_>>()),
+            expect,
+        );
 
         Ok(())
     }
