@@ -1,5 +1,9 @@
 <!-- next-header -->
 
+- When running `precious config init` and asking for the Perl or Rust components, `precious` would
+  tell you to install `omegasort` even though the generated config did not use it. Reported by Olaf
+  Alders. GH #61.
+
 ## 0.6.2 - 2023-12-18
 
 - When printing the results of running a command that was invoked with a long list of paths, the

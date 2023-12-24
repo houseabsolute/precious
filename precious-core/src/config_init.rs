@@ -267,7 +267,6 @@ pub(crate) fn perl_init() -> Init {
             "https://metacpan.org/dist/App-perlimports",
             "https://metacpan.org/dist/Pod-Checker",
             "https://metacpan.org/dist/Pod-Tidy",
-            "https://github.com/houseabsolute/omegasort",
         ],
     }
 }
@@ -313,10 +312,7 @@ pub(crate) fn rust_init() -> Init {
         excludes: &["target"],
         commands: &RUST_COMMANDS,
         extra_files: vec![],
-        tool_urls: &[
-            "https://doc.rust-lang.org/clippy/",
-            "https://github.com/houseabsolute/omegasort",
-        ],
+        tool_urls: &["https://doc.rust-lang.org/clippy/"],
     }
 }
 
