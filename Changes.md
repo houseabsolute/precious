@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.6.3 - 2024-03-05
+
 - When running `precious config init` and asking for the Perl or Rust components, `precious` would
   tell you to install `omegasort` even though the generated config did not use it. Reported by Olaf
   Alders. GH #61.
