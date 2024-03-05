@@ -268,6 +268,17 @@ generated.*
         Ok(())
     }
 
+    pub fn delete_file<P: AsRef<Path>>(&self, rel: P) -> Result<()> {
+        let mut full = self.precious_root.clone();
+        full.push(rel.as_ref());
+        debug!("deleting path at {}", full.display());
+        if full.is_file() {
+            return Ok(fs::remove_file(full)?);
+        }
+
+        Ok(fs::remove_dir_all(full)?)
+    }
+
     #[cfg(not(target_os = "windows"))]
     pub fn read_file(&self, rel: &Path) -> Result<String> {
         let mut full = self.precious_root.clone();

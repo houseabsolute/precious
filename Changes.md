@@ -4,6 +4,12 @@
   tell you to install `omegasort` even though the generated config did not use it. Reported by Olaf
   Alders. GH #61.
 
+- If precious was run with `--staged` and a file that was staged had been deleted from the
+  filesystem but not removed with `git rm`, it would exit with a very unhelpful error like
+  `Error: No such file or directory (os error 2)`, without any indication of what the file was. Now
+  it will simply ignore such deleted file, though it will log a debug-level message saying that the
+  file is being ignored. Fixes #63.
+
 ## 0.6.2 - 2023-12-18
 
 - When printing the results of running a command that was invoked with a long list of paths, the

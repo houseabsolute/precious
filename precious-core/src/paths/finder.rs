@@ -246,6 +246,12 @@ impl Finder {
 
                             let mut f = git_root.clone();
                             f.push(&pb);
+                            if !f.exists() {
+                                debug!(
+                                    "The staged file at {rel:} was deleted so it will be ignored.",
+                                );
+                                return None;
+                            }
                             Some(f)
                         })
                         .collect(),
@@ -715,6 +721,19 @@ mod tests {
             Some(vec![PathBuf::from("merge-conflict-here")]),
         );
         assert!(!finder.stashed);
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn git_staged_mode_with_deleted_file() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let mut modified = helper.modify_files()?;
+        helper.stage_all()?;
+        helper.delete_file(modified.remove(0))?;
+
+        let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
+        assert_eq!(finder.files(vec![])?, Some(modified));
         Ok(())
     }
 
