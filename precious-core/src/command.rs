@@ -692,7 +692,7 @@ impl LintOrTidyCommand {
                     initial
                 )
             }
-            Invoke::PerFile => format!("{} files: {}", paths.len(), all,),
+            Invoke::PerFile => format!("{} files: {}", paths.len(), all),
         }
     }
 
