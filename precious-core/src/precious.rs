@@ -733,10 +733,10 @@ impl LintOrTidyRunner {
                 failures
                     .iter()
                     .map(|af| format!(
-                        "  {} [{}] [{}]\n    {}\n",
+                        "  {} [{}] failed for [{}]\n    {}\n",
                         self.chars.bullet,
-                        af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
                         af.config_key,
+                        af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
                         af.error,
                     ))
                     .collect::<Vec<String>>()
