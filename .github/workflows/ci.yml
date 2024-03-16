@@ -162,7 +162,7 @@ jobs:
           ( startsWith( github.ref, 'refs/tags/v' ) ||
             github.ref == 'refs/tags/test-release' )
       - name: Publish release artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: precious-${{ matrix.platform.os_name }}
           path: "precious-*"
@@ -175,7 +175,7 @@ jobs:
           ( startsWith( github.ref, 'refs/tags/v' ) ||
             github.ref == 'refs/tags/test-release' )
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: "precious-*"
