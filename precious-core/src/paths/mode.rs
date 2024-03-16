@@ -1,12 +1,13 @@
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Mode {
     FromCli,
     All,
     GitModified,
     GitStaged,
     GitStagedWithStash,
+    GitDiffFrom(String),
 }
 
 impl fmt::Display for Mode {
@@ -20,6 +21,7 @@ impl fmt::Display for Mode {
                 f,
                 "files staged for a git commit, stashing unstaged content"
             ),
+            Mode::GitDiffFrom(from) => write!(f, "files modified as compared to {from:}",),
         }
     }
 }

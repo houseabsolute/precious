@@ -1,5 +1,8 @@
 <!-- next-header -->
 
+- Added a `--git-diff-from <REF>` option that will find all files changed in the diff between
+  `<REF>` and the current `HEAD`. Requested by Michael McClimon. GH #64.
+
 ## 0.6.3 - 2024-03-05
 
 - When running `precious config init` and asking for the Perl or Rust components, `precious` would

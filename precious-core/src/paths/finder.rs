@@ -70,25 +70,33 @@ impl Finder {
             Mode::FromCli => (),
             _ => {
                 if !cli_paths.is_empty() {
-                    return Err(
-                        FinderError::GotPathsFromCliWithWrongMode { mode: self.mode }.into(),
-                    );
+                    return Err(FinderError::GotPathsFromCliWithWrongMode {
+                        mode: self.mode.clone(),
+                    }
+                    .into());
                 }
             }
         };
 
-        let mut files = match self.mode {
+        let mut files = match self.mode.clone() {
             Mode::All => self.all_files()?,
             Mode::FromCli => self.files_from_cli(cli_paths)?,
             Mode::GitModified => self.git_modified_files()?,
             Mode::GitStaged | Mode::GitStagedWithStash => self.git_staged_files()?,
+            Mode::GitDiffFrom(ref from) => self.git_modified_since(from)?,
         };
         files.sort();
 
         if files.is_empty() {
             return match self.mode {
-                Mode::GitModified | Mode::GitStaged | Mode::GitStagedWithStash => Ok(None),
-                _ => Err(FinderError::AllPathsWereExcluded { mode: self.mode }.into()),
+                Mode::GitModified
+                | Mode::GitStaged
+                | Mode::GitStagedWithStash
+                | Mode::GitDiffFrom(_) => Ok(None),
+                _ => Err(FinderError::AllPathsWereExcluded {
+                    mode: self.mode.clone(),
+                }
+                .into()),
             };
         }
 
@@ -183,6 +191,11 @@ impl Finder {
         }
 
         Ok(())
+    }
+
+    fn git_modified_since(&mut self, since: &str) -> Result<Vec<PathBuf>> {
+        let since_dot = format!("{since:}...");
+        self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM", &since_dot])
     }
 
     fn walkdir_files(&self, root: &Path) -> Result<Vec<PathBuf>> {
@@ -733,6 +746,31 @@ mod tests {
         helper.delete_file(modified.remove(0))?;
 
         let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
+        assert_eq!(finder.files(vec![])?, Some(modified));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn git_modified_since() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.switch_to_branch("some-branch", false)?;
+
+        // When there are no commits in the branch the diff between master and
+        // the branch finds no files.
+        let mut finder = new_finder(
+            Mode::GitDiffFrom("master".to_string()),
+            helper.precious_root(),
+        )?;
+        assert_eq!(finder.files(vec![])?, None);
+
+        let modified = helper.modify_files()?;
+        helper.commit_all()?;
+
+        let mut finder = new_finder(
+            Mode::GitDiffFrom("master".to_string()),
+            helper.precious_root(),
+        )?;
         assert_eq!(finder.files(vec![])?, Some(modified));
         Ok(())
     }

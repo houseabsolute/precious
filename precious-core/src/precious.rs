@@ -123,7 +123,7 @@ pub enum Subcommand {
 #[clap(group(
     ArgGroup::new("path-spec")
         .required(true)
-        .args(&["all", "git", "staged", "staged_with_stash", "paths"]),
+        .args(&["all", "git", "staged", "git_diff_from", "staged_with_stash", "paths"]),
 ))]
 pub struct CommonArgs {
     /// The command to run. If specified, only this command will be run. This
@@ -139,8 +139,16 @@ pub struct CommonArgs {
     /// Run against files that are staged for a git commit
     #[clap(long, short)]
     staged: bool,
+    /// Run against files that are different as compared with the given
+    /// `<REF>`. This can be a branch name, like `master`, or an ref name like
+    /// `HEAD~6` or `master@{2.days.ago}`. See `git help rev-parse` for more
+    /// options. Note that this will _not_ see files with uncommitted changes
+    /// in the local working directory.
+    #[clap(long, short = 'd', value_name = "REF")]
+    git_diff_from: Option<String>,
     /// Run against file content that is staged for a git commit, stashing all
-    /// unstaged content first
+    /// unstaged content first. The stash push/pop tends to do weird things to
+    /// the working directory, and is not recommended for scripting.
     #[clap(long)]
     staged_with_stash: bool,
     /// If this is set, then only commands matching this label will be run. If
@@ -573,9 +581,12 @@ impl LintOrTidyRunner {
             return Ok(paths::mode::Mode::GitModified);
         } else if common.staged {
             return Ok(paths::mode::Mode::GitStaged);
+        } else if let Some(from) = &common.git_diff_from {
+            return Ok(paths::mode::Mode::GitDiffFrom(from.clone()));
         } else if common.staged_with_stash {
             return Ok(paths::mode::Mode::GitStagedWithStash);
         }
+
         if common.paths.is_empty() {
             return Err(PreciousError::NoModeOrPathsInCliArgs.into());
         }
@@ -709,7 +720,7 @@ impl LintOrTidyRunner {
 
     fn finder(&mut self) -> Result<Finder> {
         Finder::new(
-            self.mode,
+            self.mode.clone(),
             self.project_root.clone(),
             self.cwd.clone(),
             self.config.exclude.clone(),
