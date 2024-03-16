@@ -405,7 +405,7 @@ By default, precious treats _any_ output to stderr as an error in the command (a
 linting failure). You can use the `ignore_stderr` to specify one or more regexes for allowed stderr
 output.
 
-In addition, you can see all stdout and stderr output from a comment by running precious in
+In addition, you can see all stdout and stderr output from a command by running precious in
 `--debug` mode.
 
 All of which is to say that in general there's no value to running a command in quiet mode with
