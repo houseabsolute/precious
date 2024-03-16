@@ -414,13 +414,14 @@ other issues occur.
 
 ## Exit Codes
 
-When running in `--tidy` mode, precious always exits with `0`, whether or not any files are tidied.
+When running in `--tidy` mode, precious always exits with `0` if there are no errors when tidying,
+whether or not any files are tidied.
 
 When running in `--lint` mode, precious will exit with `0` when all files pass linting. If any lint
 commands fail it will exit with `1`.
 
 In both modes, if any commands fail, either by returning exit codes that aren't listed as ok or by
-printing to stderr unexpectedly, then precious will exit with a non-0 exit code.
+printing to stderr unexpectedly, then precious will exit with a non-`0` exit code.
 
 ## Common Scenarios
 
