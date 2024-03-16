@@ -8,6 +8,13 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 version.workspace = true
+categories = ["development-tools"]
+keywords = [
+         "beautifier",
+         "linter",
+         "pretty-printer",
+         "tidier",
+]
 
 [workspace.package]
 authors = ["Dave Rolsky <autarch@urth.org>"]
