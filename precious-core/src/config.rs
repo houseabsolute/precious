@@ -1,7 +1,7 @@
 use crate::command::{self, Invoke, LintOrTidyCommandType, PathArgs, WorkingDir};
 use anyhow::Result;
 use indexmap::IndexMap;
-//use log::warn;
+use log::warn;
 use serde::{de, de::Deserializer, Deserialize};
 use std::{
     collections::HashMap,
@@ -471,12 +471,12 @@ impl CommandConfig {
         // This translates the old config options into their equivalent new
         // options.
         if run_mode.is_some() || chdir.is_some() {
-            // let options = match (run_mode, chdir) {
-            //     (Some(_), None) => "run_mode",
-            //     (None, Some(_)) => "chdir",
-            //     _ => "run_mode and chdir",
-            // };
-            // warn!("The {name} command is using deprecated config options: {options}");
+            let (article, plural, options) = match (run_mode, chdir) {
+                (Some(_), None) => ("a ", "", "run_mode"),
+                (None, Some(_)) => ("a ", "", "chdir"),
+                _ => ("", "s", "run_mode and chdir"),
+            };
+            warn!("The {name} command is using {article:}deprecated config option{plural:}: {options}");
 
             match (run_mode, chdir) {
                 (Some(OldRunMode::Files) | None, Some(false) | None) => {

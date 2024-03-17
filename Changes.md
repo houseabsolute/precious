@@ -1,5 +1,10 @@
 <!-- next-header -->
 
+## 0.7.0
+
+- `precious` will now emit a warning if your config file uses any of the deprecated config keys,
+  `run_mode` and `chdir`. Support for these options will be removed entirely in a future release.
+
 ## 0.6.4 - 2024-03-23
 
 - Added a `--git-diff-from <REF>` option that will find all files changed in the diff between
