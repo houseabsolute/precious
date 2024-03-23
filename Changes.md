@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.6.4 - 2024-03-23
+
 - Added a `--git-diff-from <REF>` option that will find all files changed in the diff between
   `<REF>` and the current `HEAD`. Requested by Michael McClimon. GH #64.
 
