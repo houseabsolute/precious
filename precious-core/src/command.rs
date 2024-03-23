@@ -56,7 +56,6 @@ pub enum Invoke {
 
 impl fmt::Display for Invoke {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Is using serde to do this incredibly gross?
         f.write_str(match self {
             Invoke::PerFile => r#""per-file""#,
             Invoke::PerDir => r#""per-dir""#,
