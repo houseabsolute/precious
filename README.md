@@ -140,6 +140,33 @@ The `invoke` key tells `precious` how the command should be invoked.
 | `"per-dir"`  | Run this command once for each matching directory.                     |
 | `"once"`     | Run this command once.                                                 |
 
+There are some experimental options for the `invoke` key as well. **The exact names or the details
+of how they operate may change in a future release.**
+
+| Value                                                                         | Description                                                                                                                                        |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <code>&nbsp;.per&#x2011;file&#x2011;or&#x2011;dir&nbsp;=&nbsp;n&nbsp;</code>  | If the number of matching files is less than `n`, run this command once for each matching file. Otherwise run it once for each matching directory. |
+| <code>&nbsp;.per&#x2011;file&#x2011;or&#x2011;once&nbsp;=&nbsp;n&nbsp;</code> | If the number of matching files is less than `n`, run this command once for each matching file. Otherwise run it once.                             |
+| <code>&nbsp;.per&#x2011;dir&#x2011;or&#x2011;dir&nbsp;=&nbsp;n&nbsp;</code>   | If the number of matching directories is less than `n`, run this command once for each matching directory. Otherwise run it once.                  |
+
+These are written like this:
+
+```toml
+[commands.some-command]
+invoke.per-file-or-dir = 42
+```
+
+These experimental options are useful for optimizing the speed of running a command. In some cases,
+a command can be run in multiple ways, and how quickly it completes depends on how many files or
+directories need to be linted or tidied.
+
+The `golangci-lint` tool is a good example. Invoking it multiple times for a few directories can be
+much faster than running it against the entire repo. However, once there are enough directories to
+check, invoking it once for the entire repo will be faster.
+
+Note that the `path_args` setting needs to work with both possible cases for these options. For
+`golangci-lint`, that means setting it to `dir` when using `per-dir-or-once`.
+
 #### `working_dir`
 
 The `working_dir` key tells precious what the working directory should be when the command is run.
@@ -383,7 +410,7 @@ Here are some recommendations for how to get the best experience with precious.
 
 ### Choosing How to `invoke` the Command
 
-Some commands might work equally well with `invoke` set to either `per-dir` or `root`. The right run
+Some commands might work equally well with `invoke` set to either `per-dir` or `once`. The right run
 mode to choose depends on how you are using precious.
 
 In general, if you either have a very small set of directories, _or_ you are running precious on
@@ -391,6 +418,9 @@ most or all of the directories at once, then `once` will be faster.
 
 However, if you have a larger set of directories and you usually only need to lint or tidy a small
 subset of these at once, then `per-dir` mode will be faster.
+
+You can also use the experimental `invoke.per-dir-or-once = n` option to invoke the command one of
+two ways, depending on the number of directories that precious will operate on.
 
 ### Quiet Flags
 

@@ -928,4 +928,41 @@ mod tests {
 
         Ok(())
     }
+
+    #[test_case(
+        r#""per-file-or-dir" = 42"#,
+        Invoke::PerFileOrDir(42);
+        "per-file-or-dir"
+    )]
+    #[test_case(
+        r#""per-file-or-once" = 42"#,
+        Invoke::PerFileOrOnce(42);
+        "per-file-or-once"
+    )]
+    #[test_case(
+        r#""per-dir-or-once" = 42"#,
+        Invoke::PerDirOrOnce(42);
+        "per-dir-or-once"
+    )]
+    #[parallel]
+    fn new_invoke_options(invoke: &str, expect: Invoke) -> Result<()> {
+        let toml_text = format!(
+            r#"
+            [commands.omegasort-gitignore]
+            type = "both"
+            include = "**/.gitignore"
+            invoke = {{ {invoke:} }}
+            cmd = [ "omegasort", "--sort=path" ]
+            lint_flags = "--check"
+            tidy_flags = "--in-place"
+            ok_exit_codes = 0
+            lint_failure_exit_codes = 1
+        "#
+        );
+
+        let config: Config = toml::from_str(&toml_text)?;
+        assert_eq!(config.commands[0].invoke, Some(expect));
+
+        Ok(())
+    }
 }
