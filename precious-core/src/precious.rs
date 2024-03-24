@@ -1,6 +1,6 @@
 use crate::{
     chars,
-    command::{self, TidyOutcome},
+    command::{self, ActualInvoke, TidyOutcome},
     config, config_init,
     paths::{self, finder::Finder},
     vcs,
@@ -767,15 +767,18 @@ impl LintOrTidyRunner {
         files: &[PathBuf],
         t: &command::LintOrTidyCommand,
     ) -> Result<Option<Vec<ActionFailure>>> {
-        let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
-            match t.tidy(files) {
+        let runner = |s: &Self,
+                      actual_invoke: ActualInvoke,
+                      files: &[&Path]|
+         -> Option<Result<(), ActionFailure>> {
+            match t.tidy(actual_invoke, files) {
                 Ok(Some(TidyOutcome::Changed)) => {
                     if !s.quiet {
                         println!(
                             "{} Tidied by {}:    {}",
                             s.chars.tidied,
                             t.name,
-                            t.paths_summary(files),
+                            t.paths_summary(actual_invoke, files),
                         );
                     }
                     Some(Ok(()))
@@ -786,7 +789,7 @@ impl LintOrTidyRunner {
                             "{} Unchanged by {}: {}",
                             s.chars.unchanged,
                             t.name,
-                            t.paths_summary(files),
+                            t.paths_summary(actual_invoke, files),
                         );
                     }
                     Some(Ok(()))
@@ -797,7 +800,7 @@ impl LintOrTidyRunner {
                             "{} Maybe changed by {}: {}",
                             s.chars.unknown,
                             t.name,
-                            t.paths_summary(files),
+                            t.paths_summary(actual_invoke, files),
                         );
                     }
                     Some(Ok(()))
@@ -808,7 +811,7 @@ impl LintOrTidyRunner {
                         "{} Error from {}: {}",
                         s.chars.execution_error,
                         t.name,
-                        t.paths_summary(files),
+                        t.paths_summary(actual_invoke, files),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
@@ -827,8 +830,11 @@ impl LintOrTidyRunner {
         files: &[PathBuf],
         l: &command::LintOrTidyCommand,
     ) -> Result<Option<Vec<ActionFailure>>> {
-        let runner = |s: &Self, files: &[&Path]| -> Option<Result<(), ActionFailure>> {
-            match l.lint(files) {
+        let runner = |s: &Self,
+                      actual_invoke: ActualInvoke,
+                      files: &[&Path]|
+         -> Option<Result<(), ActionFailure>> {
+            match l.lint(actual_invoke, files) {
                 Ok(Some(lo)) => {
                     if lo.ok {
                         if !s.quiet {
@@ -836,7 +842,7 @@ impl LintOrTidyRunner {
                                 "{} Passed {}: {}",
                                 s.chars.lint_free,
                                 l.name,
-                                l.paths_summary(files),
+                                l.paths_summary(actual_invoke, files),
                             );
                         }
                         Some(Ok(()))
@@ -845,7 +851,7 @@ impl LintOrTidyRunner {
                             "{} Failed {}: {}",
                             s.chars.lint_dirty,
                             l.name,
-                            l.paths_summary(files),
+                            l.paths_summary(actual_invoke, files),
                         );
                         if let Some(s) = lo.stdout {
                             println!("{s}");
@@ -880,7 +886,7 @@ impl LintOrTidyRunner {
                         "{} error {}: {}",
                         s.chars.execution_error,
                         l.name,
-                        l.paths_summary(files),
+                        l.paths_summary(actual_invoke, files),
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
@@ -902,9 +908,9 @@ impl LintOrTidyRunner {
         runner: R,
     ) -> Result<Option<Vec<ActionFailure>>>
     where
-        R: Fn(&Self, &[&Path]) -> Option<Result<(), ActionFailure>> + Sync,
+        R: Fn(&Self, ActualInvoke, &[&Path]) -> Option<Result<(), ActionFailure>> + Sync,
     {
-        let sets = c.files_to_args_sets(files)?;
+        let (sets, actual_invoke) = c.files_to_args_sets(files)?;
 
         let start = Instant::now();
         let results = self
@@ -914,7 +920,7 @@ impl LintOrTidyRunner {
                 res.append(
                     &mut sets
                         .into_par_iter()
-                        .filter_map(|set| runner(self, &set))
+                        .filter_map(|set| runner(self, actual_invoke, &set))
                         .collect::<Vec<Result<(), ActionFailure>>>(),
                 );
                 Ok(res)

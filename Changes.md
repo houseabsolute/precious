@@ -2,6 +2,18 @@
 
 ## 0.7.0
 
+- Added three new `invoke` options:
+
+  - `"per-file-or-dir" = n`
+  - `"per-file-or-once" = n`
+  - `"per-dir-or-once" = n`
+
+  These will run the command in different ways depending on how many files or directories match the
+  command's config. This lets you pick the fastest way to run commands that can operate in different
+  ways. For example, with a large repo, `golangci-lint` is much faster when run once per directory
+  with a few directories. But once the number of directories is large enough, it's faster to just
+  run it once on the whole repo.
+
 - `precious` will now emit a warning if your config file uses any of the deprecated config keys,
   `run_mode` and `chdir`. Support for these options will be removed entirely in a future release.
 

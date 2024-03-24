@@ -134,11 +134,25 @@ command.
 
 The `invoke` key tells `precious` how the command should be invoked.
 
-| Value        | Description                                                            |
-| ------------ | ---------------------------------------------------------------------- |
-| `"per-file"` | Run this command once for each matching file. **This is the default.** |
-| `"per-dir"`  | Run this command once for each matching directory.                     |
-| `"once"`     | Run this command once.                                                 |
+| Value                        | Description                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"per-file"`                 | Run this command once for each matching file. **This is the default.**                                                                                |
+| `"per-dir"`                  | Run this command once for each matching directory.                                                                                                    |
+| `"once"`                     | Run this command once.                                                                                                                                |
+| `{ "per-file-or-dir" = n }`  | If the number of matching files is less than `n`, run this command once for eaching matching file. Otherwise run it once for each matching directory. |
+| `{ "per-file-or-once" = n }` | If the number of matching files is less than `n`, run this command once for eaching matching file. Otherwise run it once.                             |
+| `{ "per-dir-or-once" = n }`  | If the number of matching directories is less than `n`, run this command once for eaching matching directories. Otherwise run it once.                |
+
+The last three options are useful for optimizing how quickly the command runs. In some cases, a
+command can be run in multiple ways, and how quickly it completes depends on how many files or
+directories need to be linted or tidied.
+
+The `golangci-lint` tool is a good example. Invoking it multiple times for a few directories can be
+much faster than running it against the entire repo. However, once there are enough directories to
+check, invoking it once for the entire repo will be faster.
+
+Note that the `path_args` setting needs to work with both possible cases for these options. For
+`golangci-lint`, that means setting it to `dir` when using `per-dir-or-once`.
 
 #### `working_dir`
 

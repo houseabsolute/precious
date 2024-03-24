@@ -48,19 +48,46 @@ impl fmt::Display for LintOrTidyCommandType {
 pub enum Invoke {
     #[serde(rename = "per-file")]
     PerFile,
+    #[serde(rename = "per-file-or-dir")]
+    PerFileOrDir(usize),
+    #[serde(rename = "per-file-or-once")]
+    PerFileOrOnce(usize),
     #[serde(rename = "per-dir")]
     PerDir,
+    #[serde(rename = "per-dir-or-once")]
+    PerDirOrOnce(usize),
     #[serde(rename = "once")]
     Once,
 }
 
 impl fmt::Display for Invoke {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Invoke::PerFile => r#""per-file""#,
-            Invoke::PerDir => r#""per-dir""#,
-            Invoke::Once => r#""once""#,
-        })
+        match self {
+            Invoke::PerFile => write!(f, r#""per-file""#),
+            Invoke::PerFileOrDir(n) => write!(f, r#""per-file-or-dir" = {n}"#),
+            Invoke::PerFileOrOnce(n) => write!(f, r#""per-file-or-once" = {n}"#),
+            Invoke::PerDir => write!(f, r#""per-dir""#),
+            Invoke::PerDirOrOnce(n) => write!(f, r#""per-dir-or-once" = {n}"#),
+            Invoke::Once => write!(f, r#""once""#),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ActualInvoke {
+    PerFile,
+    PerDir,
+    Once,
+}
+
+impl ActualInvoke {
+    #[cfg(test)]
+    fn as_invoke(&self) -> Invoke {
+        match *self {
+            ActualInvoke::PerFile => Invoke::PerFile,
+            ActualInvoke::PerDir => Invoke::PerDir,
+            ActualInvoke::Once => Invoke::Once,
+        }
     }
 }
 
@@ -288,24 +315,69 @@ impl LintOrTidyCommand {
     // files. Each of those sub-vecs represents one invocation of the
     // program. The exact paths that are passed to that invocation are later
     // determined based on the command's `path_args` field.
-    pub fn files_to_args_sets<'a>(&self, files: &'a [PathBuf]) -> Result<Vec<Vec<&'a Path>>> {
+    pub fn files_to_args_sets<'a>(
+        &self,
+        files: &'a [PathBuf],
+    ) -> Result<(Vec<Vec<&'a Path>>, ActualInvoke)> {
         let files = files.iter().filter(|f| self.file_matches_rules(f));
         Ok(match self.invoke {
             // Every file becomes its own one one-element Vec.
-            Invoke::PerFile => files.sorted().map(|f| vec![f.as_path()]).collect(),
+            Invoke::PerFile => (
+                files.sorted().map(|f| vec![f.as_path()]).collect(),
+                ActualInvoke::PerFile,
+            ),
+            Invoke::PerFileOrDir(n) => {
+                if files.clone().count() < n {
+                    (
+                        files.sorted().map(|f| vec![f.as_path()]).collect(),
+                        ActualInvoke::PerFile,
+                    )
+                } else {
+                    (Self::files_to_dirs(files)?, ActualInvoke::PerDir)
+                }
+            }
+            Invoke::PerFileOrOnce(n) => {
+                if files.clone().count() < n {
+                    (
+                        files.sorted().map(|f| vec![f.as_path()]).collect(),
+                        ActualInvoke::PerFile,
+                    )
+                } else {
+                    (
+                        vec![files.sorted().map(PathBuf::as_path).collect()],
+                        ActualInvoke::Once,
+                    )
+                }
+            }
             // Every directory becomes a Vec of its files.
-            Invoke::PerDir => {
-                let files = files.map(|p| p.as_ref()).collect::<Vec<_>>();
-                let by_dir = Self::files_by_dir(&files)?;
-                by_dir
-                    .into_iter()
-                    .sorted_by_key(|(k, _)| *k)
-                    .map(|(_, v)| v.into_iter().sorted().collect())
-                    .collect()
+            Invoke::PerDir => (Self::files_to_dirs(files)?, ActualInvoke::PerDir),
+            Invoke::PerDirOrOnce(n) => {
+                let dirs = Self::files_to_dirs(files.clone())?;
+                if dirs.len() < n {
+                    (dirs, ActualInvoke::PerDir)
+                } else {
+                    (
+                        vec![files.sorted().map(PathBuf::as_path).collect()],
+                        ActualInvoke::Once,
+                    )
+                }
             }
             // All the files in one Vec.
-            Invoke::Once => vec![files.sorted().map(PathBuf::as_path).collect()],
+            Invoke::Once => (
+                vec![files.sorted().map(PathBuf::as_path).collect()],
+                ActualInvoke::Once,
+            ),
         })
+    }
+
+    fn files_to_dirs<'a>(files: impl Iterator<Item = &'a PathBuf>) -> Result<Vec<Vec<&'a Path>>> {
+        let files = files.map(|p| p.as_ref()).collect::<Vec<_>>();
+        let by_dir = Self::files_by_dir(&files)?;
+        Ok(by_dir
+            .into_iter()
+            .sorted_by_key(|(k, _)| *k)
+            .map(|(_, v)| v.into_iter().sorted().collect())
+            .collect())
     }
 
     fn files_by_dir<'a>(files: &[&'a Path]) -> Result<HashMap<&'a Path, Vec<&'a Path>>> {
@@ -319,14 +391,18 @@ impl LintOrTidyCommand {
         Ok(by_dir)
     }
 
-    pub fn tidy(&self, files: &[&Path]) -> Result<Option<TidyOutcome>> {
+    pub fn tidy(
+        &self,
+        actual_invoke: ActualInvoke,
+        files: &[&Path],
+    ) -> Result<Option<TidyOutcome>> {
         self.require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)?;
 
-        if !self.should_act_on_files(files)? {
+        if !self.should_act_on_files(actual_invoke, files)? {
             return Ok(None);
         }
 
-        let path_metadata = self.maybe_path_metadata_for(files)?;
+        let path_metadata = self.maybe_path_metadata_for(actual_invoke, files)?;
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
@@ -359,10 +435,14 @@ impl LintOrTidyCommand {
         Ok(Some(TidyOutcome::Unknown))
     }
 
-    pub fn lint(&self, files: &[&Path]) -> Result<Option<LintOutcome>> {
+    pub fn lint(
+        &self,
+        actual_invoke: ActualInvoke,
+        files: &[&Path],
+    ) -> Result<Option<LintOutcome>> {
         self.require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)?;
 
-        if !self.should_act_on_files(files)? {
+        if !self.should_act_on_files(actual_invoke, files)? {
             return Ok(None);
         }
 
@@ -411,9 +491,9 @@ impl LintOrTidyCommand {
         Ok(())
     }
 
-    fn should_act_on_files(&self, files: &[&Path]) -> Result<bool> {
-        match self.invoke {
-            Invoke::PerFile => {
+    fn should_act_on_files(&self, actual_invoke: ActualInvoke, files: &[&Path]) -> Result<bool> {
+        match actual_invoke {
+            ActualInvoke::PerFile => {
                 let f = &files[0];
                 // This check isn't strictly necessary since we default to not
                 // matching, but the debug output is helpful.
@@ -434,7 +514,7 @@ impl LintOrTidyCommand {
                     return Ok(true);
                 }
             }
-            Invoke::PerDir => {
+            ActualInvoke::PerDir => {
                 let dir = files[0]
                     .parent()
                     .ok_or_else(|| CommandError::PathHasNoParent {
@@ -465,7 +545,7 @@ impl LintOrTidyCommand {
                     self.name
                 );
             }
-            Invoke::Once => {
+            ActualInvoke::Once => {
                 for f in files {
                     if self.excluder.path_matches(f, false) {
                         debug!(
@@ -560,14 +640,18 @@ impl LintOrTidyCommand {
     // determines what paths it should collect metadata for (which may be
     // none). This metadata is collected for tidy commands so we can determine
     // whether the command changed anything.
-    fn maybe_path_metadata_for(&self, files: &[&Path]) -> Result<Option<PathMetadata>> {
-        match self.invoke {
+    fn maybe_path_metadata_for(
+        &self,
+        actual_invoke: ActualInvoke,
+        files: &[&Path],
+    ) -> Result<Option<PathMetadata>> {
+        match actual_invoke {
             // If it's invoked per file we know that we only have one file in
             // `files`.
-            Invoke::PerFile => Ok(Some(self.path_metadata_for(files[0])?)),
+            ActualInvoke::PerFile => Ok(Some(self.path_metadata_for(files[0])?)),
             // If it's invoked per dir we can look at the first file's
             // parent. All the files should have the same dir.
-            Invoke::PerDir => {
+            ActualInvoke::PerDir => {
                 let dir = files[0]
                     .parent()
                     .ok_or_else(|| CommandError::PathHasNoParent {
@@ -578,7 +662,7 @@ impl LintOrTidyCommand {
             // If it's invoked once we would have to look at the entire
             // tree. That might be too expensive so we won't report a tidy
             // outcome in this case.
-            Invoke::Once => Ok(None),
+            ActualInvoke::Once => Ok(None),
         }
     }
 
@@ -666,7 +750,7 @@ impl LintOrTidyCommand {
         Ok(cmd)
     }
 
-    pub(crate) fn paths_summary(&self, paths: &[&Path]) -> String {
+    pub(crate) fn paths_summary(&self, actual_invoke: ActualInvoke, paths: &[&Path]) -> String {
         let all = paths
             .iter()
             .sorted()
@@ -676,8 +760,8 @@ impl LintOrTidyCommand {
             return all;
         }
 
-        match self.invoke {
-            Invoke::Once | Invoke::PerDir => {
+        match actual_invoke {
+            ActualInvoke::Once | ActualInvoke::PerDir => {
                 let initial = paths
                     .iter()
                     .sorted()
@@ -691,7 +775,7 @@ impl LintOrTidyCommand {
                     initial
                 )
             }
-            Invoke::PerFile => format!("{} files: {}", paths.len(), all),
+            ActualInvoke::PerFile => format!("{} files: {}", paths.len(), all),
         }
     }
 
@@ -841,17 +925,106 @@ mod tests {
             includer: matcher(&["**/*.go"])?,
             ..default_command()?
         };
-        let files = &["foo.go", "bar.go", "subdir/baz.go"]
+        let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
+        let bar = PathBuf::from("bar.go");
+        let foo = PathBuf::from("foo.go");
+        let baz = PathBuf::from("subdir/baz.go");
+        let test_foo = PathBuf::from("test/foo.go");
         assert_eq!(
             command.files_to_args_sets(files)?,
-            vec![
-                vec![PathBuf::from("bar.go")],
-                vec![PathBuf::from("foo.go")],
-                vec![PathBuf::from("subdir/baz.go")],
-            ],
+            (
+                vec![
+                    vec![bar.as_path()],
+                    vec![foo.as_path()],
+                    vec![baz.as_path()],
+                    vec![test_foo.as_path()],
+                ],
+                ActualInvoke::PerFile,
+            ),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn files_to_args_sets_per_file_or_dir() -> Result<()> {
+        let command = LintOrTidyCommand {
+            invoke: Invoke::PerFileOrDir(3),
+            includer: matcher(&["**/*.go"])?,
+            ..default_command()?
+        };
+        let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+        let bar = PathBuf::from("bar.go");
+        let foo = PathBuf::from("foo.go");
+        let baz = PathBuf::from("subdir/baz.go");
+        let test_foo = PathBuf::from("test/foo.go");
+        assert_eq!(
+            command.files_to_args_sets(&files[0..2])?,
+            (
+                vec![vec![foo.as_path()], vec![test_foo.as_path()],],
+                ActualInvoke::PerFile,
+            ),
+            "with two paths invoke is PerFile",
+        );
+        assert_eq!(
+            command.files_to_args_sets(files)?,
+            (
+                vec![
+                    vec![bar.as_path(), foo.as_path()],
+                    vec![baz.as_path()],
+                    vec![test_foo.as_path()],
+                ],
+                ActualInvoke::PerDir,
+            ),
+            "with four paths invoke is PerDir",
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn files_to_args_sets_per_file_or_once() -> Result<()> {
+        let command = LintOrTidyCommand {
+            invoke: Invoke::PerFileOrOnce(3),
+            includer: matcher(&["**/*.go"])?,
+            ..default_command()?
+        };
+        let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+        let bar = PathBuf::from("bar.go");
+        let foo = PathBuf::from("foo.go");
+        let baz = PathBuf::from("subdir/baz.go");
+        let test_foo = PathBuf::from("test/foo.go");
+        assert_eq!(
+            command.files_to_args_sets(&files[0..2])?,
+            (
+                vec![vec![foo.as_path()], vec![test_foo.as_path()],],
+                ActualInvoke::PerFile,
+            ),
+            "with 2 paths invoke is PerFile",
+        );
+        assert_eq!(
+            command.files_to_args_sets(files)?,
+            (
+                vec![vec![
+                    bar.as_path(),
+                    foo.as_path(),
+                    baz.as_path(),
+                    test_foo.as_path()
+                ]],
+                ActualInvoke::Once,
+            ),
+            "with four paths invoke is Once",
         );
 
         Ok(())
@@ -869,13 +1042,20 @@ mod tests {
             .iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
+        let bar = PathBuf::from("bar.go");
+        let foo = PathBuf::from("foo.go");
+        let baz = PathBuf::from("subdir/baz.go");
+        let test_foo = PathBuf::from("test/foo.go");
         assert_eq!(
             command.files_to_args_sets(files)?,
-            vec![
-                vec![PathBuf::from("bar.go"), PathBuf::from("foo.go")],
-                vec![PathBuf::from("subdir/baz.go")],
-                vec![PathBuf::from("test/foo.go")],
-            ],
+            (
+                vec![
+                    vec![bar.as_path(), foo.as_path()],
+                    vec![baz.as_path()],
+                    vec![test_foo.as_path()],
+                ],
+                ActualInvoke::PerDir,
+            ),
         );
 
         Ok(())
@@ -889,17 +1069,25 @@ mod tests {
             includer: matcher(&["**/*.go"])?,
             ..default_command()?
         };
-        let files = ["foo.go", "bar.go", "subdir/baz.go"]
+        let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
+        let bar = PathBuf::from("bar.go");
+        let foo = PathBuf::from("foo.go");
+        let baz = PathBuf::from("subdir/baz.go");
+        let test_foo = PathBuf::from("test/foo.go");
         assert_eq!(
-            command.files_to_args_sets(&files)?,
-            vec![vec![
-                PathBuf::from("bar.go"),
-                PathBuf::from("foo.go"),
-                PathBuf::from("subdir/baz.go"),
-            ],],
+            command.files_to_args_sets(files)?,
+            (
+                vec![vec![
+                    bar.as_path(),
+                    foo.as_path(),
+                    baz.as_path(),
+                    test_foo.as_path(),
+                ]],
+                ActualInvoke::Once,
+            ),
         );
 
         Ok(())
@@ -995,7 +1183,11 @@ mod tests {
         ];
         for i in include.iter().map(PathBuf::from) {
             let name = i.clone();
-            assert!(command.should_act_on_files(&[&i])?, "{}", name.display());
+            assert!(
+                command.should_act_on_files(ActualInvoke::PerFile, &[&i])?,
+                "{}",
+                name.display(),
+            );
         }
 
         let exclude = [
@@ -1007,7 +1199,11 @@ mod tests {
         ];
         for e in exclude.iter().map(PathBuf::from) {
             let name = e.clone();
-            assert!(!command.should_act_on_files(&[&e])?, "{}", name.display());
+            assert!(
+                !command.should_act_on_files(ActualInvoke::PerFile, &[&e])?,
+                "{}",
+                name.display(),
+            );
         }
 
         Ok(())
@@ -1036,8 +1232,10 @@ mod tests {
         for i in include.iter() {
             let files = i.iter().map(PathBuf::from).collect::<Vec<_>>();
             assert!(
-                command
-                    .should_act_on_files(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?,
+                command.should_act_on_files(
+                    ActualInvoke::PerDir,
+                    &files.iter().map(|f| f.as_ref()).collect::<Vec<_>>(),
+                )?,
                 "{}",
                 i.join(", ")
             );
@@ -1052,8 +1250,10 @@ mod tests {
         for e in exclude.iter() {
             let files = e.iter().map(PathBuf::from).collect::<Vec<_>>();
             assert!(
-                !command
-                    .should_act_on_files(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?,
+                !command.should_act_on_files(
+                    ActualInvoke::PerDir,
+                    &files.iter().map(|f| f.as_ref()).collect::<Vec<_>>(),
+                )?,
                 "{}",
                 e.join(", ")
             );
@@ -1085,8 +1285,10 @@ mod tests {
             let files = i[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
             assert!(
-                command
-                    .should_act_on_files(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?,
+                command.should_act_on_files(
+                    ActualInvoke::Once,
+                    &files.iter().map(|f| f.as_ref()).collect::<Vec<_>>()
+                )?,
                 "{}",
                 name.display()
             );
@@ -1107,8 +1309,10 @@ mod tests {
             let files = e[1..].iter().map(PathBuf::from).collect::<Vec<PathBuf>>();
             let name = dir.clone();
             assert!(
-                !command
-                    .should_act_on_files(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?,
+                !command.should_act_on_files(
+                    ActualInvoke::Once,
+                    &files.iter().map(|f| f.as_ref()).collect::<Vec<_>>()
+                )?,
                 "{}",
                 name.display()
             );
@@ -1377,7 +1581,7 @@ mod tests {
         let mut file = helper.git_root();
         file.push("src/bar.rs");
         let metadata = command
-            .maybe_path_metadata_for(&[&file])?
+            .maybe_path_metadata_for(ActualInvoke::PerFile, &[&file])?
             .unwrap_or_else(|| unreachable!("Should always have metadata with Invoke::PerFile"));
         assert!(metadata.path_map.contains_key(&file));
 
@@ -1399,7 +1603,7 @@ mod tests {
         let mut dir = helper.git_root();
         dir.push("src");
         let metadata = command
-            .maybe_path_metadata_for(&[&dir])?
+            .maybe_path_metadata_for(ActualInvoke::PerFile, &[&dir])?
             .unwrap_or_else(|| unreachable!("Should always have metadata with Invoke::PerFile"));
         let expect_files = ["bar.rs", "main.rs", "module.rs"];
         for name in expect_files {
@@ -1425,7 +1629,9 @@ mod tests {
             ..default_command()?
         };
         let cwd = env::current_dir()?;
-        assert!(command.maybe_path_metadata_for(&[&cwd])?.is_none());
+        assert!(command
+            .maybe_path_metadata_for(ActualInvoke::Once, &[&cwd])?
+            .is_none());
 
         Ok(())
     }
@@ -1498,7 +1704,7 @@ mod tests {
         file.push("src/main.rs");
         let files = vec![file.as_ref()];
 
-        let prev = command.maybe_path_metadata_for(&files)?;
+        let prev = command.maybe_path_metadata_for(ActualInvoke::PerFile, &files)?;
         assert!(prev.is_some());
         assert!(!command.paths_were_changed(prev.clone().unwrap())?);
 
@@ -1524,7 +1730,7 @@ mod tests {
         file.push("src/main.rs");
         let files = vec![file.as_ref()];
 
-        let prev = command.maybe_path_metadata_for(&files)?;
+        let prev = command.maybe_path_metadata_for(ActualInvoke::PerFile, &files)?;
         assert!(prev.is_some());
         assert!(!command.paths_were_changed(prev.clone().unwrap())?);
 
@@ -1550,7 +1756,7 @@ mod tests {
         file.push("src/main.rs");
         let files = vec![file.as_ref()];
 
-        let prev = command.maybe_path_metadata_for(&files)?;
+        let prev = command.maybe_path_metadata_for(ActualInvoke::PerFile, &files)?;
         assert!(prev.is_some());
         assert!(!command.paths_were_changed(prev.clone().unwrap())?);
 
@@ -1587,8 +1793,10 @@ mod tests {
             }
         }
 
-        let prev = command
-            .maybe_path_metadata_for(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?;
+        let prev = command.maybe_path_metadata_for(
+            ActualInvoke::PerDir,
+            &files.iter().map(|f| f.as_ref()).collect::<Vec<_>>(),
+        )?;
         assert!(prev.is_some());
         let prev = prev.unwrap();
         assert_eq!(
@@ -1630,8 +1838,10 @@ mod tests {
             }
         }
 
-        let prev = command
-            .maybe_path_metadata_for(&files.iter().map(|f| f.as_ref()).collect::<Vec<_>>())?;
+        let prev = command.maybe_path_metadata_for(
+            ActualInvoke::PerDir,
+            &files.iter().map(|f| f.as_ref()).collect::<Vec<_>>(),
+        )?;
         assert!(prev.is_some());
         let prev = prev.unwrap();
         assert_eq!(
@@ -1648,93 +1858,101 @@ mod tests {
     }
 
     #[test_case(
-        Invoke::Once,
+        ActualInvoke::Once,
         &["**/*.go"],
         &["foo.go"],
         "foo.go";
         "invoke = once with one path"
     )]
     #[test_case(
-        Invoke::Once,
+        ActualInvoke::Once,
         &["**/*.go"],
         &["foo.go", "bar.go"],
         "bar.go foo.go";
         "invoke = once with two paths"
     )]
     #[test_case(
-        Invoke::Once,
+        ActualInvoke::Once,
         &["**/*.go"],
         &["foo.go", "bar.go", "baz.go"],
         "bar.go baz.go foo.go";
         "invoke = once with three paths"
     )]
     #[test_case(
-        Invoke::Once,
+        ActualInvoke::Once,
         &["**/*.go"],
         &["foo.go", "bar.go", "baz.go", "quux.go"],
         "4 files matching **/*.go, starting with bar.go baz.go";
         "invoke = once with four paths"
     )]
     #[test_case(
-        Invoke::Once,
+        ActualInvoke::Once,
         &["**/*.go", "!food.go"],
         &["foo.go", "bar.go", "baz.go", "quux.go"],
         "4 files matching **/*.go !food.go, starting with bar.go baz.go";
         "invoke = once with four paths and two includes"
     )]
     #[test_case(
-        Invoke::PerDir,
+        ActualInvoke::PerDir,
         &["**/*.go"],
         &["foo.go"],
         "foo.go";
         "invoke = dir with one path"
     )]
     #[test_case(
-        Invoke::PerDir,
+        ActualInvoke::PerDir,
         &["**/*.go"],
         &["foo.go", "bar.go"],
         "bar.go foo.go";
         "invoke = dir with two paths"
     )]
     #[test_case(
-        Invoke::PerDir,
+        ActualInvoke::PerDir,
         &["**/*.go"],
         &["foo.go", "bar.go", "baz.go"],
         "bar.go baz.go foo.go";
         "invoke = dir with three paths"
     )]
     #[test_case(
-        Invoke::PerDir,
+        ActualInvoke::PerDir,
         &["**/*.go"],
         &["foo.go", "bar.go", "baz.go", "quux.go"],
         "4 files matching **/*.go, starting with bar.go baz.go";
         "invoke = dir with four paths"
     )]
     #[test_case(
-        Invoke::PerDir,
+        ActualInvoke::PerDir,
         &["**/*.go", "!food.go"],
         &["foo.go", "bar.go", "baz.go", "quux.go"],
         "4 files matching **/*.go !food.go, starting with bar.go baz.go";
         "invoke = dir with four paths and two includes"
     )]
     #[test_case(
-        Invoke::PerFile,
+        ActualInvoke::PerFile,
         &["**/*.go", "!food.go"],
         &["foo.go"],
         "foo.go";
         "invoke = file"
     )]
     #[parallel]
-    fn paths_summary(invoke: Invoke, include: &[&str], paths: &[&str], expect: &str) -> Result<()> {
+    fn paths_summary(
+        actual_invoke: ActualInvoke,
+        include: &[&str],
+        paths: &[&str],
+        expect: &str,
+    ) -> Result<()> {
         let command = LintOrTidyCommand {
             name: String::from("Test"),
-            invoke,
+            invoke: actual_invoke.as_invoke(),
             include: include.iter().map(|i| i.to_string()).collect(),
             ..default_command()?
         };
 
         assert_eq!(
-            &command.paths_summary(&paths.iter().map(Path::new).collect::<Vec<_>>()),
+            &command.paths_summary(
+                actual_invoke,
+                &paths.iter().map(Path::new).collect::<Vec<_>>()
+            ),
             expect,
         );
 
