@@ -17,13 +17,11 @@ pub struct CommandConfig {
     pub(crate) typ: LintOrTidyCommandType,
     #[serde(deserialize_with = "string_or_seq_string")]
     pub(crate) include: Vec<String>,
-    #[serde(default)]
-    #[serde(deserialize_with = "string_or_seq_string")]
+    #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) exclude: Vec<String>,
     #[serde(default)]
     pub(crate) invoke: Option<Invoke>,
-    #[serde(default)]
-    #[serde(deserialize_with = "working_dir")]
+    #[serde(default, deserialize_with = "working_dir")]
     pub(crate) working_dir: Option<WorkingDir>,
     #[serde(default)]
     pub(crate) path_args: Option<PathArgs>,
@@ -35,26 +33,21 @@ pub struct CommandConfig {
     pub(crate) cmd: Vec<String>,
     #[serde(default)]
     pub(crate) env: HashMap<String, String>,
-    #[serde(default)]
-    #[serde(deserialize_with = "string_or_seq_string")]
+    #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) lint_flags: Vec<String>,
-    #[serde(default)]
-    #[serde(deserialize_with = "string_or_seq_string")]
+    #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) tidy_flags: Vec<String>,
     #[serde(default = "empty_string")]
     pub(crate) path_flag: String,
     #[serde(deserialize_with = "u8_or_seq_u8")]
     pub(crate) ok_exit_codes: Vec<u8>,
-    #[serde(default)]
-    #[serde(deserialize_with = "u8_or_seq_u8")]
+    #[serde(default, deserialize_with = "u8_or_seq_u8")]
     pub(crate) lint_failure_exit_codes: Vec<u8>,
     #[serde(default)]
     pub(crate) expect_stderr: bool,
-    #[serde(default)]
-    #[serde(deserialize_with = "string_or_seq_string")]
+    #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) ignore_stderr: Vec<String>,
-    #[serde(default)]
-    #[serde(deserialize_with = "string_or_seq_string")]
+    #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) labels: Vec<String>,
 }
 
@@ -74,8 +67,7 @@ fn empty_string() -> String {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    #[serde(default)]
-    #[serde(deserialize_with = "string_or_seq_string")]
+    #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) exclude: Vec<String>,
     commands: IndexMap<String, CommandConfig>,
 }
