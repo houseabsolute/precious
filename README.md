@@ -53,10 +53,10 @@ where the binary will be installed.
 The `precious` binary has a `config init` subcommand that will generate a config file for you. This
 subcommand takes the following flags:
 
-| Flag                              | Description                                                                        |
-| --------------------------------- | ---------------------------------------------------------------------------------- |
-| `-c`, `--component` `<COMPONENT>` | The component(s) to generate config for (see below)                                |
-| `-p`, `--path` `<PATH>`           | The path to which the config file should be written. Defaults to `./precious.toml` |
+| Flag                                                                | Description                                                                        |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `-c`, <code>&#x2011;&#x2011;component&nbsp;&lt;COMPONENT&gt;</code> | The component(s) to generate config for (see below)                                |
+| `-p`, <code>&#x2011;&#x2011;path&nbsp;&lt;PATH&gt;</code>           | The path to which the config file should be written. Defaults to `./precious.toml` |
 
 Here's an example for a Rust project:
 
@@ -144,11 +144,11 @@ The `invoke` key tells `precious` how the command should be invoked.
 
 The `working_dir` key tells precious what the working directory should be when the command is run.
 
-| Value                | Description                                                                                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"root"`             | The working directory is the project root. **This is the default.**                                                                                                       |
-| `"dir"`              | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
-| `.chdir_to = "path"` | The working directory will be the given path when executing the command. **This path must be relative to the project root.**                                              |
+| Value                                     | Description                                                                                                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"root"`                                  | The working directory is the project root. **This is the default.**                                                                                                       |
+| `"dir"`                                   | The working directory is the directory containing the matching files. This means `precious` will `chdir` into each matching directory in turn as it executes the command. |
+| <code>.chdir_to&nbsp;=&nbsp;"path"</code> | The working directory will be the given path when executing the command. **This path must be relative to the project root.**                                              |
 
 ##### `working_dir.chdir_to = "path"`
 
@@ -162,14 +162,14 @@ project root.
 
 The `path_args` key tells precious how paths should be passed when the command is run.
 
-| Value             | Description                                                                                                                                                                      |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"file"`          | Passes the path to the matching file relative to the root. **This is the default.** <br> With `working_directory.chdir_to` the path is relative to the given working directory.  |
-| `"dir"`           | Passes the path to the directory containing the matching files relative to the root. <br> With `working_directory.chdir_to` the path is relative to the given working directory. |
-| `"none"`          | No paths are passed to the command at all.                                                                                                                                       |
-| `"dot"`           | Always pass `.` as the path. This is useful when `working_dir = "dir"` and the command still requires a path to be passed.                                                       |
-| `"absolute-file"` | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                   |
-| `"absolute-dir"`  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                         |
+| Value                               | Description                                                                                                                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"file"`                            | Passes the path to the matching file relative to the root. **This is the default.** <br> With `working_directory.chdir_to` the path is relative to the given working directory.  |
+| `"dir"`                             | Passes the path to the directory containing the matching files relative to the root. <br> With `working_directory.chdir_to` the path is relative to the given working directory. |
+| `"none"`                            | No paths are passed to the command at all.                                                                                                                                       |
+| `"dot"`                             | Always pass `.` as the path. This is useful when `working_dir = "dir"` and the command still requires a path to be passed.                                                       |
+| <code>"absolute&#x2011;file"</code> | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                   |
+| <code>"absolute&#x2011;dir"</code>  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                         |
 
 #### Nonsensical Combinations
 
@@ -274,14 +274,14 @@ one of these. The `lint` and `tidy` commands take the same flags:
 
 When you run `precious` you must tell it what paths to operate on. There are several flags for this:
 
-| Mode                                                         | Flag                                | Description                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| All paths                                                    | `-a`, `--all`                       | Run on all files under the project root (the directory containing the precious config file).                                                                                                                                                                                                                                                                                       |
-| Modified files according to git                              | `-g`, `--git`                       | Run on all files that git reports as having been modified, including staged files.                                                                                                                                                                                                                                                                                                 |
-| Staged files according to git                                | `-s`, `--staged`                    | Run on all files that git reports as having been staged.                                                                                                                                                                                                                                                                                                                           |
-| Files that differ from a given git ref                       | `-d <REF>`, `--git-diff-from <REF>` | Run on all files in the current `HEAD` that differ from the given `<REF>`. The value `<REF>` can be a branch name, like `master`, or an ref name like `HEAD~6` or `master@{2.days.ago}`. See `git help rev-parse` for more options. Note that this will _not_ see files with uncommitted changes in the local working directory.                                                   |
-| Staged files according to git, with unstaged changes stashed | `--staged-with-stash`               | This is like `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this flag. Be careful when using this option in scripts because of this issue. |
-| Paths given on CLI                                           |                                     | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other flags. If any of these paths are directories then that entire directory tree will be included.                                                                                                                                             |
+| Mode                                                         | Flag                                                                       | Description                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All paths                                                    | `-a`, `--all`                                                              | Run on all files under the project root (the directory containing the precious config file).                                                                                                                                                                                                                                                                                       |
+| Modified files according to git                              | `-g`, `--git`                                                              | Run on all files that git reports as having been modified, including staged files.                                                                                                                                                                                                                                                                                                 |
+| Staged files according to git                                | `-s`, `--staged`                                                           | Run on all files that git reports as having been staged.                                                                                                                                                                                                                                                                                                                           |
+| Files that differ from a given git ref                       | `-d <REF>`, <code>&#x2011;&#x2011;git&#x2011;diff&#x2011;from <REF></code> | Run on all files in the current `HEAD` that differ from the given `<REF>`. The value `<REF>` can be a branch name, like `master`, or an ref name like `HEAD~6` or `master@{2.days.ago}`. See `git help rev-parse` for more options. Note that this will _not_ see files with uncommitted changes in the local working directory.                                                   |
+| Staged files according to git, with unstaged changes stashed | <code>&#x2011;&#x2011;staged&#x2011;with&#x2011;stash</code>               | This is like `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this flag. Be careful when using this option in scripts because of this issue. |
+| Paths given on CLI                                           |                                                                            | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other flags. If any of these paths are directories then that entire directory tree will be included.                                                                                                                                             |
 
 #### Running One Command
 
