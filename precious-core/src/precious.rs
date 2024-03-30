@@ -607,7 +607,7 @@ impl LintOrTidyRunner {
             }
             Err(e) => {
                 error!("Failed to run precious: {}", e);
-                1
+                42
             }
         }
     }
@@ -1314,7 +1314,7 @@ lint-failure-exit-codes = [1]
         let mut lt = app.new_lint_or_tidy_runner()?;
         let status = lt.run();
 
-        assert_eq!(status, 1);
+        assert_eq!(status, 42);
 
         Ok(())
     }

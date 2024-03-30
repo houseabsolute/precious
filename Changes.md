@@ -19,6 +19,9 @@
   will continue to work. I do not intend to ever deprecate the underscore version. They simply will
   not be used in the docs and examples.
 
+- Fixed cases where `precious` would exit with an exit code of `1` on errors that were _not_ linting
+  failures. Going forward, an exit code of `1` should only be used for linting failures.
+
 - `precious` will now emit a warning if your config file uses any of the deprecated config keys,
   `run_mode` and `chdir`. Support for these options will be removed entirely in a future release.
 

@@ -144,7 +144,7 @@ impl fmt::Display for PathArgs {
 #[derive(Debug, Error, PartialEq, Eq)]
 enum CommandError {
     #[error(
-        "You cannot create a Command which lints and tidies without lint-flags and/or tidy-flags"
+        "You cannot define a command which lints and tidies without lint-flags and/or tidy-flags"
     )]
     CommandWhichIsBothRequiresLintOrTidyFlags,
 

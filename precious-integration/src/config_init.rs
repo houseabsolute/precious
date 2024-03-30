@@ -84,7 +84,7 @@ fn init_does_not_overwrite_existing_file() -> Result<()> {
     File::create("precious.toml")?;
     let output = init_with_components(&["rust"], None)?;
 
-    assert_eq!(output.exit_code, 1);
+    assert_eq!(output.exit_code, 42);
     assert!(output.stderr.is_some());
     assert!(output
         .stderr
@@ -103,7 +103,7 @@ fn init_does_not_overwrite_existing_file_with_nonstandard_name() -> Result<()> {
     File::create("my-precious.toml")?;
     let output = init_with_components(&["rust"], Some("my-precious.toml"))?;
 
-    assert_eq!(output.exit_code, 1);
+    assert_eq!(output.exit_code, 42);
     assert!(output.stderr.is_some());
     assert!(output
         .stderr
@@ -137,7 +137,7 @@ fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<
         &precious,
         &args,
         &env,
-        &[0, 1],
+        &[0, 42],
         Some(&[Regex::new(".*")?]),
         None,
     )

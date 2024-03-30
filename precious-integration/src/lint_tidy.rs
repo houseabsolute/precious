@@ -302,6 +302,91 @@ fn foo() -> u8   {
 
 #[test]
 #[serial]
+fn exit_codes() -> Result<()> {
+    let helper = set_up_for_tests()?;
+
+    let all_codes = Vec::from_iter(0..=255);
+    let match_all_re = Regex::new(".*")?;
+
+    let precious = precious_path()?;
+    let env = HashMap::new();
+    let out = exec::run(
+        &precious,
+        &["lint", "--all"],
+        &env,
+        &all_codes,
+        Some(&[match_all_re.clone()]),
+        Some(&helper.precious_root()),
+    )?;
+    assert_eq!(out.exit_code, 0);
+
+    helper.write_file("src/good.rs", "this is not valid rust")?;
+
+    let out = exec::run(
+        &precious,
+        &["lint", "--all"],
+        &env,
+        &all_codes,
+        Some(&[match_all_re.clone()]),
+        Some(&helper.precious_root()),
+    )?;
+    assert_eq!(out.exit_code, 1);
+
+    let out = exec::run(
+        &precious,
+        &["foo", "--all"],
+        &env,
+        &all_codes,
+        Some(&[match_all_re.clone()]),
+        Some(&helper.precious_root()),
+    )?;
+    assert_eq!(out.exit_code, 2);
+
+    let out = exec::run(
+        &precious,
+        &["lint", "--foo"],
+        &env,
+        &all_codes,
+        Some(&[match_all_re.clone()]),
+        Some(&helper.precious_root()),
+    )?;
+    assert_eq!(out.exit_code, 2);
+
+    helper.write_file("precious.toml", "this is not valid config")?;
+    let out = exec::run(
+        &precious,
+        &["lint", "--all"],
+        &env,
+        &all_codes,
+        Some(&[match_all_re.clone()]),
+        Some(&helper.precious_root()),
+    )?;
+    assert_eq!(out.exit_code, 42);
+
+    let config_missing_key = r#"
+[commands.rustfmt]
+type    = "both"
+include = "**/*.rs"
+cmd     = [ "rustfmt", "--edition", "2021" ]
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#;
+    helper.write_file("precious.toml", config_missing_key)?;
+    let out = exec::run(
+        &precious,
+        &["lint", "--all"],
+        &env,
+        &all_codes,
+        Some(&[match_all_re.clone()]),
+        Some(&helper.precious_root()),
+    )?;
+    assert_eq!(out.exit_code, 42);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn all_invocation_options() -> Result<()> {
     let helper = set_up_for_tests()?;
     write_perl_script(&helper)?;

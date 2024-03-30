@@ -7,13 +7,13 @@ fn main() {
     let app = precious::app();
     if let Err(e) = app.init_logger() {
         eprintln!("Error creating logger: {e}");
-        std::process::exit(1);
+        std::process::exit(42);
     }
     let status = match app.run() {
         Ok(s) => s,
         Err(e) => {
             error!("{e}");
-            1
+            42
         }
     };
     std::process::exit(status as i32);
