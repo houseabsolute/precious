@@ -475,12 +475,13 @@ This will cause `precious` to run the command exactly once in the project root.
 ### Command runs in the same directory as the files it lints and does not accept path arguments
 
 If you want to run the command without passing the path being operated on to the command, set
-`invoke = "per-dir"` and `path-args = "none"`:
+`invoke = "per-dir"`, `working-dir = "dir"`, and `path-args = "none"`:
 
 ```toml
-include   = "**/*.rs"
-invoke    = "per-dir"
-path-args = "none"
+include     = "**/*.rs"
+invoke      = "per-dir"
+working-dir = "dir"
+path-args   = "none"
 ```
 
 ### You want a command to exclude an entire directory (tree) except for one or more files
