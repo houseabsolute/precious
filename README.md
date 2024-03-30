@@ -422,7 +422,7 @@ subset of these at once, then `per-dir` mode will be faster.
 You can also use the experimental `invoke.per-dir-or-once = n` option to invoke the command one of
 two ways, depending on the number of directories that precious will operate on.
 
-### Quiet Flags
+### Quiet Flags for Commands
 
 Many commands will accept a "quiet" flag of some sort. In general, you probably _do not_ want to run
 commands in a quiet mode with precious.
