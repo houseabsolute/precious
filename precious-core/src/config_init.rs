@@ -20,7 +20,7 @@ const GO_COMMANDS: [(&str, &str); 3] = [
 type = "lint"
 include = "**/*.go"
 invoke = "once"
-path_args = "dir"
+path-args = "dir"
 cmd = [
     "golangci-lint",
     "run",
@@ -29,8 +29,8 @@ cmd = [
     "--allow-parallel-runners",
 ]
 env = { "FAIL_ON_WARNINGS" = "1" }
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
+ok-exit-codes = [0]
+lint-failure-exit-codes = [1]
 "#,
     ),
     (
@@ -47,7 +47,7 @@ cmd = [
     "--enable", "goimports",
     "--allow-parallel-runners",
 ]
-ok_exit_codes = [0]
+ok-exit-codes = [0]
 "#,
     ),
     (
@@ -56,10 +56,10 @@ ok_exit_codes = [0]
 type = "lint"
 include = "**/*.go"
 invoke = "once"
-path_args = "none"
+path-args = "none"
 cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
+ok-exit-codes = [0]
+lint-failure-exit-codes = [1]
 "#,
     ),
 ];
@@ -201,8 +201,8 @@ const PERL_COMMANDS: [(&str, &str); 5] = [
 type = "lint"
 include = [ "**/*.{pl,pm,t,psgi}" ]
 cmd = [ "perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc" ]
-ok_exit_codes = 0
-lint_failure_exit_codes = 2
+ok-exit-codes = 0
+lint-failure-exit-codes = 2
 "#,
     ),
     (
@@ -211,11 +211,11 @@ lint_failure_exit_codes = 2
 type = "both"
 include = [ "**/*.{pl,pm,t,psgi}" ]
 cmd = [ "perltidy", "--profile=$PRECIOUS_ROOT/perltidyrc" ]
-lint_flags = [ "--assert-tidy", "--no-standard-output", "--outfile=/dev/null" ]
-tidy_flags = [ "--backup-and-modify-in-place", "--backup-file-extension=/" ]
-ok_exit_codes = 0
-lint_failure_exit_codes = 2
-ignore_stderr = "Begin Error Output Stream"
+lint-flags = [ "--assert-tidy", "--no-standard-output", "--outfile=/dev/null" ]
+tidy-flags = [ "--backup-and-modify-in-place", "--backup-file-extension=/" ]
+ok-exit-codes = 0
+lint-failure-exit-codes = 2
+ignore-stderr = "Begin Error Output Stream"
 "#,
     ),
     (
@@ -224,10 +224,10 @@ ignore_stderr = "Begin Error Output Stream"
 type = "both"
 include = [ "**/*.{pl,pm,t,psgi}" ]
 cmd = [ "perlimports" ]
-lint_flags = ["--lint" ]
-tidy_flags = ["-i" ]
-ok_exit_codes = 0
-expect_stderr = true
+lint-flags = ["--lint" ]
+tidy-flags = ["-i" ]
+ok-exit-codes = 0
+expect-stderr = true
 "#,
     ),
     (
@@ -236,9 +236,9 @@ expect_stderr = true
 type = "lint"
 include = [ "**/*.{pl,pm,pod}" ]
 cmd = [ "podchecker", "--warnings", "--warnings" ]
-ok_exit_codes = [ 0, 2 ]
-lint_failure_exit_codes = 1
-ignore_stderr = [
+ok-exit-codes = [ 0, 2 ]
+lint-failure-exit-codes = 1
+ignore-stderr = [
     ".+ pod syntax OK",
     ".+ does not contain any pod commands",
 ]
@@ -250,8 +250,8 @@ ignore_stderr = [
 type = "tidy"
 include = [ "**/*.{pl,pm,pod}" ]
 cmd = [ "podtidy", "--columns", "80", "--inplace", "--nobackup" ]
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
 "#,
     ),
 ];
@@ -278,9 +278,9 @@ const RUST_COMMANDS: [(&str, &str); 2] = [
 type    = "both"
 include = "**/*.rs"
 cmd     = [ "rustfmt", "--edition", "2021" ]
-lint_flags = "--check"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
+lint-flags = "--check"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
 "#,
     ),
     (
@@ -289,7 +289,7 @@ lint_failure_exit_codes = 1
 type      = "lint"
 include   = "**/*.rs"
 invoke    = "once"
-path_args = "none"
+path-args = "none"
 cmd = [
     "cargo",
     "clippy",
@@ -300,9 +300,9 @@ cmd = [
     "--",
     "-D", "clippy::all",
 ]
-ok_exit_codes = 0
-lint_failure_exit_codes = 101
-ignore_stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
+ok-exit-codes = 0
+lint-failure-exit-codes = 101
+ignore-stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
 "#,
     ),
 ];
@@ -322,11 +322,11 @@ const GITIGNORE_COMMANDS: [(&str, &str); 1] = [(
 type = "both"
 include = "**/.gitignore"
 cmd = [ "omegasort", "--sort", "path", "--unique" ]
-lint_flags = "--check"
-tidy_flags = "--in-place"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
-ignore_stderr = [
+lint-flags = "--check"
+tidy-flags = "--in-place"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = [
     "The .+ file is not sorted",
     "The .+ file is not unique",
 ]
@@ -353,11 +353,11 @@ cmd     = [
     "--print-width", "100",
     "--prose-wrap", "always",
 ]
-lint_flags = "--check"
-tidy_flags = "--write"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
-ignore_stderr = [ "Code style issues" ]
+lint-flags = "--check"
+tidy-flags = "--write"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = [ "Code style issues" ]
 "#,
 )];
 
@@ -379,11 +379,11 @@ cmd     = [
     "./node_modules/.bin/prettier",
     "--no-config",
 ]
-lint_flags = "--check"
-tidy_flags = "--write"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
-ignore_stderr = [ "Code style issues" ]
+lint-flags = "--check"
+tidy-flags = "--write"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = [ "Code style issues" ]
 "#,
 )];
 

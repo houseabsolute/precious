@@ -1011,9 +1011,9 @@ mod tests {
 type    = "both"
 include = "**/*.rs"
 cmd     = ["rustfmt"]
-lint_flags = "--check"
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
+lint-flags = "--check"
+ok-exit-codes = [0]
+lint-failure-exit-codes = [1]
 "#;
 
     const DEFAULT_CONFIG_FILE_NAME: &str = super::CONFIG_FILE_NAMES[0];
@@ -1207,7 +1207,7 @@ lint_failure_exit_codes = [1]
     type    = "tidy"
     include = "**/*"
     cmd     = ["true"]
-    ok_exit_codes = [0]
+    ok-exit-codes = [0]
     "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
@@ -1231,7 +1231,7 @@ lint_failure_exit_codes = [1]
     type    = "tidy"
     include = "**/*"
     cmd     = ["false"]
-    ok_exit_codes = [0]
+    ok-exit-codes = [0]
     "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
@@ -1255,8 +1255,8 @@ lint_failure_exit_codes = [1]
     type    = "lint"
     include = "**/*"
     cmd     = ["true"]
-    ok_exit_codes = [0]
-    lint_failure_exit_codes = [1]
+    ok-exit-codes = [0]
+    lint-failure-exit-codes = [1]
     "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;
@@ -1337,21 +1337,21 @@ lint_failure_exit_codes = [1]
             type    = "tidy"
             include = "test.replace"
             cmd     = ["perl", "-pi", "-e", "s/a/b/i"]
-            ok_exit_codes = [0]
+            ok-exit-codes = [0]
 
             [commands.perl-replace-a-with-c]
             type    = "tidy"
             include = "test.replace"
             cmd     = ["perl", "-pi", "-e", "s/a/c/i"]
-            ok_exit_codes = [0]
-            lint_failure_exit_codes = [1]
+            ok-exit-codes = [0]
+            lint-failure-exit-codes = [1]
 
             [commands.perl-replace-a-with-d]
             type    = "tidy"
             include = "test.replace"
             cmd     = ["perl", "-pi", "-e", "s/a/d/i"]
-            ok_exit_codes = [0]
-            lint_failure_exit_codes = [1]
+            ok-exit-codes = [0]
+            lint-failure-exit-codes = [1]
         "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let test_replace = PathBuf::from_str("test.replace")?;
@@ -1377,20 +1377,20 @@ lint_failure_exit_codes = [1]
             type    = "lint"
             include = "*.foo"
             cmd     = ["foo", "--lint", "--with-vigor"]
-            ok_exit_codes = [0]
+            ok-exit-codes = [0]
 
             [commands.bar]
             type    = "tidy"
             include = "*.bar"
             cmd     = ["bar", "--fix-broken-things", "--aggressive"]
-            ok_exit_codes = [0]
+            ok-exit-codes = [0]
 
             [commands.baz]
             type    = "both"
             include = "*.baz"
             cmd     = ["baz", "--fast-mode", "--no-verify"]
-            lint_flags = "--lint"
-            ok_exit_codes = [0]
+            lint-flags = "--lint"
+            ok-exit-codes = [0]
         "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
         let _pushd = helper.pushd_to_git_root()?;

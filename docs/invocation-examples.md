@@ -32,8 +32,8 @@ This is the default configuration.
 ```toml
 [commands.some-linter]
 invoke = "per-file"
-working_dir = "root"
-path_args = "file"
+working-dir = "root"
+path-args = "file"
 ```
 
 ```
@@ -54,8 +54,8 @@ some-linter pkg2/subpkg/subpkg.go
 ```toml
 [commands.some-linter]
 invoke = "per-file"
-working_dir = "root"
-path_args = "absolute-file"
+working-dir = "root"
+path-args = "absolute-file"
 ```
 
 ```
@@ -76,8 +76,8 @@ some-linter /example/pkg2/subpkg/subpkg.go
 ```toml
 [commands.some-linter]
 invoke = "per-file"
-working_dir = "dir"
-path_args = "file"
+working-dir = "dir"
+path-args = "file"
 ```
 
 ```
@@ -101,8 +101,8 @@ some-linter subpkg.go
 ```toml
 [commands.some-linter]
 invoke = "per-file"
-working_dir = "dir"
-path_args = "absolute-file"
+working-dir = "dir"
+path-args = "absolute-file"
 ```
 
 ```
@@ -117,7 +117,7 @@ cd /example/pkg2/subpkg
 some-linter /example/pkg2/subpkg/subpkg.go
 ```
 
-It's odd to combine `working_dir = "dir"` with `path_args = "absolute-file"`, but it will work.
+It's odd to combine `working-dir = "dir"` with `path-args = "absolute-file"`, but it will work.
 
 ---
 
@@ -128,8 +128,8 @@ It's odd to combine `working_dir = "dir"` with `path_args = "absolute-file"`, bu
 ```toml
 [commands.some-linter]
 invoke = "per-file"
-working_dir.chdir_to = "pkg1"
-path_args = "file"
+working-dir.chdir-to = "pkg1"
+path-args = "file"
 ```
 
 ```
@@ -151,8 +151,8 @@ some-linter pkg1.go
 ```toml
 [commands.some-linter]
 invoke = "per-file"
-working_dir.chdir_to = "pkg1"
-path_args = "absolute-file"
+working-dir.chdir-to = "pkg1"
+path-args = "absolute-file"
 ```
 
 ```
@@ -174,8 +174,8 @@ some-linter /example/pkg2/subpkg/subpkg.go
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir = "root"
-path_args = "dir"
+working-dir = "root"
+path-args = "dir"
 ```
 
 ```
@@ -194,8 +194,8 @@ some-linter pkg2/subpkg
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir = "root"
-path_args = "absolute-dir"
+working-dir = "root"
+path-args = "absolute-dir"
 ```
 
 ```
@@ -214,8 +214,8 @@ some-linter /example/pkg2/subpkg
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir = "root"
-path_args = "file"
+working-dir = "root"
+path-args = "file"
 ```
 
 ```
@@ -234,8 +234,8 @@ some-linter pkg2/subpkg/subpkg.go
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir = "root"
-path_args = "absolute-file"
+working-dir = "root"
+path-args = "absolute-file"
 ```
 
 ```
@@ -254,8 +254,8 @@ some-linter /example/pkg2/subpkg/subpkg.go
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir = "dir"
-path_args = "dot"
+working-dir = "dir"
+path-args = "dot"
 ```
 
 ```
@@ -277,8 +277,8 @@ some-linter .
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir = "dir"
-path_args = "none"
+working-dir = "dir"
+path-args = "none"
 ```
 
 ```
@@ -300,8 +300,8 @@ some-linter
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir.chdir_to = "pkg1"
-path_args = "file"
+working-dir.chdir-to = "pkg1"
+path-args = "file"
 ```
 
 ```
@@ -321,8 +321,8 @@ some-linter pkg1.go
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir.chdir_to = "pkg1"
-path_args = "absolute-file"
+working-dir.chdir-to = "pkg1"
+path-args = "absolute-file"
 ```
 
 ```
@@ -342,8 +342,8 @@ some-linter /example/pkg2/subpkg/subpkg.go
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir.chdir_to = "pkg1"
-path_args = "dir"
+working-dir.chdir-to = "pkg1"
+path-args = "dir"
 ```
 
 ```
@@ -363,8 +363,8 @@ some-linter ../pkg2/subpkg
 ```toml
 [commands.some-linter]
 invoke = "per-dir"
-working_dir.chdir_to = "pkg1"
-path_args = "absolute-dir"
+working-dir.chdir-to = "pkg1"
+path-args = "absolute-dir"
 ```
 
 ```
@@ -384,8 +384,8 @@ some-linter /example/pkg2/subpkg
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir = "root"
-path_args = "file"
+working-dir = "root"
+path-args = "file"
 ```
 
 ```
@@ -407,8 +407,8 @@ some-linter \
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir = "root"
-path_args = "absolute-file"
+working-dir = "root"
+path-args = "absolute-file"
 ```
 
 ```
@@ -430,8 +430,8 @@ some-linter \
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir = "root"
-path_args = "dir"
+working-dir = "root"
+path-args = "dir"
 ```
 
 ```
@@ -447,8 +447,8 @@ some-linter . pkg1 pkg2 pkg2/subpkg
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir = "root"
-path_args = "absolute-dir"
+working-dir = "root"
+path-args = "absolute-dir"
 ```
 
 ```
@@ -468,8 +468,8 @@ some-linter \
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir = "root"
-path_args = "dot"
+working-dir = "root"
+path-args = "dot"
 ```
 
 ```
@@ -485,8 +485,8 @@ some-linter .
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir = "root"
-path_args = "none"
+working-dir = "root"
+path-args = "none"
 ```
 
 ```
@@ -502,8 +502,8 @@ some-linter
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir.chdir_to = "pkg1"
-path_args = "file"
+working-dir.chdir-to = "pkg1"
+path-args = "file"
 ```
 
 ```
@@ -520,8 +520,8 @@ some-linter ../app.go ../main.go pkg1.go ../pkg2/pkg2.go ../pkg2/pkg2_test.go ..
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir.chdir_to = "pkg1"
-path_args = "absolute-file"
+working-dir.chdir-to = "pkg1"
+path-args = "absolute-file"
 ```
 
 ```
@@ -544,8 +544,8 @@ some-linter \
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir.chdir_to = "pkg1"
-path_args = "dir"
+working-dir.chdir-to = "pkg1"
+path-args = "dir"
 ```
 
 ```
@@ -562,8 +562,8 @@ some-linter .. . ../pkg2 ../pkg2/subpkg
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir.chdir_to = "pkg1"
-path_args = "absolute-dir"
+working-dir.chdir-to = "pkg1"
+path-args = "absolute-dir"
 ```
 
 ```
@@ -580,8 +580,8 @@ some-linter /example /example/pkg1 /example/pkg2 /example/pkg2/subpkg
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir.chdir_to = "pkg1"
-path_args = "dot"
+working-dir.chdir-to = "pkg1"
+path-args = "dot"
 ```
 
 ```
@@ -598,8 +598,8 @@ some-linter .
 ```toml
 [commands.some-linter]
 invoke = "once"
-working_dir.chdir_to = "pkg1"
-path_args = "none"
+working-dir.chdir-to = "pkg1"
+path-args = "none"
 ```
 
 ```

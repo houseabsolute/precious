@@ -17,24 +17,24 @@ exclude = [
 type    = "both"
 include = "**/*.rs"
 cmd     = [ "rustfmt", "--edition", "2021" ]
-lint_flags = "--check"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
+lint-flags = "--check"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
 
 [commands.true]
 type    = "lint"
 include = "**/*.rs"
 cmd     = [ "true" ]
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
 
 [commands.stderr]
 type    = "lint"
 include = "**/*.rs"
 cmd     = [ "sh", "-c", "echo 'some stderr output' 1>&2" ]
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
-ignore_stderr = "some.+output"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = "some.+output"
 "#;
 
 const GOOD_RUST: &str = r#"
@@ -424,7 +424,7 @@ fn run_one_invocation_test(helper: &TestHelper, config: &str, expect: &str) -> R
 type = "lint"
 include = "**/*.go"
 cmd = [ "perl", "$PRECIOUS_ROOT/some-linter" ]
-ok_exit_codes = 0
+ok-exit-codes = 0
 {config}
 "#
     );

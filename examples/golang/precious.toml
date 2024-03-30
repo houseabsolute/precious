@@ -5,7 +5,7 @@
 type = "lint"
 include = "**/*.go"
 invoke = "once"
-path_args = "dir"
+path-args = "dir"
 cmd = [
     "golangci-lint",
     "run",
@@ -20,13 +20,13 @@ cmd = [
     # the same project.
     #
     # Alternatively, for smaller projects you can set `invoke = "once"` and
-    # `path_args = "none"` to run it once for all code in the project, in
+    # `path-args = "none"` to run it once for all code in the project, in
     # which case you can remove this flag.
     "--allow-parallel-runners",
 ]
 env = { "FAIL_ON_WARNINGS" = "1" }
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
+ok-exit-codes = [0]
+lint-failure-exit-codes = [1]
 
 [commands."tidy go files"]
 type = "tidy"
@@ -40,27 +40,27 @@ cmd = [
     "--enable", "goimports",
     "--allow-parallel-runners",
 ]
-ok_exit_codes = [0]
+ok-exit-codes = [0]
 
 # See check-go-mod.sh in helpers dir
 [commands.check-go-mod]
 type = "lint"
 include = "**/*.go"
 invoke = "once"
-path_args = "none"
+path-args = "none"
 cmd = ["$PRECIOUS_ROOT/dev/bin/check-go-mod.sh"]
-ok_exit_codes = [0]
-lint_failure_exit_codes = [1]
+ok-exit-codes = [0]
+lint-failure-exit-codes = [1]
 
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
 cmd = [ "omegasort", "--sort", "path", "--unique" ]
-lint_flags = "--check"
-tidy_flags = "--in-place"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
-ignore_stderr = [
+lint-flags = "--check"
+tidy-flags = "--in-place"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = [
     "The .+ file is not sorted",
     "The .+ file is not unique",
 ]

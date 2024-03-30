@@ -104,7 +104,7 @@ impl fmt::Display for WorkingDir {
             WorkingDir::Root => f.write_str(r#""root""#),
             WorkingDir::Dir => f.write_str(r#""dir""#),
             WorkingDir::ChdirTo(cd) => {
-                f.write_str(r#"chdir_to = ""#)?;
+                f.write_str(r#"chdir-to = ""#)?;
                 f.write_str(&format!("{}", cd.display()))?;
                 f.write_str(r#"""#)
             }
@@ -144,7 +144,7 @@ impl fmt::Display for PathArgs {
 #[derive(Debug, Error, PartialEq, Eq)]
 enum CommandError {
     #[error(
-        "You cannot create a Command which lints and tidies without lint_flags and/or tidy_flags"
+        "You cannot create a Command which lints and tidies without lint-flags and/or tidy-flags"
     )]
     CommandWhichIsBothRequiresLintOrTidyFlags,
 
@@ -314,7 +314,7 @@ impl LintOrTidyCommand {
     // This returns a vec of vecs where each of the sub-vecs contains 1+
     // files. Each of those sub-vecs represents one invocation of the
     // program. The exact paths that are passed to that invocation are later
-    // determined based on the command's `path_args` field.
+    // determined based on the command's `path-args` field.
     pub fn files_to_args_sets<'a>(
         &self,
         files: &'a [PathBuf],
@@ -862,7 +862,7 @@ impl LintOrTidyCommand {
 
     pub fn config_debug(&self) -> String {
         format!(
-            "invoke = {} | working_dir = {} | path_args = {}",
+            "invoke = {} | working-dir = {} | path-args = {}",
             self.invoke, self.working_dir, self.path_args
         )
     }

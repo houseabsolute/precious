@@ -21,11 +21,11 @@ pub struct CommandConfig {
     pub(crate) exclude: Vec<String>,
     #[serde(default)]
     pub(crate) invoke: Option<Invoke>,
-    #[serde(default, deserialize_with = "working_dir")]
+    #[serde(default, alias = "working-dir", deserialize_with = "working_dir")]
     pub(crate) working_dir: Option<WorkingDir>,
-    #[serde(default)]
+    #[serde(default, alias = "path-args")]
     pub(crate) path_args: Option<PathArgs>,
-    #[serde(default)]
+    #[serde(default, alias = "run-mode")]
     pub(crate) run_mode: Option<OldRunMode>,
     #[serde(default)]
     pub(crate) chdir: Option<bool>,
@@ -33,19 +33,35 @@ pub struct CommandConfig {
     pub(crate) cmd: Vec<String>,
     #[serde(default)]
     pub(crate) env: HashMap<String, String>,
-    #[serde(default, deserialize_with = "string_or_seq_string")]
+    #[serde(
+        default,
+        alias = "lint-flags",
+        deserialize_with = "string_or_seq_string"
+    )]
     pub(crate) lint_flags: Vec<String>,
-    #[serde(default, deserialize_with = "string_or_seq_string")]
+    #[serde(
+        default,
+        alias = "tidy-flags",
+        deserialize_with = "string_or_seq_string"
+    )]
     pub(crate) tidy_flags: Vec<String>,
-    #[serde(default = "empty_string")]
+    #[serde(default = "empty_string", alias = "path-flag")]
     pub(crate) path_flag: String,
-    #[serde(deserialize_with = "u8_or_seq_u8")]
+    #[serde(alias = "ok-exit-codes", deserialize_with = "u8_or_seq_u8")]
     pub(crate) ok_exit_codes: Vec<u8>,
-    #[serde(default, deserialize_with = "u8_or_seq_u8")]
+    #[serde(
+        default,
+        alias = "lint-failure-exit-codes",
+        deserialize_with = "u8_or_seq_u8"
+    )]
     pub(crate) lint_failure_exit_codes: Vec<u8>,
-    #[serde(default)]
+    #[serde(default, alias = "expect-stderr")]
     pub(crate) expect_stderr: bool,
-    #[serde(default, deserialize_with = "string_or_seq_string")]
+    #[serde(
+        default,
+        alias = "ignore-stderr",
+        deserialize_with = "string_or_seq_string"
+    )]
     pub(crate) ignore_stderr: Vec<String>,
     #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) labels: Vec<String>,
@@ -77,14 +93,14 @@ pub(crate) enum ConfigError {
     #[error("File at {} cannot be read: {error:}", file.display())]
     FileCannotBeRead { file: PathBuf, error: String },
     #[error(
-        "The {name:} command mixes old command params (run_mode or chdir) with new command params (invoke, working_dir, or path_args)"
+        "The {name:} command mixes old command params (run-mode or chdir) with new command params (invoke, working-dir, or path-args)"
     )]
     CannotMixOldAndNewCommandParams { name: String },
-    #[error(r#"Cannot set invoke = "per-file" and path_args = "{path_args:}""#)]
+    #[error(r#"Cannot set invoke = "per-file" and path-args = "{path_args:}""#)]
     CannotInvokePerFileWithPathArgs { path_args: PathArgs },
-    #[error(r#"Cannot set invoke = "per-dir" and path_args = "{path_args:}""#)]
+    #[error(r#"Cannot set invoke = "per-dir" and path-args = "{path_args:}""#)]
     CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs },
-    #[error(r#"Cannot set invoke = "once" and working_dir = "dir""#)]
+    #[error(r#"Cannot set invoke = "once" and working-dir = "dir""#)]
     CannotInvokeOnceWithWorkingDirEqDir,
     #[error(transparent)]
     Toml(#[from] toml::de::Error),
@@ -261,7 +277,7 @@ where
         type Value = Option<WorkingDir>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str(r#"one of "root", "dir", or a chdir_to map"#)
+            formatter.write_str(r#"one of "root", "dir", or a chdir-to map"#)
         }
 
         fn visit_none<E>(self) -> Result<Self::Value, E>
@@ -298,16 +314,16 @@ where
         {
             let mut kv_pairs: Vec<(String, String)> = vec![];
             while let Some((k, v)) = map.next_entry::<String, String>()? {
-                if &k != "chdir_to" {
+                if !(&k == "chdir_to" || &k == "chdir-to") {
                     return Err(<A::Error as de::Error>::invalid_value(
                         de::Unexpected::Str(&k),
-                        &r#"the only valid key for a working_dir map is "chdir_to""#,
+                        &r#"the only valid key for a working-dir map is "chdir-to""#,
                     ));
                 }
                 if v.is_empty() {
                     return Err(<A::Error as de::Error>::invalid_value(
                         de::Unexpected::Seq,
-                        &r#"the "chdir_to" key cannot be empty"#,
+                        &r#"the "chdir-to" key cannot be empty"#,
                     ));
                 }
                 kv_pairs.push((k, v));
@@ -316,14 +332,14 @@ where
             if kv_pairs.is_empty() {
                 return Err(<A::Error as de::Error>::invalid_value(
                     de::Unexpected::Map,
-                    &r#"the "working_dir" cannot be an empty map"#,
+                    &r#"the "working-dir" cannot be an empty map"#,
                 ));
             }
 
             if kv_pairs.len() > 1 {
                 return Err(<A::Error as de::Error>::invalid_value(
                     de::Unexpected::Map,
-                    &r#"the "working_dir" map must contain one key, "chdir_to""#,
+                    &r#"the "working-dir" map must contain one key, "chdir-to""#,
                 ));
             }
 
@@ -464,9 +480,9 @@ impl CommandConfig {
         // options.
         if run_mode.is_some() || chdir.is_some() {
             let (article, plural, options) = match (run_mode, chdir) {
-                (Some(_), None) => ("a ", "", "run_mode"),
+                (Some(_), None) => ("a ", "", "run-mode"),
                 (None, Some(_)) => ("a ", "", "chdir"),
-                _ => ("", "s", "run_mode and chdir"),
+                _ => ("", "s", "run-mode and chdir"),
             };
             warn!("The {name} command is using {article:}deprecated config option{plural:}: {options}");
 
@@ -628,11 +644,11 @@ mod tests {
                 type    = "tidy"
                 include = "**/*.rs"
                 cmd     = "cmd"
-                ok_exit_codes = 0
+                ok-exit-codes = 0
             "#,
         );
         if let Some(run_mode) = run_mode {
-            toml_text.push_str(&format!("run_mode = \"{run_mode}\"\n"));
+            toml_text.push_str(&format!("run-mode = \"{run_mode}\"\n"));
         }
         if let Some(chdir) = chdir {
             toml_text.push_str(&format!("chdir = {chdir}\n"));
@@ -660,27 +676,27 @@ mod tests {
             type    = "both"
             include = "**/*.rs"
             cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
-            lint_flags = "--check"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 1
+            lint-flags = "--check"
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
 
             [commands.clippy]
             type     = "lint"
             include  = "**/*.rs"
-            run_mode = "root"
+            run-mode = "root"
             chdir    = true
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 101
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 101
 
             [commands.omegasort-gitignore]
             type = "both"
             include = "**/.gitignore"
             cmd = [ "omegasort", "--sort=path" ]
-            lint_flags = "--check"
-            tidy_flags = "--in-place"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 1
+            lint-flags = "--check"
+            tidy-flags = "--in-place"
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
@@ -702,28 +718,28 @@ mod tests {
             [commands.clippy]
             type     = "lint"
             include  = "**/*.rs"
-            run_mode = "root"
+            run-mode = "root"
             chdir    = true
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 101
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 101
 
             [commands.rustfmt]
             type    = "both"
             include = "**/*.rs"
             cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
-            lint_flags = "--check"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 1
+            lint-flags = "--check"
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
 
             [commands.omegasort-gitignore]
             type = "both"
             include = "**/.gitignore"
             cmd = [ "omegasort", "--sort=path" ]
-            lint_flags = "--check"
-            tidy_flags = "--in-place"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 1
+            lint-flags = "--check"
+            tidy-flags = "--in-place"
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
@@ -746,27 +762,27 @@ mod tests {
             type = "both"
             include = "**/.gitignore"
             cmd = [ "omegasort", "--sort=path" ]
-            lint_flags = "--check"
-            tidy_flags = "--in-place"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 1
+            lint-flags = "--check"
+            tidy-flags = "--in-place"
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
 
             [commands.clippy]
             type     = "lint"
             include  = "**/*.rs"
-            run_mode = "root"
+            run-mode = "root"
             chdir    = true
             cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 101
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 101
 
             [commands.rustfmt]
             type    = "both"
             include = "**/*.rs"
             cmd     = [ "rustfmt", "--skip-children", "--unstable-features" ]
-            lint_flags = "--check"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 1
+            lint-flags = "--check"
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
@@ -786,56 +802,56 @@ mod tests {
         WorkingDir::Root,
         PathArgs::Dir,
         ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dir } ;
-        r#"invoke = "per-file" + path_args = "dir""#
+        r#"invoke = "per-file" + path-args = "dir""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::None,
         ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::None } ;
-        r#"invoke = "per-file" + path_args = "none""#
+        r#"invoke = "per-file" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::Dot,
         ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dot } ;
-        r#"invoke = "per-file" + path_args = "dot""#
+        r#"invoke = "per-file" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::AbsoluteDir,
         ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::AbsoluteDir } ;
-        r#"invoke = "per-file" + path_args = "absolute-dir""#
+        r#"invoke = "per-file" + path-args = "absolute-dir""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::Root,
         PathArgs::None,
         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
-        r#"invoke = "per-dir" + working_dir = "root" + path_args = "none""#
+        r#"invoke = "per-dir" + working_dir = "root" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::Root,
         PathArgs::Dot,
         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
-        r#"invoke = "per-dir" + working_dir = "root" + path_args = "dot""#
+        r#"invoke = "per-dir" + working_dir = "root" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::ChdirTo(PathBuf::from("foo")),
         PathArgs::None,
         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
-        r#"invoke = "per-dir" + working_dir.chdir_to = "foo" + path_args = "none""#
+        r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::ChdirTo(PathBuf::from("foo")),
         PathArgs::Dot,
         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
-        r#"invoke = "per-dir" + working_dir.chdir_to = "foo" + path_args = "dot""#
+        r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::Once,
@@ -945,10 +961,10 @@ mod tests {
             include = "**/.gitignore"
             invoke = {{ {invoke:} }}
             cmd = [ "omegasort", "--sort=path" ]
-            lint_flags = "--check"
-            tidy_flags = "--in-place"
-            ok_exit_codes = 0
-            lint_failure_exit_codes = 1
+            lint-flags = "--check"
+            tidy-flags = "--in-place"
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
         "#
         );
 

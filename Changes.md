@@ -14,6 +14,11 @@
   directories, `golangci-lint` is much faster when run once per directory. But once the number of
   directories is large enough, it's faster to just run it once on the whole repo.
 
+- All config keys have been changed to use dashes instead of underscores, so for example `path_args`
+  is not `path-args` and `ok_exit_codes` is now `ok-exit-codes`. However, the names with underscores
+  will continue to work. I do not intend to ever deprecate the underscore version. They simply will
+  not be used in the docs and examples.
+
 - `precious` will now emit a warning if your config file uses any of the deprecated config keys,
   `run_mode` and `chdir`. Support for these options will be removed entirely in a future release.
 

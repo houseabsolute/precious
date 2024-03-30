@@ -6,15 +6,15 @@ exclude = [
 type    = "both"
 include = "**/*.rs"
 cmd     = [ "rustfmt", "--edition", "2021" ]
-lint_flags = "--check"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
+lint-flags = "--check"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
 
 [commands.clippy]
 type      = "lint"
 include   = "**/*.rs"
 invoke    = "once"
-path_args = "none"
+path-args = "none"
 cmd = [
     "cargo",
     "clippy",
@@ -25,9 +25,9 @@ cmd = [
     "--",
     "-D", "clippy::all",
 ]
-ok_exit_codes = 0
-lint_failure_exit_codes = 101
-ignore_stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
+ok-exit-codes = 0
+lint-failure-exit-codes = 101
+ignore-stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
 
 [commands.prettier]
 type    = "both"
@@ -38,21 +38,21 @@ cmd     = [
     "--print-width", "100",
     "--prose-wrap", "always",
 ]
-lint_flags = "--check"
-tidy_flags = "--write"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
-ignore_stderr = [ "Code style issues" ]
+lint-flags = "--check"
+tidy-flags = "--write"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = [ "Code style issues" ]
 
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
 cmd = [ "omegasort", "--sort", "path", "--unique" ]
-lint_flags = "--check"
-tidy_flags = "--in-place"
-ok_exit_codes = 0
-lint_failure_exit_codes = 1
-ignore_stderr = [
+lint-flags = "--check"
+tidy-flags = "--in-place"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = [
     "The .+ file is not sorted",
     "The .+ file is not unique",
 ]
@@ -62,5 +62,5 @@ type = "lint"
 include = "**/*"
 cmd = "typos"
 invoke = "once"
-ok_exit_codes = 0
-lint_failure_exit_codes = 2
+ok-exit-codes = 0
+lint-failure-exit-codes = 2
