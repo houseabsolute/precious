@@ -319,9 +319,9 @@ fn project_root(config_file: Option<&PathBuf>, cwd: &Path) -> Result<PathBuf> {
         return Ok(cwd.into());
     }
 
-    for anc in cwd.ancestors() {
-        if is_checkout_root(anc) {
-            return Ok(anc.to_owned());
+    for ancestor in cwd.ancestors() {
+        if is_checkout_root(ancestor) {
+            return Ok(ancestor.to_owned());
         }
     }
 
