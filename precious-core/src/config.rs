@@ -93,7 +93,7 @@ pub(crate) enum ConfigError {
     #[error("File at {} cannot be read: {error:}", file.display())]
     FileCannotBeRead { file: PathBuf, error: String },
     #[error(
-        "The {name:} command mixes old command params (run-mode or chdir) with new command params (invoke, working-dir, or path-args)"
+        "The {name:} command mixes old command params (run_mode or chdir) with new command params (invoke, working-dir, or path-args)"
     )]
     CannotMixOldAndNewCommandParams { name: String },
     #[error(r#"Cannot set invoke = "per-file" and path-args = "{path_args:}""#)]
