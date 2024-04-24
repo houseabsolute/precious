@@ -327,22 +327,40 @@ impl LintOrTidyCommand {
                 ActualInvoke::PerFile,
             ),
             Invoke::PerFileOrDir(n) => {
-                if files.clone().count() < n {
+                let count = files.clone().count();
+                if count < n {
+                    debug!(
+                        "Invoking {} once per file for {count} files, which is less than {n}.",
+                        self.name,
+                    );
                     (
                         files.sorted().map(|f| vec![f.as_path()]).collect(),
                         ActualInvoke::PerFile,
                     )
                 } else {
+                    debug!(
+                        "Invoking {} once per directory for {count} files, which is at least {n}.",
+                        self.name,
+                    );
                     (Self::files_to_dirs(files)?, ActualInvoke::PerDir)
                 }
             }
             Invoke::PerFileOrOnce(n) => {
-                if files.clone().count() < n {
+                let count = files.clone().count();
+                if count < n {
+                    debug!(
+                        "Invoking {} once per file for {count} files, which is less than {n}.",
+                        self.name,
+                    );
                     (
                         files.sorted().map(|f| vec![f.as_path()]).collect(),
                         ActualInvoke::PerFile,
                     )
                 } else {
+                    debug!(
+                        "Invoking {} once for all {count} files, which is at least {n}.",
+                        self.name,
+                    );
                     (
                         vec![files.sorted().map(PathBuf::as_path).collect()],
                         ActualInvoke::Once,
@@ -353,9 +371,15 @@ impl LintOrTidyCommand {
             Invoke::PerDir => (Self::files_to_dirs(files)?, ActualInvoke::PerDir),
             Invoke::PerDirOrOnce(n) => {
                 let dirs = Self::files_to_dirs(files.clone())?;
-                if dirs.len() < n {
+                let count = dirs.len();
+                if count < n {
+                    debug!("Invoking {} once per directory because there are fewer than {n} directories.", self.name);
                     (dirs, ActualInvoke::PerDir)
                 } else {
+                    debug!(
+                        "Invoking {} once for all {count} directories, which is at least {n}.",
+                        self.name,
+                    );
                     (
                         vec![files.sorted().map(PathBuf::as_path).collect()],
                         ActualInvoke::Once,
