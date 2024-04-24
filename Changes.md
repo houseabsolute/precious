@@ -1,5 +1,8 @@
 <!-- next-header -->
 
+- Added/cleaned up some debugging output for the new `invopke.per-x-or-y` options. Fixes GH #65 and
+  #66.
+
 ## 0.7.0 - 2024-03-30
 
 - Added three new **experimental** `invoke` options:
