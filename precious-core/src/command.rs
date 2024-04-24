@@ -63,12 +63,12 @@ pub enum Invoke {
 impl fmt::Display for Invoke {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Invoke::PerFile => write!(f, r#""per-file""#),
-            Invoke::PerFileOrDir(n) => write!(f, r#""per-file-or-dir" = {n}"#),
-            Invoke::PerFileOrOnce(n) => write!(f, r#""per-file-or-once" = {n}"#),
-            Invoke::PerDir => write!(f, r#""per-dir""#),
-            Invoke::PerDirOrOnce(n) => write!(f, r#""per-dir-or-once" = {n}"#),
-            Invoke::Once => write!(f, r#""once""#),
+            Invoke::PerFile => write!(f, r#"invoke = "per-file""#),
+            Invoke::PerFileOrDir(n) => write!(f, "invoke.per-file-or-dir = {n}"),
+            Invoke::PerFileOrOnce(n) => write!(f, "invoke.per-file-or-once = {n}"),
+            Invoke::PerDir => write!(f, r#"invoke = "per-dir""#),
+            Invoke::PerDirOrOnce(n) => write!(f, "invoke.per-dir-or-once = {n}"),
+            Invoke::Once => write!(f, r#"invoke = "once""#),
         }
     }
 }
@@ -886,7 +886,7 @@ impl LintOrTidyCommand {
 
     pub fn config_debug(&self) -> String {
         format!(
-            "invoke = {} | working-dir = {} | path-args = {}",
+            "{} | working-dir = {} | path-args = {}",
             self.invoke, self.working_dir, self.path_args
         )
     }
