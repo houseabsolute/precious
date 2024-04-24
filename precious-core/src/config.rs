@@ -169,7 +169,7 @@ where
         where
             E: de::Error,
         {
-            if value < 0 || value > std::u8::MAX as i16 {
+            if value < 0 || value > u8::MAX as i16 {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Signed(value as i64),
                     &"an integer from 0-255",
@@ -183,7 +183,7 @@ where
         where
             E: de::Error,
         {
-            if value < 0 || value > std::u8::MAX as i32 {
+            if value < 0 || value > u8::MAX as i32 {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Signed(value as i64),
                     &"an integer from 0-255",
@@ -197,7 +197,7 @@ where
         where
             E: de::Error,
         {
-            if value < 0 || value > std::u8::MAX as i64 {
+            if value < 0 || value > u8::MAX as i64 {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Signed(value),
                     &"an integer from 0-255",
@@ -218,7 +218,7 @@ where
         where
             E: de::Error,
         {
-            if value > std::u8::MAX as u16 {
+            if value > u8::MAX as u16 {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Unsigned(value as u64),
                     &"an integer from 0-255",
@@ -232,7 +232,7 @@ where
         where
             E: de::Error,
         {
-            if value > std::u8::MAX as u32 {
+            if value > u8::MAX as u32 {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Unsigned(value as u64),
                     &"an integer from 0-255",
@@ -246,7 +246,7 @@ where
         where
             E: de::Error,
         {
-            if value > std::u8::MAX as u64 {
+            if value > u8::MAX as u64 {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Unsigned(value),
                     &"an integer from 0-255",
