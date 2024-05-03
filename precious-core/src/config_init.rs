@@ -196,6 +196,18 @@ pub(crate) fn go_init() -> Init {
 
 const PERL_COMMANDS: [(&str, &str); 5] = [
     (
+        "perlimports",
+        r#"
+type = "both"
+include = [ "**/*.{pl,pm,t,psgi}" ]
+cmd = [ "perlimports" ]
+lint-flags = ["--lint" ]
+tidy-flags = ["-i" ]
+ok-exit-codes = 0
+expect-stderr = true
+"#,
+    ),
+    (
         "perlcritic",
         r#"
 type = "lint"
@@ -216,18 +228,6 @@ tidy-flags = [ "--backup-and-modify-in-place", "--backup-file-extension=/" ]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
 ignore-stderr = "Begin Error Output Stream"
-"#,
-    ),
-    (
-        "perlimports",
-        r#"
-type = "both"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perlimports" ]
-lint-flags = ["--lint" ]
-tidy-flags = ["-i" ]
-ok-exit-codes = 0
-expect-stderr = true
 "#,
     ),
     (
