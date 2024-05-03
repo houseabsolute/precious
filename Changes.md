@@ -1,8 +1,5 @@
 <!-- next-header -->
 
-- Added/cleaned up some debugging output for the new `invopke.per-x-or-y` options. Fixes GH #65 and
-  #66.
-
 - Added an `--auto` flag for `precious config init`. If this is specified then `precious` will look
   at all the files in your project and generate config based on the types of files it finds.
   Suggested by John Vandenberg (@jayvdb). GH #67.
@@ -10,6 +7,15 @@
 - Fixed a bug when running `precious config init`. The `--component` argument was not required, when
   it should require at least one. If none were given it would create an empty `precious.toml` file.
   Reported by John Vandenberg (@jayvdb). GH #67.
+
+- Changed how `precious config init` generates config for Perl. The `perlimports` command is now the
+  first one in the generated config. This is necessary because `perlimports` may change the code in
+  a way that `perltidy` will then change further. Running `perlimports` after `perltidy` meant that
+  tidying Perl code could leave the code in a state where it fails linting checks. Implemented by
+  Olaf Alders (@oalders). GH #68.
+
+- Added/cleaned up some debugging output for the new `invopke.per-x-or-y` options. Fixes GH #65 and
+  #66.
 
 ## 0.7.0 - 2024-03-30
 

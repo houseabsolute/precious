@@ -19,6 +19,16 @@ exclude = [
     "xt/release/**",
 ]
 
+# Add App::perlimports as a develop phase prereq
+[commands.perlimports]
+type = "both"
+include = [ "**/*.{pl,pm,t,psgi}" ]
+cmd = [ "perlimports" ]
+lint-flags = ["--lint" ]
+tidy-flags = ["-i" ]
+ok-exit-codes = 0
+expect-stderr = true
+
 # Add Perl::Critic as a develop phase prereq
 [commands.perlcritic]
 type = "lint"
@@ -37,16 +47,6 @@ tidy-flags = [ "--backup-and-modify-in-place", "--backup-file-extension=/" ]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
 ignore-stderr = "Begin Error Output Stream"
-
-# Add App::perlimports as a develop phase prereq
-[commands.perlimports]
-type = "both"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perlimports" ]
-lint-flags = ["--lint" ]
-tidy-flags = ["-i" ]
-ok-exit-codes = 0
-expect-stderr = true
 
 # Add Pod::Checker as a develop phase prereq
 [commands.podchecker]
