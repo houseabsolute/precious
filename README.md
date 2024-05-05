@@ -55,8 +55,12 @@ subcommand takes the following flags:
 
 | Flag                                                                | Description                                                                        |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `-a`, `--auto`                                                      | Automatically determines what components to create                                 |
 | `-c`, <code>&#x2011;&#x2011;component&nbsp;&lt;COMPONENT&gt;</code> | The component(s) to generate config for (see below)                                |
 | `-p`, <code>&#x2011;&#x2011;path&nbsp;&lt;PATH&gt;</code>           | The path to which the config file should be written. Defaults to `./precious.toml` |
+
+You must pass either `--auto` or at least one `--component`. In `--auto` mode, `precious` will look
+at all the files in your project and generate config based on the types of files it finds.
 
 Here's an example for a Rust project:
 

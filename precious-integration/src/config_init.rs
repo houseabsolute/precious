@@ -6,7 +6,11 @@ use regex::Regex;
 use serial_test::serial;
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
-use std::{collections::HashMap, fs::File, path::Path};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    path::Path,
+};
 use tempfile::TempDir;
 
 #[test]
@@ -113,6 +117,33 @@ fn init_does_not_overwrite_existing_file_with_nonstandard_name() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[serial]
+fn init_auto() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+
+    for path in ["src/foo.rs", "README.md", ".github/workflows/ci.yml"]
+        .iter()
+        .map(Path::new)
+    {
+        fs::create_dir_all(path.parent().unwrap())?;
+        File::create(path)?;
+    }
+
+    let output = init_with_auto()?;
+
+    assert_eq!(output.exit_code, 0);
+    assert_file_exists("precious.toml")?;
+    assert_file_contains("precious.toml", &["clippy", "prettier"])?;
+
+    let stdout = output.stdout.unwrap();
+    assert!(stdout.contains("clippy"));
+    assert!(stdout.contains("prettier"));
+
+    Ok(())
+}
+
 fn chdir_to_tempdir() -> Result<(TempDir, Pushd)> {
     let td = tempfile::Builder::new()
         .prefix("precious-integration-")
@@ -143,6 +174,19 @@ fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<
     )
 }
 
+fn init_with_auto() -> Result<ExecOutput> {
+    let precious = precious_path()?;
+    let env = HashMap::new();
+    exec::run(
+        &precious,
+        &["config", "init", "--auto"],
+        &env,
+        &[0, 42],
+        Some(&[Regex::new(".*")?]),
+        None,
+    )
+}
+
 fn assert_file_exists(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     assert!(path.exists(), "file {:?} does not exist", path);
@@ -155,7 +199,7 @@ fn assert_file_contains(path: impl AsRef<Path>, contains: &[&str]) -> Result<()>
     for c in contains {
         assert!(
             contents.contains(c),
-            "file {:?} does not contain {:?}",
+            "file {:?} does not contain {:?}:\n{contents}",
             path,
             c,
         );

@@ -12,6 +12,7 @@ use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
 };
+use ignore;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use log::{debug, error, info};
@@ -174,14 +175,21 @@ enum ConfigSubcommand {
 }
 
 #[derive(Debug, Parser)]
+#[clap(group(
+    ArgGroup::new("components")
+        .required(true)
+        .args(&["component", "auto"]),
+))]
 pub struct ConfigInitArgs {
-    #[clap(long, short, value_enum, required = true)]
+    #[clap(long, short, value_enum)]
     component: Vec<InitComponent>,
+    #[clap(long, short)]
+    auto: bool,
     #[clap(long, short, default_value = "precious.toml")]
     path: PathBuf,
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, ValueEnum)]
 pub enum InitComponent {
     Go,
     Perl,
@@ -247,7 +255,7 @@ impl App {
     fn _run(self, output: impl Write) -> Result<i8> {
         if let Subcommand::Config(config_args) = &self.subcommand {
             if let ConfigSubcommand::Init(init_args) = &config_args.subcommand {
-                init_config(&init_args.component, &init_args.path)?;
+                init_config(init_args.auto, &init_args.component, &init_args.path)?;
                 return Ok(0);
             }
         }
@@ -282,7 +290,7 @@ impl App {
 
     fn load_config(&self) -> Result<(PathBuf, PathBuf, PathBuf, config::Config)> {
         let cwd = env::current_dir()?;
-        let project_root = project_root(self.config.as_ref(), &cwd)?;
+        let project_root = project_root(self.config.as_deref(), &cwd)?;
         let config_file = self.config_file(&project_root);
         let config = config::Config::new(&config_file)?;
 
@@ -304,7 +312,7 @@ impl App {
     }
 }
 
-fn project_root(config_file: Option<&PathBuf>, cwd: &Path) -> Result<PathBuf> {
+fn project_root(config_file: Option<&Path>, cwd: &Path) -> Result<PathBuf> {
     if let Some(file) = config_file {
         if let Some(p) = file.parent() {
             return Ok(p.to_path_buf());
@@ -400,7 +408,7 @@ fn print_config(mut output: impl Write, config_file: &Path, config: config::Conf
     Ok(())
 }
 
-fn init_config(components: &[InitComponent], path: &Path) -> Result<()> {
+fn init_config(auto: bool, components: &[InitComponent], path: &Path) -> Result<()> {
     if env::current_dir()?.join(path).exists() {
         return Err(PreciousError::ConfigFileExists {
             path: path.to_owned(),
@@ -413,7 +421,7 @@ fn init_config(components: &[InitComponent], path: &Path) -> Result<()> {
     let mut extra_files = HashMap::new();
     let mut tool_urls: IndexSet<&'static str> = IndexSet::new();
 
-    for l in components {
+    for l in auto_or_component(auto, components)? {
         let init = match l {
             InitComponent::Go => config_init::go_init(),
             InitComponent::Perl => config_init::perl_init(),
@@ -509,6 +517,56 @@ fn init_config(components: &[InitComponent], path: &Path) -> Result<()> {
     println!();
 
     Ok(())
+}
+
+fn auto_or_component(auto: bool, components: &[InitComponent]) -> Result<Vec<InitComponent>> {
+    if !auto {
+        return Ok(components.to_vec());
+    }
+
+    let mut components: HashSet<InitComponent> = HashSet::new();
+    let cwd = env::current_dir()?;
+    debug!(
+        "Looking at all files under {} to determine which components to include.",
+        cwd.display(),
+    );
+
+    for result in ignore::WalkBuilder::new(&cwd).hidden(false).build() {
+        let entry = result?;
+        // The only time this is `None` is when the entry is for stdin, which
+        // will never happen here.
+        if !entry.file_type().unwrap().is_file() {
+            continue;
+        }
+
+        if entry.file_name() == ".gitignore" {
+            components.insert(InitComponent::Gitignore);
+            continue;
+        }
+
+        let component = match entry
+            .path()
+            .extension()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or_default()
+        {
+            "go" => InitComponent::Go,
+            "md" => InitComponent::Markdown,
+            "pl" | "pm" => InitComponent::Perl,
+            "rs" => InitComponent::Rust,
+            "yml" | "yaml" => InitComponent::YAML,
+            _ => continue,
+        };
+        debug!(
+            "File {} matches component {:?}",
+            entry.path().display(),
+            component
+        );
+        components.insert(component);
+    }
+
+    Ok(components.into_iter().collect())
 }
 
 #[derive(Debug)]
