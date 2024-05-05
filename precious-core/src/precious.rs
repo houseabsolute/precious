@@ -175,7 +175,7 @@ enum ConfigSubcommand {
 
 #[derive(Debug, Parser)]
 pub struct ConfigInitArgs {
-    #[clap(long, short, value_enum)]
+    #[clap(long, short, value_enum, required = true)]
     component: Vec<InitComponent>,
     #[clap(long, short, default_value = "precious.toml")]
     path: PathBuf,

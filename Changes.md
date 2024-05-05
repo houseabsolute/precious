@@ -3,6 +3,10 @@
 - Added/cleaned up some debugging output for the new `invopke.per-x-or-y` options. Fixes GH #65 and
   #66.
 
+- Fixed a bug when running `precious config init`. The `--component` argument was not required, when
+  it should require at least one. If none were given it would create an empty `precious.toml` file.
+  Reported by John Vandenberg (@jayvdb). GH #67.
+
 ## 0.7.0 - 2024-03-30
 
 - Added three new **experimental** `invoke` options:
