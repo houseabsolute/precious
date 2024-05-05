@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.7.1 - 2024-05-05
+
 - Added an `--auto` flag for `precious config init`. If this is specified then `precious` will look
   at all the files in your project and generate config based on the types of files it finds.
   Suggested by John Vandenberg (@jayvdb). GH #67.
