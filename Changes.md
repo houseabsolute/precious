@@ -13,7 +13,7 @@
   a way that `perltidy` will then change further. Running `perlimports` after `perltidy` meant that
   tidying Perl code could leave the code in a state where it fails linting checks. Implemented by
   Olaf Alders (@oalders). GH #68.
-- Added/cleaned up some debugging output for the new `invopke.per-x-or-y` options. Fixes GH #65 and
+- Added/cleaned up some debugging output for the new `invoke.per-x-or-y` options. Fixes GH #65 and
   #66.
 
 ## 0.7.0 - 2024-03-30
