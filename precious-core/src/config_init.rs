@@ -395,3 +395,25 @@ pub(crate) fn yaml_init() -> Init {
         tool_urls: &["https://prettier.io/"],
     }
 }
+
+const TOML_COMMANDS: [(&str, &str); 1] = [(
+    "taplo",
+    r#"
+type = "both"
+include = "**/*.toml"
+cmd = ["taplo", "format", "--option", "indent_string=    ", "--option", "column_width=100"]
+lint_flags = "--check"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+ignore_stderr = "INFO taplo.+"
+"#,
+)];
+
+pub(crate) fn toml_init() -> Init {
+    Init {
+        excludes: &[],
+        commands: &TOML_COMMANDS,
+        extra_files: vec![],
+        tool_urls: &["https://taplo.tamasfe.dev/"],
+    }
+}
