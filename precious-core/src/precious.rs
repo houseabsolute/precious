@@ -196,6 +196,7 @@ pub enum InitComponent {
     Rust,
     Gitignore,
     Markdown,
+    Shell,
     TOML,
     YAML,
 }
@@ -427,6 +428,7 @@ fn init_config(auto: bool, components: &[InitComponent], path: &Path) -> Result<
             InitComponent::Go => config_init::go_init(),
             InitComponent::Perl => config_init::perl_init(),
             InitComponent::Rust => config_init::rust_init(),
+            InitComponent::Shell => config_init::shell_init(),
             InitComponent::Gitignore => config_init::gitignore_init(),
             InitComponent::Markdown => config_init::markdown_init(),
             InitComponent::TOML => config_init::toml_init(),
@@ -557,6 +559,7 @@ fn auto_or_component(auto: bool, components: &[InitComponent]) -> Result<Vec<Ini
             "md" => InitComponent::Markdown,
             "pl" | "pm" => InitComponent::Perl,
             "rs" => InitComponent::Rust,
+            "sh" => InitComponent::Shell,
             "toml" => InitComponent::TOML,
             "yml" | "yaml" => InitComponent::YAML,
             _ => continue,

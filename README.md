@@ -80,6 +80,8 @@ The following components are supported:
 - `rust` - Generates config for a Rust project which uses
   [`rustfmt`](https://rust-lang.github.io/rustfmt/) for tidying and
   [`clippy`](https://doc.rust-lang.org/stable/clippy/) for linting.
+- `shell` - Generated config which uses [`shfmt`](https://github.com/mvdan/sh) for tidying and
+  [`shellcheck`](https://www.shellcheck.net/) for linting.
 - `gitignore` - Generates config to lint and tidy (by sorting) `.gitignore` files using
   [`omegasort`](https://github.com/houseabsolute/omegasort).
 - `markdown` - Generates config to lint and tidy Markdown files using

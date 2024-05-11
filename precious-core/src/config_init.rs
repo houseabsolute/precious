@@ -128,19 +128,19 @@ const CHECK_GO_MOD: &str = r#"
 
 set -e
 
-ROOT=$( git rev-parse --show-toplevel )
+ROOT=$(git rev-parse --show-toplevel)
 
 if [ ! -f "$ROOT/go.sum" ]; then
     exit 0
 fi
 
-BEFORE_MOD=$( md5sum "$ROOT/go.mod" )
-BEFORE_SUM=$( md5sum "$ROOT/go.sum" )
+BEFORE_MOD=$(md5sum "$ROOT/go.mod")
+BEFORE_SUM=$(md5sum "$ROOT/go.sum")
 
-OUTPUT=$( go mod tidy -v 2>&1 )
+OUTPUT=$(go mod tidy -v 2>&1)
 
-AFTER_MOD=$( md5sum "$ROOT/go.mod" )
-AFTER_SUM=$( md5sum "$ROOT/go.sum" )
+AFTER_MOD=$(md5sum "$ROOT/go.mod")
+AFTER_SUM=$(md5sum "$ROOT/go.sum")
 
 red=$'\e[1;31m'
 end=$'\e[0m'
@@ -307,6 +307,40 @@ pub(crate) fn rust_init() -> Init {
         commands: &RUST_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://doc.rust-lang.org/clippy/"],
+    }
+}
+
+const SHELL_COMMANDS: [(&str, &str); 2] = [
+    (
+        "shellcheck",
+        r#"
+type = "lint"
+include = "**/*.sh"
+cmd = "shellcheck"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+"#,
+    ),
+    (
+        "shfmt",
+        r#"
+type = "both"
+include = "**/*.sh"
+cmd = ["shfmt", "--simplify", "--indent", "4"]
+lint_flags = "--diff"
+tidy_flags = "--write"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+"#,
+    ),
+];
+
+pub(crate) fn shell_init() -> Init {
+    Init {
+        excludes: &["target"],
+        commands: &SHELL_COMMANDS,
+        extra_files: vec![],
+        tool_urls: &["https://www.shellcheck.net/", "https://github.com/mvdan/sh"],
     }
 }
 
