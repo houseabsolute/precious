@@ -1,9 +1,7 @@
 # See examples/bin/install-dev-tools.sh for an example script to install all
 # of the tools needed by this config. You can copy it into your project and
 # modify it as needed to only install the tools you need.
-exclude = [
-  "target",
-]
+exclude = ["target"]
 
 # If you install a nightly rustfmt from the project's GitHub releases
 # (https://github.com/rust-lang/rustfmt/releases) you can change the cmd to:
@@ -16,17 +14,17 @@ exclude = [
 # Try ubi (https://github.com/houseabsolute/ubi) for installing rustfmt and
 # other single-file executables.
 [commands.rustfmt]
-type    = "both"
+type = "both"
 include = "**/*.rs"
-cmd     = [ "rustfmt", "--edition", "2021" ]
+cmd = ["rustfmt", "--edition", "2021"]
 lint-flags = "--check"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
 
 [commands.clippy]
-type      = "lint"
-include   = "**/*.rs"
-invoke    = "once"
+type = "lint"
+include = "**/*.rs"
+invoke = "once"
 path-args = "none"
 cmd = [
     "cargo",
@@ -36,21 +34,19 @@ cmd = [
     "--all-features",
     "--workspace",
     "--",
-    "-D", "clippy::all",
+    "-D",
+    "clippy::all",
 ]
 ok-exit-codes = 0
 lint-failure-exit-codes = 101
-ignore-stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
+ignore-stderr = ["Checking.+precious", "Finished.+dev", "could not compile"]
 
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort", "path", "--unique" ]
+cmd = ["omegasort", "--sort", "path", "--unique"]
 lint-flags = "--check"
 tidy-flags = "--in-place"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    "The .+ file is not sorted",
-    "The .+ file is not unique",
-]
+ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]

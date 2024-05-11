@@ -84,6 +84,7 @@ The following components are supported:
   [`omegasort`](https://github.com/houseabsolute/omegasort).
 - `markdown` - Generates config to lint and tidy Markdown files using
   [`prettier`](https://prettier.io/).
+- `toml` - Generates config to lint and tidy TOML files using [`taplo`](https://taplo.tamasfe.dev/).
 - `yaml` - Generates config to lint and tidy YAML files using [`prettier`](https://prettier.io/).
 
 ### Examples

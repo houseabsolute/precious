@@ -36,8 +36,10 @@ cmd = [
     "run",
     "--fix",
     "--disable-all",
-    "--enable", "gci",
-    "--enable", "goimports",
+    "--enable",
+    "gci",
+    "--enable",
+    "goimports",
     "--allow-parallel-runners",
 ]
 ok-exit-codes = [0]
@@ -55,12 +57,9 @@ lint-failure-exit-codes = [1]
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort", "path", "--unique" ]
+cmd = ["omegasort", "--sort", "path", "--unique"]
 lint-flags = "--check"
 tidy-flags = "--in-place"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    "The .+ file is not sorted",
-    "The .+ file is not unique",
-]
+ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]

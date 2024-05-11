@@ -21,13 +21,7 @@ type = "lint"
 include = "**/*.go"
 invoke = "once"
 path-args = "dir"
-cmd = [
-    "golangci-lint",
-    "run",
-    "-c",
-    "$PRECIOUS_ROOT/golangci-lint.yml",
-    "--allow-parallel-runners",
-]
+cmd = ["golangci-lint", "run", "-c", "$PRECIOUS_ROOT/golangci-lint.yml", "--allow-parallel-runners"]
 env = { "FAIL_ON_WARNINGS" = "1" }
 ok-exit-codes = [0]
 lint-failure-exit-codes = [1]
@@ -43,8 +37,10 @@ cmd = [
     "run",
     "--fix",
     "--disable-all",
-    "--enable", "gci",
-    "--enable", "goimports",
+    "--enable",
+    "gci",
+    "--enable",
+    "gofump",
     "--allow-parallel-runners",
 ]
 ok-exit-codes = [0]
@@ -199,10 +195,10 @@ const PERL_COMMANDS: [(&str, &str); 5] = [
         "perlimports",
         r#"
 type = "both"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perlimports" ]
-lint-flags = ["--lint" ]
-tidy-flags = ["-i" ]
+include = ["**/*.{pl,pm,t,psgi}"]
+cmd = ["perlimports"]
+lint-flags = ["--lint"]
+tidy-flags = ["-i"]
 ok-exit-codes = 0
 expect-stderr = true
 "#,
@@ -211,8 +207,8 @@ expect-stderr = true
         "perlcritic",
         r#"
 type = "lint"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc" ]
+include = ["**/*.{pl,pm,t,psgi}"]
+cmd = ["perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
 "#,
@@ -221,10 +217,10 @@ lint-failure-exit-codes = 2
         "perltidy",
         r#"
 type = "both"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perltidy", "--profile=$PRECIOUS_ROOT/perltidyrc" ]
-lint-flags = [ "--assert-tidy", "--no-standard-output", "--outfile=/dev/null" ]
-tidy-flags = [ "--backup-and-modify-in-place", "--backup-file-extension=/" ]
+include = ["**/*.{pl,pm,t,psgi}"]
+cmd = ["perltidy", "--profile=$PRECIOUS_ROOT/perltidyrc"]
+lint-flags = ["--assert-tidy", "--no-standard-output", "--outfile=/dev/null"]
+tidy-flags = ["--backup-and-modify-in-place", "--backup-file-extension=/"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
 ignore-stderr = "Begin Error Output Stream"
@@ -234,22 +230,19 @@ ignore-stderr = "Begin Error Output Stream"
         "podchecker",
         r#"
 type = "lint"
-include = [ "**/*.{pl,pm,pod}" ]
-cmd = [ "podchecker", "--warnings", "--warnings" ]
-ok-exit-codes = [ 0, 2 ]
+include = ["**/*.{pl,pm,pod}"]
+cmd = ["podchecker", "--warnings", "--warnings"]
+ok-exit-codes = [0, 2]
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    ".+ pod syntax OK",
-    ".+ does not contain any pod commands",
-]
+ignore-stderr = [".+ pod syntax OK", ".+ does not contain any pod commands"]
 "#,
     ),
     (
         "podtidy",
         r#"
 type = "tidy"
-include = [ "**/*.{pl,pm,pod}" ]
-cmd = [ "podtidy", "--columns", "80", "--inplace", "--nobackup" ]
+include = ["**/*.{pl,pm,pod}"]
+cmd = ["podtidy", "--columns", "100", "--inplace", "--nobackup"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
 "#,
@@ -275,9 +268,9 @@ const RUST_COMMANDS: [(&str, &str); 2] = [
     (
         "rustfmt",
         r#"
-type    = "both"
+type = "both"
 include = "**/*.rs"
-cmd     = [ "rustfmt", "--edition", "2021" ]
+cmd = ["rustfmt", "--edition", "2021"]
 lint-flags = "--check"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
@@ -286,9 +279,9 @@ lint-failure-exit-codes = 1
     (
         "clippy",
         r#"
-type      = "lint"
-include   = "**/*.rs"
-invoke    = "once"
+type = "lint"
+include = "**/*.rs"
+invoke = "once"
 path-args = "none"
 cmd = [
     "cargo",
@@ -298,11 +291,12 @@ cmd = [
     "--all-features",
     "--workspace",
     "--",
-    "-D", "clippy::all",
+    "-D",
+    "clippy::all",
 ]
 ok-exit-codes = 0
 lint-failure-exit-codes = 101
-ignore-stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
+ignore-stderr = ["Checking.+precious", "Finished.+dev", "could not compile"]
 "#,
     ),
 ];
@@ -321,15 +315,12 @@ const GITIGNORE_COMMANDS: [(&str, &str); 1] = [(
     r#"
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort", "path", "--unique" ]
+cmd = ["omegasort", "--sort", "path", "--unique"]
 lint-flags = "--check"
 tidy-flags = "--in-place"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    "The .+ file is not sorted",
-    "The .+ file is not unique",
-]
+ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]
 "#,
 )];
 
@@ -345,19 +336,21 @@ pub(crate) fn gitignore_init() -> Init {
 const MARKDOWN_COMMANDS: [(&str, &str); 1] = [(
     "prettier-markdown",
     r#"
-type    = "both"
+type = "both"
 include = "**/*.md"
-cmd     = [
+cmd = [
     "./node_modules/.bin/prettier",
     "--no-config",
-    "--print-width", "100",
-    "--prose-wrap", "always",
+    "--print-width",
+    "100",
+    "--prose-wrap",
+    "always",
 ]
 lint-flags = "--check"
 tidy-flags = "--write"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [ "Code style issues" ]
+ignore-stderr = ["Code style issues"]
 "#,
 )];
 
@@ -365,32 +358,6 @@ pub(crate) fn markdown_init() -> Init {
     Init {
         excludes: &[],
         commands: &MARKDOWN_COMMANDS,
-        extra_files: vec![],
-        tool_urls: &["https://prettier.io/"],
-    }
-}
-
-const YAML_COMMANDS: [(&str, &str); 1] = [(
-    "prettier-yaml",
-    r#"
-type    = "both"
-include = "**/*.yml"
-cmd     = [
-    "./node_modules/.bin/prettier",
-    "--no-config",
-]
-lint-flags = "--check"
-tidy-flags = "--write"
-ok-exit-codes = 0
-lint-failure-exit-codes = 1
-ignore-stderr = [ "Code style issues" ]
-"#,
-)];
-
-pub(crate) fn yaml_init() -> Init {
-    Init {
-        excludes: &[],
-        commands: &YAML_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://prettier.io/"],
     }
@@ -415,5 +382,28 @@ pub(crate) fn toml_init() -> Init {
         commands: &TOML_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://taplo.tamasfe.dev/"],
+    }
+}
+
+const YAML_COMMANDS: [(&str, &str); 1] = [(
+    "prettier-yaml",
+    r#"
+type = "both"
+include = "**/*.yml"
+cmd = ["./node_modules/.bin/prettier", "--no-config"]
+lint-flags = "--check"
+tidy-flags = "--write"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = ["Code style issues"]
+"#,
+)];
+
+pub(crate) fn yaml_init() -> Init {
+    Init {
+        excludes: &[],
+        commands: &YAML_COMMANDS,
+        extra_files: vec![],
+        tool_urls: &["https://prettier.io/"],
     }
 }

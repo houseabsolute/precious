@@ -9,12 +9,7 @@ readme.workspace = true
 repository.workspace = true
 version.workspace = true
 categories = ["development-tools"]
-keywords = [
-         "beautifier",
-         "linter",
-         "pretty-printer",
-         "tidier",
-]
+keywords = ["beautifier", "linter", "pretty-printer", "tidier"]
 
 [workspace.package]
 authors = ["Dave Rolsky <autarch@urth.org>"]
@@ -35,7 +30,7 @@ precious-core.workspace = true
 
 [workspace.dependencies]
 anyhow = "1.0.82"
-clap = { version = "4.5.4", features = [ "cargo", "derive", "wrap_help" ] }
+clap = { version = "4.5.4", features = ["cargo", "derive", "wrap_help"] }
 clean-path = "0.2.1"
 comfy-table = "7.1.1"
 env_logger = "0.11.3"
@@ -66,12 +61,7 @@ toml = "0.8.12"
 which = ">= 3.0.0, < 5.0.0"
 
 [workspace]
-members = [
-        "precious-helpers",
-        "precious-core",
-        "precious-integration",
-        "precious-testhelper",
-]
+members = ["precious-helpers", "precious-core", "precious-integration", "precious-testhelper"]
 
 [package.metadata.release]
 tag-name = "v{{version}}"

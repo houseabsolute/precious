@@ -22,28 +22,28 @@ exclude = [
 # Add App::perlimports as a develop phase prereq
 [commands.perlimports]
 type = "both"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perlimports" ]
-lint-flags = ["--lint" ]
-tidy-flags = ["-i" ]
+include = ["**/*.{pl,pm,t,psgi}"]
+cmd = ["perlimports"]
+lint-flags = ["--lint"]
+tidy-flags = ["-i"]
 ok-exit-codes = 0
 expect-stderr = true
 
 # Add Perl::Critic as a develop phase prereq
 [commands.perlcritic]
 type = "lint"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc" ]
+include = ["**/*.{pl,pm,t,psgi}"]
+cmd = ["perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
 
 # Add Perl::Tidy as a develop phase prereq
 [commands.perltidy]
 type = "both"
-include = [ "**/*.{pl,pm,t,psgi}" ]
-cmd = [ "perltidy", "--profile=$PRECIOUS-ROOT/perltidyrc" ]
-lint-flags = [ "--assert-tidy", "--no-standard-output", "--outfile=/dev/null" ]
-tidy-flags = [ "--backup-and-modify-in-place", "--backup-file-extension=/" ]
+include = ["**/*.{pl,pm,t,psgi}"]
+cmd = ["perltidy", "--profile=$PRECIOUS-ROOT/perltidyrc"]
+lint-flags = ["--assert-tidy", "--no-standard-output", "--outfile=/dev/null"]
+tidy-flags = ["--backup-and-modify-in-place", "--backup-file-extension=/"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
 ignore-stderr = "Begin Error Output Stream"
@@ -51,46 +51,37 @@ ignore-stderr = "Begin Error Output Stream"
 # Add Pod::Checker as a develop phase prereq
 [commands.podchecker]
 type = "lint"
-include = [ "**/*.{pl,pm,pod}" ]
-cmd = [ "podchecker", "--warnings", "--warnings" ]
-ok-exit-codes = [ 0, 2 ]
+include = ["**/*.{pl,pm,pod}"]
+cmd = ["podchecker", "--warnings", "--warnings"]
+ok-exit-codes = [0, 2]
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    ".+ pod syntax OK",
-    ".+ does not contain any pod commands",
-]
+ignore-stderr = [".+ pod syntax OK", ".+ does not contain any pod commands"]
 
 # Add Pod::Tidy as a develop phase prereq
 [commands.podtidy]
 type = "tidy"
-include = [ "**/*.{pl,pm,pod}" ]
-cmd = [ "podtidy", "--columns", "80", "--inplace", "--nobackup" ]
+include = ["**/*.{pl,pm,pod}"]
+cmd = ["podtidy", "--columns", "80", "--inplace", "--nobackup"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
 
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort", "path", "--unique" ]
+cmd = ["omegasort", "--sort", "path", "--unique"]
 lint-flags = "--check"
 tidy-flags = "--in-place"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    "The .+ file is not sorted",
-    "The .+ file is not unique",
-]
+ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]
 
 # If you have an external stopwords file for use with Test::Spelling
 [commands.omegasort-stopwords]
 type = "both"
 include = ".stopwords"
-cmd = [ "omegasort", "--sort", "text", "--case-insensitive", "--unique" ]
+cmd = ["omegasort", "--sort", "text", "--case-insensitive", "--unique"]
 lint-flags = "--check"
 tidy-flags = "--in-place"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    "The .+ file is not sorted",
-    "The .+ file is not unique",
-]
+ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]

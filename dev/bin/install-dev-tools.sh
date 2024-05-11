@@ -15,6 +15,7 @@ function install_tools () {
     run "ubi --project houseabsolute/precious --in ~/bin"
     run "ubi --project houseabsolute/omegasort --in ~/bin"
     run "ubi --project crate-ci/typos --in ~/bin"
+    run "ubi --project tamasfe/taplo --tag 0.8.1 --in ~/bin"
     run "npm install prettier"
 }
 

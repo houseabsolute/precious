@@ -1,19 +1,17 @@
-exclude = [
-  "target",
-]
+exclude = ["target"]
 
 [commands.rustfmt]
-type    = "both"
+type = "both"
 include = "**/*.rs"
-cmd     = [ "rustfmt", "--edition", "2021" ]
+cmd = ["rustfmt", "--edition", "2021"]
 lint-flags = "--check"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
 
 [commands.clippy]
-type      = "lint"
-include   = "**/*.rs"
-invoke    = "once"
+type = "lint"
+include = "**/*.rs"
+invoke = "once"
 path-args = "none"
 cmd = [
     "cargo",
@@ -23,39 +21,39 @@ cmd = [
     "--all-features",
     "--workspace",
     "--",
-    "-D", "clippy::all",
+    "-D",
+    "clippy::all",
 ]
 ok-exit-codes = 0
 lint-failure-exit-codes = 101
-ignore-stderr = [ "Checking.+precious", "Finished.+dev", "could not compile" ]
+ignore-stderr = ["Checking.+precious", "Finished.+dev", "could not compile"]
 
 [commands.prettier]
-type    = "both"
-include = [ "**/*.md", "**/*.yml" ]
-cmd     = [
+type = "both"
+include = ["**/*.md", "**/*.yml"]
+cmd = [
     "./node_modules/.bin/prettier",
     "--no-config",
-    "--print-width", "100",
-    "--prose-wrap", "always",
+    "--print-width",
+    "100",
+    "--prose-wrap",
+    "always",
 ]
 lint-flags = "--check"
 tidy-flags = "--write"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [ "Code style issues" ]
+ignore-stderr = ["Code style issues"]
 
 [commands.omegasort-gitignore]
 type = "both"
 include = "**/.gitignore"
-cmd = [ "omegasort", "--sort", "path", "--unique" ]
+cmd = ["omegasort", "--sort", "path", "--unique"]
 lint-flags = "--check"
 tidy-flags = "--in-place"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
-ignore-stderr = [
-    "The .+ file is not sorted",
-    "The .+ file is not unique",
-]
+ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]
 
 [commands.typos]
 type = "lint"
@@ -64,3 +62,12 @@ cmd = "typos"
 invoke = "once"
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
+
+[commands.taplo]
+type = "both"
+include = "**/*.toml"
+cmd = ["taplo", "format", "--option", "indent_string=    ", "--option", "column_width=100"]
+lint_flags = "--check"
+ok_exit_codes = 0
+lint_failure_exit_codes = 1
+ignore_stderr = "INFO taplo.+"
