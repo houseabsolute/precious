@@ -29,7 +29,7 @@ log.workspace = true
 precious-core.workspace = true
 
 [workspace.dependencies]
-anyhow = "1.0.82"
+anyhow = "1.0.83"
 clap = { version = "4.5.4", features = ["cargo", "derive", "wrap_help"] }
 clean-path = "0.2.1"
 comfy-table = "7.1.1"
@@ -52,11 +52,11 @@ prettytable = "0.10.0"
 pushd = "0.0.1"
 rayon = "1.10.0"
 regex = "1.10.4"
-serde = { version = "1.0.200", features = ["derive"] }
+serde = { version = "1.0.201", features = ["derive"] }
 serial_test = "3.1.1"
 tempfile = "3.10.1"
 test-case = "3.3.1"
-thiserror = "1.0.59"
+thiserror = "1.0.60"
 toml = "0.8.12"
 which = ">= 3.0.0, < 5.0.0"
 
