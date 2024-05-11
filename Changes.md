@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+- Added `shell` and `toml` components for `precious config --component ...` options.
+
 ## 0.7.1 - 2024-05-05
 
 - Added an `--auto` flag for `precious config init`. If this is specified then `precious` will look
