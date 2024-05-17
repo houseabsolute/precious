@@ -425,6 +425,25 @@ fn all_invocation_options() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[serial]
+fn fix_is_tidy() -> Result<()> {
+    let helper = set_up_for_tests()?;
+
+    let precious = precious_path()?;
+    let env = HashMap::new();
+    exec::run(
+        &precious,
+        &["fix", "--all"],
+        &env,
+        &[0],
+        None,
+        Some(&helper.precious_root()),
+    )?;
+
+    Ok(())
+}
+
 // Since precious runs the linter in parallel on different files we to force
 // the execution to be serialized. On Linux we can use the flock command but
 // that doesn't exist on macOS so we'll use this Perl script instead.

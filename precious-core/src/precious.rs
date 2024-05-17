@@ -116,6 +116,7 @@ pub struct App {
 #[derive(Debug, Parser)]
 pub enum Subcommand {
     Lint(CommonArgs),
+    #[clap(alias = "fix")]
     Tidy(CommonArgs),
     Config(ConfigArgs),
 }
