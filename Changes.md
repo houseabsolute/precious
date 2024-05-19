@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.7.2 - 2024-05-19
+
 - Added `fix` as an alias for the `tidy` command. Implemented by Michael McClimon (@mmcclimon). GH
   #70.
 - Added `shell` and `toml` components for `precious config --component ...` options.
