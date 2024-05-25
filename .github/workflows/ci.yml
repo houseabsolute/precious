@@ -119,10 +119,7 @@ jobs:
         toolchain:
           - stable
           - beta
-          # Disabled until https://github.com/cross-rs/cross/issues/1496 is
-          # fixed.
-          #
-          # - nightly
+          - nightly
     steps:
       - uses: actions/checkout@v4
       - name: Cache cargo & target directories
