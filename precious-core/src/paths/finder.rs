@@ -29,6 +29,7 @@ pub struct Finder {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
+#[allow(clippy::module_name_repetitions)]
 pub enum FinderError {
     #[error("You cannot pass an explicit list of files when looking for {mode:}")]
     GotPathsFromCliWithWrongMode { mode: Mode },
@@ -105,7 +106,7 @@ impl Finder {
 
     fn git_root(&mut self) -> Result<PathBuf> {
         if let Some(r) = &self.git_root {
-            return Ok(r.to_path_buf());
+            return Ok(r.clone());
         }
 
         let res = exec::run(
@@ -199,15 +200,15 @@ impl Finder {
     }
 
     fn walkdir_files(&self, root: &Path) -> Result<Vec<PathBuf>> {
-        let mut excludes = ignore::overrides::OverrideBuilder::new(root);
+        let mut exclude_globs = ignore::overrides::OverrideBuilder::new(root);
         for d in vcs::DIRS {
-            excludes.add(&format!("!{d}/**/*"))?;
+            exclude_globs.add(&format!("!{d}/**/*"))?;
         }
 
         let mut files: Vec<PathBuf> = vec![];
         for result in ignore::WalkBuilder::new(root)
             .hidden(false)
-            .overrides(excludes.build()?)
+            .overrides(exclude_globs.build()?)
             .build()
         {
             match result {

@@ -12,6 +12,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize)]
+#[allow(clippy::module_name_repetitions)]
 pub struct CommandConfig {
     #[serde(rename = "type")]
     pub(crate) typ: LintOrTidyCommandType,
@@ -138,12 +139,14 @@ where
     deserializer.deserialize_any(StringOrVec(PhantomData))
 }
 
+#[allow(clippy::too_many_lines)]
 fn u8_or_seq_u8<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 where
     D: Deserializer<'de>,
 {
     struct U8OrVec(PhantomData<Vec<u8>>);
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     impl<'de> de::Visitor<'de> for U8OrVec {
         type Value = Vec<u8>;
 
@@ -157,7 +160,7 @@ where
         {
             if value < 0 {
                 return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(value as i64),
+                    de::Unexpected::Signed(i64::from(value)),
                     &"an integer from 0-255",
                 ));
             }
@@ -169,9 +172,9 @@ where
         where
             E: de::Error,
         {
-            if value < 0 || value > u8::MAX as i16 {
+            if value < 0 || value > i16::from(u8::MAX) {
                 return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(value as i64),
+                    de::Unexpected::Signed(i64::from(value)),
                     &"an integer from 0-255",
                 ));
             }
@@ -183,9 +186,9 @@ where
         where
             E: de::Error,
         {
-            if value < 0 || value > u8::MAX as i32 {
+            if value < 0 || value > i32::from(u8::MAX) {
                 return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(value as i64),
+                    de::Unexpected::Signed(i64::from(value)),
                     &"an integer from 0-255",
                 ));
             }
@@ -197,7 +200,7 @@ where
         where
             E: de::Error,
         {
-            if value < 0 || value > u8::MAX as i64 {
+            if value < 0 || value > i64::from(u8::MAX) {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Signed(value),
                     &"an integer from 0-255",
@@ -218,9 +221,9 @@ where
         where
             E: de::Error,
         {
-            if value > u8::MAX as u16 {
+            if value > u16::from(u8::MAX) {
                 return Err(de::Error::invalid_type(
-                    de::Unexpected::Unsigned(value as u64),
+                    de::Unexpected::Unsigned(u64::from(value)),
                     &"an integer from 0-255",
                 ));
             }
@@ -232,9 +235,9 @@ where
         where
             E: de::Error,
         {
-            if value > u8::MAX as u32 {
+            if value > u32::from(u8::MAX) {
                 return Err(de::Error::invalid_type(
-                    de::Unexpected::Unsigned(value as u64),
+                    de::Unexpected::Unsigned(u64::from(value)),
                     &"an integer from 0-255",
                 ));
             }
@@ -246,7 +249,7 @@ where
         where
             E: de::Error,
         {
-            if value > u8::MAX as u64 {
+            if value > u64::from(u8::MAX) {
                 return Err(de::Error::invalid_type(
                     de::Unexpected::Unsigned(value),
                     &"an integer from 0-255",
@@ -393,7 +396,7 @@ impl Config {
         typ: LintOrTidyCommandType,
     ) -> Result<Vec<command::LintOrTidyCommand>> {
         let mut commands: Vec<command::LintOrTidyCommand> = vec![];
-        for (name, c) in self.commands.into_iter() {
+        for (name, c) in self.commands {
             if let Some(c) = command {
                 if name != c {
                     continue;

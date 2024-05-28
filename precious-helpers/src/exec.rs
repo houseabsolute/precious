@@ -56,12 +56,13 @@ fn exec_output_summary(stdout: &str, stderr: &str) -> String {
 }
 
 #[derive(Debug)]
-pub struct ExecOutput {
+pub struct Output {
     pub exit_code: i32,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
 }
 
+#[allow(clippy::implicit_hasher, clippy::missing_errors_doc)]
 pub fn run(
     exe: &str,
     args: &[&str],
@@ -69,7 +70,7 @@ pub fn run(
     ok_exit_codes: &[i32],
     ignore_stderr: Option<&[Regex]>,
     in_dir: Option<&Path>,
-) -> Result<ExecOutput> {
+) -> Result<Output> {
     if which(exe).is_err() {
         let path = match env::var("PATH") {
             Ok(p) => p,
@@ -83,7 +84,7 @@ pub fn run(
     }
 
     let mut c = process::Command::new(exe);
-    for a in args.iter() {
+    for a in args {
         c.arg(a);
     }
 
@@ -106,7 +107,10 @@ pub fn run(
             cwd.display()
         );
         for k in env.keys().sorted() {
-            debug!(r#"  with env: {k} = "{}""#, env.get(k).unwrap());
+            debug!(
+                r#"  with env: {k} = "{}""#,
+                env.get(k).unwrap_or(&"<not UTF-8>".to_string()),
+            );
         }
     }
 
@@ -139,10 +143,10 @@ pub fn run(
         }
     }
 
-    Ok(ExecOutput {
+    Ok(Output {
         exit_code: code,
-        stdout: to_option_string(output.stdout),
-        stderr: to_option_string(output.stderr),
+        stdout: to_option_string(&output.stdout),
+        stderr: to_option_string(&output.stderr),
     })
 }
 
@@ -153,29 +157,26 @@ fn output_from_command(
     args: &[&str],
 ) -> Result<process::Output> {
     let output = c.output()?;
-    match output.status.code() {
-        Some(code) => {
-            let estr = exec_string(exe, args);
-            debug!("Ran {} and got exit code of {}", estr, code);
-            if !ok_exit_codes.contains(&code) {
-                return Err(Error::UnexpectedExitCode {
-                    cmd: estr,
-                    code,
-                    stdout: String::from_utf8(output.stdout)?,
-                    stderr: String::from_utf8(output.stderr)?,
-                }
-                .into());
+    if let Some(code) = output.status.code() {
+        let estr = exec_string(exe, args);
+        debug!("Ran {} and got exit code of {}", estr, code);
+        if !ok_exit_codes.contains(&code) {
+            return Err(Error::UnexpectedExitCode {
+                cmd: estr,
+                code,
+                stdout: String::from_utf8(output.stdout)?,
+                stderr: String::from_utf8(output.stderr)?,
             }
+            .into());
         }
-        None => {
-            let estr = exec_string(exe, args);
-            if output.status.success() {
-                error!("Ran {} successfully but it had no exit code", estr);
-            } else {
-                let signal = signal_from_status(output.status);
-                debug!("Ran {} which exited because of signal {}", estr, signal);
-                return Err(Error::ProcessKilledBySignal { cmd: estr, signal }.into());
-            }
+    } else {
+        let estr = exec_string(exe, args);
+        if output.status.success() {
+            error!("Ran {} successfully but it had no exit code", estr);
+        } else {
+            let signal = signal_from_status(output.status);
+            debug!("Ran {} which exited because of signal {}", estr, signal);
+            return Err(Error::ProcessKilledBySignal { cmd: estr, signal }.into());
         }
     }
 
@@ -191,11 +192,11 @@ fn exec_string(exe: &str, args: &[&str]) -> String {
     estr
 }
 
-fn to_option_string(v: Vec<u8>) -> Option<String> {
+fn to_option_string(v: &[u8]) -> Option<String> {
     if v.is_empty() {
         None
     } else {
-        Some(String::from_utf8_lossy(&v).into_owned())
+        Some(String::from_utf8_lossy(v).into_owned())
     }
 }
 
@@ -527,7 +528,7 @@ STDERR
         Ok(())
     }
 
-    fn error_from_run(result: Result<super::ExecOutput>) -> Result<Error> {
+    fn error_from_run(result: Result<super::Output>) -> Result<Error> {
         match result {
             Ok(_) => Err(format_err!("did not get an error in the returned Result")),
             Err(e) => e.downcast::<super::Error>(),

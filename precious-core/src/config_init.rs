@@ -60,7 +60,7 @@ lint-failure-exit-codes = [1]
     ),
 ];
 
-const GOLANGCI_LINT_YML: &str = r#"
+const GOLANGCI_LINT_YML: &str = "
 linters:
   disable-all: true
   enable:
@@ -121,7 +121,7 @@ linters-settings:
     check-shadowing: true
   importas:
     no-extra-aliases: true
-"#;
+";
 
 const CHECK_GO_MOD: &str = r#"
 #!/bin/bash

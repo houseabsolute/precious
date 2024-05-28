@@ -20,9 +20,9 @@ use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
     collections::{HashMap, HashSet},
     env,
+    fmt::Write,
     fs::{create_dir_all, File},
     io::stdout,
-    io::Write,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -85,6 +85,7 @@ struct ActionFailure {
 #[clap(propagate_version = true)]
 #[clap(subcommand_required = true, arg_required_else_help = true)]
 #[clap(max_term_width = 100)]
+#[allow(clippy::struct_excessive_bools)]
 /// One code quality tool to rule them all
 pub struct App {
     /// Path to the precious config file
@@ -127,6 +128,7 @@ pub enum Subcommand {
         .required(true)
         .args(&["all", "git", "staged", "git_diff_from", "staged_with_stash", "paths"]),
 ))]
+#[allow(clippy::struct_excessive_bools)]
 pub struct CommonArgs {
     /// The command to run. If specified, only this command will be run. This
     /// should match the command name in your config file.
@@ -202,11 +204,13 @@ pub enum InitComponent {
     YAML,
 }
 
+#[must_use]
 pub fn app() -> App {
     App::parse()
 }
 
 impl App {
+    #[allow(clippy::missing_errors_doc)]
     pub fn init_logger(&self) -> Result<(), log::SetLoggerError> {
         let line_colors = ColoredLevelConfig::new()
             .error(Color::Red)
@@ -246,16 +250,17 @@ impl App {
             .apply()
     }
 
+    #[allow(clippy::missing_errors_doc)]
     pub fn run(self) -> Result<i8> {
         self._run(stdout())
     }
 
     #[cfg(test)]
-    fn run_with_output(self, output: impl Write) -> Result<i8> {
+    fn run_with_output(self, output: impl std::io::Write) -> Result<i8> {
         self._run(output)
     }
 
-    fn _run(self, output: impl Write) -> Result<i8> {
+    fn _run(self, output: impl std::io::Write) -> Result<i8> {
         if let Subcommand::Config(config_args) = &self.subcommand {
             if let ConfigSubcommand::Init(init_args) = &config_args.subcommand {
                 init_config(init_args.auto, &init_args.component, &init_args.path)?;
@@ -303,7 +308,7 @@ impl App {
     fn config_file(&self, dir: &Path) -> PathBuf {
         if let Some(cf) = self.config.as_ref() {
             debug!("Loading config from {} (set via flag)", cf.display());
-            return cf.to_path_buf();
+            return cf.clone();
         }
 
         let default = default_config_file(dir);
@@ -358,7 +363,7 @@ fn default_config_file(dir: &Path) -> PathBuf {
             path.push(n);
             path
         }),
-        |p| p.exists(),
+        Path::exists,
     )
 }
 
@@ -385,7 +390,11 @@ fn is_checkout_root(dir: &Path) -> bool {
     false
 }
 
-fn print_config(mut output: impl Write, config_file: &Path, config: config::Config) -> Result<()> {
+fn print_config(
+    mut output: impl std::io::Write,
+    config_file: &Path,
+    config: config::Config,
+) -> Result<()> {
     writeln!(output, "Found config file at: {}", config_file.display())?;
     writeln!(output)?;
 
@@ -412,6 +421,8 @@ fn print_config(mut output: impl Write, config_file: &Path, config: config::Conf
 }
 
 fn init_config(auto: bool, components: &[InitComponent], path: &Path) -> Result<()> {
+    use std::io::Write;
+
     if env::current_dir()?.join(path).exists() {
         return Err(PreciousError::ConfigFileExists {
             path: path.to_owned(),
@@ -437,7 +448,7 @@ fn init_config(auto: bool, components: &[InitComponent], path: &Path) -> Result<
         };
         excludes.extend(init.excludes);
         for (name, c) in init.commands {
-            commands.insert(name, c);
+            commands.insert(*name, c);
         }
         for f in init.extra_files {
             extra_files.insert(f.path.clone(), f);
@@ -592,7 +603,7 @@ pub struct LintOrTidyRunner {
 }
 
 impl LintOrTidyRunner {
-    pub fn new(
+    fn new(
         app: App,
         cwd: PathBuf,
         project_root: PathBuf,
@@ -636,8 +647,7 @@ impl LintOrTidyRunner {
 
     fn mode(app: &App) -> Result<paths::mode::Mode> {
         let common = match &app.subcommand {
-            Subcommand::Lint(c) => c,
-            Subcommand::Tidy(c) => c,
+            Subcommand::Lint(c) | Subcommand::Tidy(c) => c,
             Subcommand::Config(_) => unreachable!("this is handled in App::run"),
         };
         if common.all {
@@ -768,7 +778,7 @@ impl LintOrTidyRunner {
         };
 
         match self.finder()?.files(cli_paths)? {
-            None => Ok(self.no_files_exit()),
+            None => Ok(Self::no_files_exit()),
             Some(files) => {
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for c in commands {
@@ -778,7 +788,7 @@ impl LintOrTidyRunner {
                     }
                 }
 
-                Ok(self.make_exit(all_failures, action))
+                Ok(self.make_exit(&all_failures, action))
             }
         }
     }
@@ -792,7 +802,7 @@ impl LintOrTidyRunner {
         )
     }
 
-    fn make_exit(&self, failures: Vec<ActionFailure>, action: &str) -> Exit {
+    fn make_exit(&self, failures: &[ActionFailure], action: &str) -> Exit {
         let (status, error) = if failures.is_empty() {
             (0, None)
         } else {
@@ -806,17 +816,17 @@ impl LintOrTidyRunner {
                 plural,
                 action,
                 ansi_off,
-                failures
-                    .iter()
-                    .map(|af| format!(
+                failures.iter().fold(String::new(), |mut out, af| {
+                    let _ = write!(
+                        out,
                         "  {} [{}] failed for [{}]\n    {}\n",
                         self.chars.bullet,
                         af.config_key,
                         af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
                         af.error,
-                    ))
-                    .collect::<Vec<String>>()
-                    .join("")
+                    );
+                    out
+                }),
             );
             (1, Some(error))
         };
@@ -1005,7 +1015,7 @@ impl LintOrTidyRunner {
         let failures = results
             .into_iter()
             .filter_map(|r| match r {
-                Ok(_) => None,
+                Ok(()) => None,
                 Err(e) => Some(e),
             })
             .collect::<Vec<ActionFailure>>();
@@ -1016,7 +1026,7 @@ impl LintOrTidyRunner {
         }
     }
 
-    fn no_files_exit(&self) -> Exit {
+    fn no_files_exit() -> Exit {
         Exit {
             status: 0,
             message: Some(String::from("No files found")),
@@ -1034,6 +1044,11 @@ impl LintOrTidyRunner {
 //    X.XXms
 //    X.XXus
 //    X.XXns
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 fn format_duration(d: &Duration) -> String {
     let s = (d.as_secs_f64() * 100.0).round() / 100.0;
 

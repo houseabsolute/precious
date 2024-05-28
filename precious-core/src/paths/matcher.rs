@@ -3,6 +3,7 @@ use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::path::Path;
 
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct MatcherBuilder {
     builder: GitignoreBuilder,
 }

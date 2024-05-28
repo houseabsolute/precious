@@ -25,7 +25,7 @@ pub enum LintOrTidyCommandType {
 }
 
 impl LintOrTidyCommandType {
-    fn what(&self) -> &'static str {
+    fn what(self) -> &'static str {
         match self {
             LintOrTidyCommandType::Lint => "linter",
             LintOrTidyCommandType::Tidy => "tidier",
@@ -163,6 +163,7 @@ enum CommandError {
 }
 
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct LintOrTidyCommand {
     project_root: PathBuf,
     pub name: String,
@@ -255,12 +256,12 @@ impl LintOrTidyCommand {
                 params
                     .ignore_stderr
                     .into_iter()
-                    .map(|i| Regex::new(&i).map_err(|e| e.into()))
+                    .map(|i| Regex::new(&i).map_err(Into::into))
                     .collect::<Result<Vec<_>>>()?,
             )
         };
 
-        let cmd = replace_root(params.cmd, &params.project_root);
+        let cmd = replace_root(&params.cmd, &params.project_root);
         let root = params.project_root.clone();
         Ok(LintOrTidyCommand {
             project_root: params.project_root,
@@ -395,7 +396,7 @@ impl LintOrTidyCommand {
     }
 
     fn files_to_dirs<'a>(files: impl Iterator<Item = &'a PathBuf>) -> Result<Vec<Vec<&'a Path>>> {
-        let files = files.map(|p| p.as_ref()).collect::<Vec<_>>();
+        let files = files.map(AsRef::as_ref).collect::<Vec<_>>();
         let by_dir = Self::files_by_dir(&files)?;
         Ok(by_dir
             .into_iter()
@@ -430,7 +431,7 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let mut cmd = self.command_for_paths(&self.tidy_flags, &operating_on)?;
+        let mut cmd = self.command_for_paths(&self.tidy_flags, &operating_on);
 
         info!(
             "Tidying [{}] with {} in [{}] using command [{}]",
@@ -443,7 +444,7 @@ impl LintOrTidyCommand {
         let bin = cmd.remove(0);
         exec::run(
             &bin,
-            &cmd.iter().map(|c| c.as_str()).collect::<Vec<_>>(),
+            &cmd.iter().map(String::as_str).collect::<Vec<_>>(),
             &self.env,
             &self.ok_exit_codes,
             self.ignore_stderr.as_deref(),
@@ -472,7 +473,7 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let mut cmd = self.command_for_paths(&self.lint_flags, &operating_on)?;
+        let mut cmd = self.command_for_paths(&self.lint_flags, &operating_on);
 
         info!(
             "Linting [{}] with {} in [{}] using command [{}]",
@@ -485,7 +486,7 @@ impl LintOrTidyCommand {
         let bin = cmd.remove(0);
         let result = exec::run(
             &bin,
-            &cmd.iter().map(|c| c.as_str()).collect::<Vec<_>>(),
+            &cmd.iter().map(String::as_str).collect::<Vec<_>>(),
             &self.env,
             &self.ok_exit_codes,
             self.ignore_stderr.as_deref(),
@@ -613,12 +614,12 @@ impl LintOrTidyCommand {
                 .iter()
                 .sorted()
                 .map(|r| self.path_relative_to(r, in_dir))
-                .collect::<Result<Vec<_>>>()?),
-            PathArgs::Dir => Self::files_by_dir(files)?
+                .collect::<Vec<_>>()),
+            PathArgs::Dir => Ok(Self::files_by_dir(files)?
                 .into_keys()
                 .sorted()
                 .map(|r| self.path_relative_to(r, in_dir))
-                .collect::<Result<Vec<_>>>(),
+                .collect::<Vec<_>>()),
             PathArgs::None => Ok(vec![]),
             PathArgs::Dot => Ok(vec![PathBuf::from(".")]),
             PathArgs::AbsoluteFile => Ok(files
@@ -644,7 +645,7 @@ impl LintOrTidyCommand {
         }
     }
 
-    fn path_relative_to(&self, path: &Path, in_dir: &Path) -> Result<PathBuf> {
+    fn path_relative_to(&self, path: &Path, in_dir: &Path) -> PathBuf {
         let mut abs = self.project_root.clone();
         abs.push(path);
 
@@ -652,10 +653,10 @@ impl LintOrTidyCommand {
             if diff == Path::new("") {
                 diff = PathBuf::from(".");
             }
-            return Ok(diff);
+            return diff;
         }
 
-        Ok(path.to_path_buf())
+        path.to_path_buf()
     }
 
     // This takes the list of files relevant to the command. That list comes
@@ -752,11 +753,7 @@ impl LintOrTidyCommand {
         })
     }
 
-    fn command_for_paths(
-        &self,
-        flags: &Option<Vec<String>>,
-        paths: &[PathBuf],
-    ) -> Result<Vec<String>> {
+    fn command_for_paths(&self, flags: &Option<Vec<String>>, paths: &[PathBuf]) -> Vec<String> {
         let mut cmd = self.cmd.clone();
         if let Some(flags) = flags {
             for f in flags {
@@ -771,7 +768,7 @@ impl LintOrTidyCommand {
             cmd.push(p.to_string_lossy().to_string());
         }
 
-        Ok(cmd)
+        cmd
     }
 
     pub(crate) fn paths_summary(&self, actual_invoke: ActualInvoke, paths: &[&Path]) -> String {
@@ -892,7 +889,7 @@ impl LintOrTidyCommand {
     }
 }
 
-fn replace_root(cmd: Vec<String>, root: &Path) -> Vec<String> {
+fn replace_root(cmd: &[String], root: &Path) -> Vec<String> {
     cmd.iter()
         .map(|c| {
             c.replace(
@@ -1670,7 +1667,7 @@ mod tests {
         let paths = vec![PathBuf::from("app.go"), PathBuf::from("main.go")];
 
         assert_eq!(
-            command.command_for_paths(&None, &paths)?,
+            command.command_for_paths(&None, &paths),
             ["test", "app.go", "main.go"]
                 .iter()
                 .map(|s| s.to_string())
@@ -1680,7 +1677,7 @@ mod tests {
 
         let flags = vec![String::from("--flag")];
         assert_eq!(
-            command.command_for_paths(&Some(flags.clone()), &paths)?,
+            command.command_for_paths(&Some(flags.clone()), &paths),
             ["test", "--flag", "app.go", "main.go"]
                 .iter()
                 .map(|s| s.to_string())
@@ -1694,7 +1691,7 @@ mod tests {
             ..default_command()?
         };
         assert_eq!(
-            command.command_for_paths(&Some(flags), &paths)?,
+            command.command_for_paths(&Some(flags), &paths),
             [
                 "test",
                 "--flag",

@@ -16,5 +16,5 @@ fn main() {
             42
         }
     };
-    std::process::exit(status as i32);
+    std::process::exit(i32::from(status));
 }

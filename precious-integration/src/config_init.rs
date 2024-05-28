@@ -1,6 +1,6 @@
 use crate::shared::{compile_precious, precious_path};
 use anyhow::Result;
-use precious_helpers::exec::{self, ExecOutput};
+use precious_helpers::exec::{self, Output};
 use pushd::Pushd;
 use regex::Regex;
 use serial_test::serial;
@@ -152,7 +152,7 @@ fn chdir_to_tempdir() -> Result<(TempDir, Pushd)> {
     Ok((td, pd))
 }
 
-fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<ExecOutput> {
+fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<Output> {
     let precious = precious_path()?;
     let env = HashMap::new();
     let mut args = vec!["config", "init"];
@@ -174,7 +174,7 @@ fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<
     )
 }
 
-fn init_with_auto() -> Result<ExecOutput> {
+fn init_with_auto() -> Result<Output> {
     let precious = precious_path()?;
     let env = HashMap::new();
     exec::run(
