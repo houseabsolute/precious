@@ -1,29 +1,14 @@
-# See examples/bin/install-dev-tools.sh for an example script to install all
-# of the tools needed by this config. You can copy it into your project and
-# modify it as needed to only install the tools you need.
+excludes = [
+    "vendor/**/*",
+]
+
 [commands.golangci-lint]
-type = "lint"
+type = "both"
 include = "**/*.go"
 invoke = "once"
 path-args = "dir"
-cmd = [
-    "golangci-lint",
-    "run",
-    "-c",
-    "$PRECIOUS_ROOT/golangci-lint.yml",
-    # Allowing golangci-lint to run in parallel reduces the effectiveness of
-    # its cache when it has to parse the same code repeatedly. Depending on
-    # the structure of your repo, you may get a better result by using the
-    # `--allow-serial-runners` flag instead. However, you must use one of
-    # these, as by default golangci-lint can simply timeout and fail when
-    # multiple instances of the executable are invoked at the same time for
-    # the same project.
-    #
-    # Alternatively, for smaller projects you can set `invoke = "once"` and
-    # `path-args = "none"` to run it once for all code in the project, in
-    # which case you can remove this flag.
-    "--allow-parallel-runners",
-]
+cmd = ["golangci-lint", "run", "-c", "--allow-parallel-runners"]
+tidy-flags = "--fix"
 env = { "FAIL_ON_WARNINGS" = "1" }
 ok-exit-codes = [0]
 lint-failure-exit-codes = [1]
@@ -31,20 +16,11 @@ lint-failure-exit-codes = [1]
 [commands."tidy go files"]
 type = "tidy"
 include = "**/*.go"
-cmd = [
-    "golangci-lint",
-    "run",
-    "--fix",
-    "--disable-all",
-    "--enable",
-    "gci",
-    "--enable",
-    "goimports",
-    "--allow-parallel-runners",
-]
+cmd = ["gofumpt", "-w"]
 ok-exit-codes = [0]
 
-# See check-go-mod.sh in helpers dir
+# This script will be created for you if you run `precious config init` to
+# generate your config file.
 [commands.check-go-mod]
 type = "lint"
 include = "**/*.go"

@@ -25,9 +25,9 @@ fn init_go() -> Result<()> {
 
     assert_file_exists("precious.toml")?;
     assert_file_contains("precious.toml", &["golangci-lint", "check-go-mod.sh"])?;
-    assert_file_exists("golangci-lint.yml")?;
+    assert_file_exists(".golangci.yml")?;
     assert_file_contains(
-        "golangci-lint.yml",
+        ".golangci.yml",
         &["gofumpt", "govet", "check-type-assertions"],
     )?;
     assert_file_exists("dev/bin/check-go-mod.sh")?;

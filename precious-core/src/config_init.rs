@@ -17,11 +17,12 @@ const GO_COMMANDS: [(&str, &str); 3] = [
     (
         "golangci-lint",
         r#"
-type = "lint"
+type = "both"
 include = "**/*.go"
 invoke = "once"
 path-args = "dir"
-cmd = ["golangci-lint", "run", "-c", "$PRECIOUS_ROOT/golangci-lint.yml", "--allow-parallel-runners"]
+cmd = ["golangci-lint", "run", "-c", "--allow-parallel-runners"]
+tidy-flags = "--fix"
 env = { "FAIL_ON_WARNINGS" = "1" }
 ok-exit-codes = [0]
 lint-failure-exit-codes = [1]
@@ -32,17 +33,7 @@ lint-failure-exit-codes = [1]
         r#"
 type = "tidy"
 include = "**/*.go"
-cmd = [
-    "golangci-lint",
-    "run",
-    "--fix",
-    "--disable-all",
-    "--enable",
-    "gci",
-    "--enable",
-    "gofump",
-    "--allow-parallel-runners",
-]
+cmd = ["gofumpt", "-w"]
 ok-exit-codes = [0]
 "#,
     ),
@@ -60,7 +51,7 @@ lint-failure-exit-codes = [1]
     ),
 ];
 
-const GOLANGCI_LINT_YML: &str = "
+const GOLANGCI_YML: &str = "
 linters:
   disable-all: true
   enable:
@@ -181,12 +172,15 @@ pub(crate) fn go_init() -> Init {
                 is_executable: true,
             },
             ConfigInitFile {
-                path: PathBuf::from("golangci-lint.yml"),
-                content: GOLANGCI_LINT_YML,
+                path: PathBuf::from(".golangci.yml"),
+                content: GOLANGCI_YML,
                 is_executable: false,
             },
         ],
-        tool_urls: &["https://golangci-lint.run/"],
+        tool_urls: &[
+            "https://golangci-lint.run/",
+            "https://github.com/mvdan/gofumpt",
+        ],
     }
 }
 

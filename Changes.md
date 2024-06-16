@@ -1,5 +1,12 @@
 <!-- next-header -->
 
+- The generated config for Go projects no longer uses `golangci-lint` for code formatting. Instead,
+  it is configured to use [`gofumpt`](https://github.com/mvdan/gofumpt).
+- The generated config for `golangci-lint` creates a config file named `.golangci.yml` file instead
+  of `golangci-lint.yml`. This removes the need to pass the `-C` file to `golangci-lint`.
+- The generated config for Go projects _does_ enable `golangci-lint` as a tidier with its `--fix`
+  flag. This is useful for applying fixes from various linters.
+
 ## 0.7.2 - 2024-05-19
 
 - Added `fix` as an alias for the `tidy` command. Implemented by Michael McClimon (@mmcclimon). GH
