@@ -1,35 +1,29 @@
 use crate::{
     chars,
     command::{self, ActualInvoke, TidyOutcome},
-    config, config_init,
+    config,
+    config_init::{self, InitComponent},
     paths::{self, finder::Finder},
     vcs,
 };
 use anyhow::{Error, Result};
-use clap::{ArgGroup, Parser, ValueEnum};
+use clap::{ArgGroup, Parser};
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 use fern::{
     colors::{Color, ColoredLevelConfig},
     Dispatch,
 };
-use ignore;
-use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use log::{debug, error, info};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
-    collections::{HashMap, HashSet},
     env,
     fmt::Write,
-    fs::{create_dir_all, File},
     io::stdout,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use thiserror::Error;
-
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 
 #[derive(Debug, Error)]
 enum PreciousError {
@@ -50,9 +44,6 @@ enum PreciousError {
 
     #[error("No {what:} commands match the given label, {label:}")]
     NoCommandsMatchLabel { what: String, label: String },
-
-    #[error("A file already exists at the given path: {path}")]
-    ConfigFileExists { path: PathBuf },
 }
 
 #[derive(Debug)]
@@ -192,18 +183,6 @@ pub struct ConfigInitArgs {
     path: PathBuf,
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, ValueEnum)]
-pub enum InitComponent {
-    Go,
-    Perl,
-    Rust,
-    Gitignore,
-    Markdown,
-    Shell,
-    TOML,
-    YAML,
-}
-
 #[must_use]
 pub fn app() -> App {
     App::parse()
@@ -263,7 +242,11 @@ impl App {
     fn _run(self, output: impl std::io::Write) -> Result<i8> {
         if let Subcommand::Config(config_args) = &self.subcommand {
             if let ConfigSubcommand::Init(init_args) = &config_args.subcommand {
-                init_config(init_args.auto, &init_args.component, &init_args.path)?;
+                config_init::write_config_files(
+                    init_args.auto,
+                    &init_args.component,
+                    &init_args.path,
+                )?;
                 return Ok(0);
             }
         }
@@ -418,180 +401,6 @@ fn print_config(
     writeln!(output, "{table}")?;
 
     Ok(())
-}
-
-fn init_config(auto: bool, components: &[InitComponent], path: &Path) -> Result<()> {
-    use std::io::Write;
-
-    if env::current_dir()?.join(path).exists() {
-        return Err(PreciousError::ConfigFileExists {
-            path: path.to_owned(),
-        }
-        .into());
-    }
-
-    let mut excludes: HashSet<&'static str> = HashSet::new();
-    let mut commands = IndexMap::new();
-    let mut extra_files = HashMap::new();
-    let mut tool_urls: IndexSet<&'static str> = IndexSet::new();
-
-    for l in auto_or_component(auto, components)? {
-        let init = match l {
-            InitComponent::Go => config_init::go_init(),
-            InitComponent::Perl => config_init::perl_init(),
-            InitComponent::Rust => config_init::rust_init(),
-            InitComponent::Shell => config_init::shell_init(),
-            InitComponent::Gitignore => config_init::gitignore_init(),
-            InitComponent::Markdown => config_init::markdown_init(),
-            InitComponent::TOML => config_init::toml_init(),
-            InitComponent::YAML => config_init::yaml_init(),
-        };
-        excludes.extend(init.excludes);
-        for (name, c) in init.commands {
-            commands.insert(*name, c);
-        }
-        for f in init.extra_files {
-            extra_files.insert(f.path.clone(), f);
-        }
-        tool_urls.extend(init.tool_urls);
-    }
-
-    let mut toml = String::new();
-    if !excludes.is_empty() {
-        if excludes.len() == 1 {
-            toml.push_str(&format!(
-                "excludes = [\"{}\"]",
-                excludes.iter().next().unwrap(),
-            ));
-        } else {
-            toml.push_str(&format!(
-                "excludes = [\n{}\n]",
-                excludes
-                    .iter()
-                    .sorted()
-                    .map(|e| format!(r#"    "{e}","#))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ));
-        }
-    }
-
-    if !toml.is_empty() {
-        toml.push_str("\n\n");
-    }
-
-    let mut command_strs: Vec<String> = Vec::new();
-
-    for (name, c) in commands {
-        let name_str = if name.contains(' ') {
-            format!(r#""{name}""#)
-        } else {
-            name.to_string()
-        };
-        command_strs.push(format!("[commands.{name_str}]\n{}\n", c.trim()));
-    }
-
-    toml.push_str(&command_strs.join("\n"));
-
-    println!();
-    println!("Writing {}", path.display());
-
-    let mut precious_toml = File::create(path)?;
-    precious_toml.write_all(toml.as_bytes())?;
-
-    if !extra_files.is_empty() {
-        println!();
-        println!("Generating support files");
-        println!();
-
-        let paths = extra_files.keys().sorted().collect::<Vec<_>>();
-
-        for p in paths {
-            print!("{} ...", p.display());
-            if p.exists() {
-                println!(
-                    "  already exists, skipping - delete this file if you want to regenerate it"
-                );
-                continue;
-            }
-            println!(" generated");
-
-            if let Some(parent) = p.parent() {
-                create_dir_all(parent)?;
-            }
-            let mut file = File::create(p)?;
-            let f = extra_files.get(p).unwrap();
-            file.write_all(f.content.trim_start().as_bytes())?;
-
-            #[cfg(unix)]
-            if f.is_executable {
-                let mut perms = file.metadata()?.permissions();
-                perms.set_mode(0o755);
-                file.set_permissions(perms)?;
-            }
-        }
-    }
-
-    println!();
-    println!("The generated precious.toml requires the following tools to be installed:");
-    for u in tool_urls {
-        println!("  {u}");
-    }
-    println!();
-
-    Ok(())
-}
-
-fn auto_or_component(auto: bool, components: &[InitComponent]) -> Result<Vec<InitComponent>> {
-    if !auto {
-        return Ok(components.to_vec());
-    }
-
-    let mut components: HashSet<InitComponent> = HashSet::new();
-    let cwd = env::current_dir()?;
-    debug!(
-        "Looking at all files under {} to determine which components to include.",
-        cwd.display(),
-    );
-
-    for result in ignore::WalkBuilder::new(&cwd).hidden(false).build() {
-        let entry = result?;
-        // The only time this is `None` is when the entry is for stdin, which
-        // will never happen here.
-        if !entry.file_type().unwrap().is_file() {
-            continue;
-        }
-
-        if entry.file_name() == ".gitignore" {
-            components.insert(InitComponent::Gitignore);
-            continue;
-        }
-
-        let component = match entry
-            .path()
-            .extension()
-            .unwrap_or_default()
-            .to_str()
-            .unwrap_or_default()
-        {
-            "go" => InitComponent::Go,
-            "md" => InitComponent::Markdown,
-            "pl" | "pm" => InitComponent::Perl,
-            "rs" => InitComponent::Rust,
-            "sh" => InitComponent::Shell,
-            "toml" => InitComponent::TOML,
-            "yml" | "yaml" => InitComponent::YAML,
-            _ => continue,
-        };
-        debug!(
-            "File {} matches component {:?}",
-            entry.path().display(),
-            component
-        );
-        components.insert(component);
-    }
-
-    Ok(components.into_iter().collect())
 }
 
 #[derive(Debug)]
