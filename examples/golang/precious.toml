@@ -5,8 +5,25 @@ excludes = [
 [commands.golangci-lint]
 type = "both"
 include = "**/*.go"
+# For large projects with many packages, you may want to set
+# `invoke.per-dir-or-once = 7`. You can experiment with different numbers of
+# directories to see what works best for your project.
 invoke = "once"
 path-args = "dir"
+# The `--allow-parallel-runners` flag is only relevant when `invoke` is not
+# set to `once`.
+#
+# Allowing golangci-lint to run in parallel reduces the effectiveness of its
+# cache when it has to parse the same code repeatedly. Depending on the
+# structure of your repo, you may get a better result by using the
+# `--allow-serial-runners` flag instead. However, if `invoke` is not `once`,
+# you must use one of these, as by default golangci-lint can simply timeout
+# and fail when multiple instances of the executable are invoked at the same
+# time for the same project.
+#
+# Alternatively, for smaller projects you can set `invoke = "once"` and
+# `path-args = "none"` to run it once for all code in the project, in which
+# case you can remove this flag.
 cmd = ["golangci-lint", "run", "-c", "--allow-parallel-runners"]
 tidy-flags = "--fix"
 env = { "FAIL_ON_WARNINGS" = "1" }
