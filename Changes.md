@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.7.3 2024-06-16
+
 - The generated config for Go projects no longer uses `golangci-lint` for code formatting. Instead,
   it is configured to use [`gofumpt`](https://github.com/mvdan/gofumpt).
 - The generated config for `golangci-lint` creates a config file named `.golangci.yml` file instead
