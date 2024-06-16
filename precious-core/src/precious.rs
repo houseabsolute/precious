@@ -458,15 +458,22 @@ fn init_config(auto: bool, components: &[InitComponent], path: &Path) -> Result<
 
     let mut toml = String::new();
     if !excludes.is_empty() {
-        toml.push_str(&format!(
-            "excludes = [\n{}\n]",
-            excludes
-                .iter()
-                .sorted()
-                .map(|e| format!(r#"    "{e}","#))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ));
+        if excludes.len() == 1 {
+            toml.push_str(&format!(
+                "excludes = [\"{}\"]",
+                excludes.iter().next().unwrap(),
+            ));
+        } else {
+            toml.push_str(&format!(
+                "excludes = [\n{}\n]",
+                excludes
+                    .iter()
+                    .sorted()
+                    .map(|e| format!(r#"    "{e}","#))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
+        }
     }
 
     if !toml.is_empty() {
