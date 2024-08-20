@@ -115,7 +115,6 @@ jobs:
             target: aarch64-apple-darwin
             bin: precious
             name: precious-Darwin-aarch64.tar.gz
-            skip_tests: true
         toolchain:
           - stable
           - beta
