@@ -431,7 +431,7 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let mut cmd = self.command_for_paths(&self.tidy_flags, &operating_on);
+        let mut cmd = self.command_for_paths(self.tidy_flags.as_deref(), &operating_on);
 
         info!(
             "Tidying [{}] with {} in [{}] using command [{}]",
@@ -473,7 +473,7 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let mut cmd = self.command_for_paths(&self.lint_flags, &operating_on);
+        let mut cmd = self.command_for_paths(self.lint_flags.as_deref(), &operating_on);
 
         info!(
             "Linting [{}] with {} in [{}] using command [{}]",
@@ -753,7 +753,7 @@ impl LintOrTidyCommand {
         })
     }
 
-    fn command_for_paths(&self, flags: &Option<Vec<String>>, paths: &[PathBuf]) -> Vec<String> {
+    fn command_for_paths(&self, flags: Option<&[String]>, paths: &[PathBuf]) -> Vec<String> {
         let mut cmd = self.cmd.clone();
         if let Some(flags) = flags {
             for f in flags {
@@ -1667,7 +1667,7 @@ mod tests {
         let paths = vec![PathBuf::from("app.go"), PathBuf::from("main.go")];
 
         assert_eq!(
-            command.command_for_paths(&None, &paths),
+            command.command_for_paths(None, &paths),
             ["test", "app.go", "main.go"]
                 .iter()
                 .map(|s| s.to_string())
@@ -1677,7 +1677,7 @@ mod tests {
 
         let flags = vec![String::from("--flag")];
         assert_eq!(
-            command.command_for_paths(&Some(flags.clone()), &paths),
+            command.command_for_paths(Some(&flags), &paths),
             ["test", "--flag", "app.go", "main.go"]
                 .iter()
                 .map(|s| s.to_string())
@@ -1691,7 +1691,7 @@ mod tests {
             ..default_command()?
         };
         assert_eq!(
-            command.command_for_paths(&Some(flags), &paths),
+            command.command_for_paths(Some(&flags), &paths),
             [
                 "test",
                 "--flag",
