@@ -231,15 +231,10 @@ impl App {
 
     #[allow(clippy::missing_errors_doc)]
     pub fn run(self) -> Result<i8> {
-        self._run(stdout())
+        self.run_with_output(stdout())
     }
 
-    #[cfg(test)]
     fn run_with_output(self, output: impl std::io::Write) -> Result<i8> {
-        self._run(output)
-    }
-
-    fn _run(self, output: impl std::io::Write) -> Result<i8> {
         if let Subcommand::Config(config_args) = &self.subcommand {
             if let ConfigSubcommand::Init(init_args) = &config_args.subcommand {
                 config_init::write_config_files(
