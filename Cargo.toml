@@ -29,34 +29,34 @@ log.workspace = true
 precious-core.workspace = true
 
 [workspace.dependencies]
-anyhow = "1.0.86"
-clap = { version = "4.5.7", features = ["cargo", "derive", "wrap_help"] }
+anyhow = "1.0.89"
+clap = { version = "4.5.19", features = ["cargo", "derive", "wrap_help"] }
 clean-path = "0.2.1"
 comfy-table = "7.1.1"
-env_logger = "0.11.3"
+env_logger = "0.11.5"
 fern = { version = ">= 0.5.0, < 0.7.0", features = ["colored"] }
-filetime = "0.2.23"
-ignore = "0.4.22"
-indexmap = { version = "2.2.6", features = ["serde"] }
+filetime = "0.2.25"
+ignore = "0.4.23"
+indexmap = { version = "2.6.0", features = ["serde"] }
 itertools = ">= 0.9.0, < 0.11.0"
-log = "0.4.21"
+log = "0.4.22"
 md5 = "0.7.0"
-once_cell = "1.19.0"
+once_cell = "1.20.2"
 pathdiff = "0.2.1"
 precious-core = { version = "0.7.3", path = "./precious-core" }
 precious-helpers = { version = "0.7.3", path = "./precious-helpers" }
 precious-testhelper = { version = "0.7.3", path = "./precious-testhelper" }
-pretty_assertions = "1.4.0"
+pretty_assertions = "1.4.1"
 prettytable = "0.10.0"
 pushd = "0.0.1"
 rayon = "1.10.0"
-regex = "1.10.5"
-serde = { version = "1.0.203", features = ["derive"] }
+regex = "1.11.0"
+serde = { version = "1.0.210", features = ["derive"] }
 serial_test = "3.1.1"
-tempfile = "3.10.1"
+tempfile = "3.13.0"
 test-case = "3.3.1"
-thiserror = "1.0.61"
-toml = "0.8.14"
+thiserror = "1.0.64"
+toml = "0.8.19"
 which = ">= 3.0.0, < 5.0.0"
 
 [workspace]
