@@ -115,7 +115,7 @@ pub fn run(
     }
 
     let output = output_from_command(c, ok_exit_codes, exe, args)
-        .with_context(|| format!(r#"Failed to execute command `{}`"#, exec_string(exe, args)))?;
+        .with_context(|| format!(r"Failed to execute command `{}`", exec_string(exe, args)))?;
 
     if log_enabled!(Debug) && !output.stdout.is_empty() {
         debug!("Stdout was:\n{}", String::from_utf8(output.stdout.clone())?);

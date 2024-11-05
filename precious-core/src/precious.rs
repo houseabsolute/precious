@@ -593,7 +593,7 @@ impl LintOrTidyRunner {
             Some(files) => {
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for c in commands {
-                    debug!(r#"Command config for {}: {}"#, c.name, c.config_debug());
+                    debug!(r"Command config for {}: {}", c.name, c.config_debug());
                     if let Some(mut failures) = run_command(self, &files, &c)? {
                         all_failures.append(&mut failures);
                     }
