@@ -337,7 +337,7 @@ Then when you tidy or lint you can pick a label by passing a `--label` flag:
 $> precious lint --label some-label --all
 ```
 
-The way labels work is as follows:
+Labels work as follows:
 
 - A command _without_ a `labels` key in its config has one label, `default`.
 - Running `tidy` or `lint` _without_ a `--label` flag uses the `default` label.
@@ -420,14 +420,14 @@ Here are some recommendations for how to get the best experience with precious.
 Some commands might work equally well with `invoke` set to either `per-dir` or `once`. The right run
 mode to choose depends on how you are using precious.
 
-In general, if you either have a very small set of directories, _or_ you are running precious on
-most or all of the directories at once, then `once` will be faster.
+In general, if you either have a very small set of directories, _or_ you are usually running
+precious on most or all of the directories at once, then `once` will be faster.
 
 However, if you have a larger set of directories and you usually only need to lint or tidy a small
 subset of these at once, then `per-dir` mode will be faster.
 
-You can also use the experimental `invoke.per-dir-or-once = n` option to invoke the command one of
-two ways, depending on the number of directories that precious will operate on.
+You can also use the experimental `invoke.per-dir-or-once = n` option to have `precious` switch
+between `once` and `per-dir`, depending on the number of directories that precious will operate on.
 
 ### Quiet Flags for Commands
 
