@@ -159,7 +159,7 @@ fn output_from_command(
     let output = c.output()?;
     if let Some(code) = output.status.code() {
         let estr = exec_string(exe, args);
-        debug!("Ran {} and got exit code of {}", estr, code);
+        debug!("Ran [{}] and got exit code of {}", estr, code);
         if !ok_exit_codes.contains(&code) {
             return Err(Error::UnexpectedExitCode {
                 cmd: estr,

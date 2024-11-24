@@ -431,14 +431,15 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let mut cmd = self.command_for_paths(self.tidy_flags.as_deref(), &operating_on);
+        let (mut cmd, before_paths_idx) =
+            self.command_for_paths(self.tidy_flags.as_deref(), &operating_on);
 
         info!(
             "Tidying [{}] with {} in [{}] using command [{}]",
             files.iter().map(|p| p.to_string_lossy()).join(" "),
             self.name,
             in_dir.display(),
-            cmd.join(" "),
+            command_for_log(&cmd, before_paths_idx),
         );
 
         let bin = cmd.remove(0);
@@ -473,14 +474,15 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let mut cmd = self.command_for_paths(self.lint_flags.as_deref(), &operating_on);
+        let (mut cmd, before_paths_idx) =
+            self.command_for_paths(self.lint_flags.as_deref(), &operating_on);
 
         info!(
             "Linting [{}] with {} in [{}] using command [{}]",
-            files.iter().map(|p| p.to_string_lossy()).join(" "),
+            file_summary_for_log(files),
             self.name,
             in_dir.display(),
-            cmd.join(" "),
+            command_for_log(&cmd, before_paths_idx),
         );
 
         let bin = cmd.remove(0);
@@ -753,13 +755,19 @@ impl LintOrTidyCommand {
         })
     }
 
-    fn command_for_paths(&self, flags: Option<&[String]>, paths: &[PathBuf]) -> Vec<String> {
+    fn command_for_paths(
+        &self,
+        flags: Option<&[String]>,
+        paths: &[PathBuf],
+    ) -> (Vec<String>, usize) {
         let mut cmd = self.cmd.clone();
         if let Some(flags) = flags {
             for f in flags {
                 cmd.push(f.clone());
             }
         }
+
+        let idx = cmd.len();
 
         for p in paths {
             if let Some(pf) = &self.path_flag {
@@ -768,7 +776,7 @@ impl LintOrTidyCommand {
             cmd.push(p.to_string_lossy().to_string());
         }
 
-        cmd
+        (cmd, idx)
     }
 
     pub(crate) fn paths_summary(&self, actual_invoke: ActualInvoke, paths: &[&Path]) -> String {
@@ -886,6 +894,23 @@ impl LintOrTidyCommand {
             "{} | working-dir = {} | path-args = {}",
             self.invoke, self.working_dir, self.path_args
         )
+    }
+}
+
+fn file_summary_for_log(files: &[&Path]) -> String {
+    if files.len() <= 3 {
+        return files.iter().map(|p| p.to_string_lossy()).join(" ");
+    }
+    let first3 = files.iter().take(3).map(|p| p.to_string_lossy()).join(" ");
+    format!("{} ... and {} more", first3, files.len() - 3)
+}
+
+fn command_for_log(cmd: &[String], before_paths_idx: usize) -> String {
+    // If this is true, then there's only one path in the command.
+    if before_paths_idx == cmd.len() - 1 {
+        cmd.join(" ")
+    } else {
+        format!("{} <paths>", cmd[..before_paths_idx].join(" "))
     }
 }
 
@@ -1668,20 +1693,26 @@ mod tests {
 
         assert_eq!(
             command.command_for_paths(None, &paths),
-            ["test", "app.go", "main.go"]
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>(),
+            (
+                ["test", "app.go", "main.go"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
+                1
+            ),
             "no flags",
         );
 
         let flags = vec![String::from("--flag")];
         assert_eq!(
             command.command_for_paths(Some(&flags), &paths),
-            ["test", "--flag", "app.go", "main.go"]
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>(),
+            (
+                ["test", "--flag", "app.go", "main.go"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
+                2
+            ),
             "one flag",
         );
 
@@ -1692,17 +1723,20 @@ mod tests {
         };
         assert_eq!(
             command.command_for_paths(Some(&flags), &paths),
-            [
-                "test",
-                "--flag",
-                "--path-flag",
-                "app.go",
-                "--path-flag",
-                "main.go"
-            ]
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>(),
+            (
+                [
+                    "test",
+                    "--flag",
+                    "--path-flag",
+                    "app.go",
+                    "--path-flag",
+                    "main.go"
+                ]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+                2
+            ),
             "with path flags",
         );
 

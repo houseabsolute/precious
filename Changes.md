@@ -1,5 +1,13 @@
 <!-- next-header -->
 
+## 0.7.4
+
+- Reduced the verbosity of the info-level logs (seen with the `--verbose` flag). Previously, this
+  would print out _all_ the files a command was operating on, which could be hundreds of files. Now
+  it will only print a summary of the files. Similarly, info-level logs of the commands being run
+  omit all of the paths if there is more than one path in the command being executed. Debug-level
+  logs still include the full command.
+
 ## 0.7.3 2024-06-16
 
 - The generated config for Go projects no longer uses `golangci-lint` for code formatting. Instead,
