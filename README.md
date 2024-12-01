@@ -97,9 +97,11 @@ Contributions for other languages are welcome!
 The config in the examples matches what `precious config init` generates, and there are comments in
 the files with more details about how you might change this configuration.
 
-Also check out [the example `install-dev-tools.sh`](examples/bin/install-dev-tools.sh) script for a
-tool to install all of your project's linting and tidying dependencies. You can customize this as
-needed to install only the tools you need for your project.
+Also check out [the example `mise.toml`](examples/mise.toml) config file. You can use
+[`mise`](https://mise.jdx.dev/) to create per-repo tool configurations. If you use `mise`'s shell
+integration, the specific tools for each repo will be added to your path whenever you enter the
+repo's directory. You can customize this as needed to install only the tools you need for your
+project.
 
 ## Configuration
 
