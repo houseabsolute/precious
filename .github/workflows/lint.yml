@@ -35,7 +35,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
           components: rustfmt
-      - name: Run cargo check
+      - name: Run cargo install
         run: cargo install --path . --locked
       - name: Install mise
         run: |
@@ -43,6 +43,5 @@ jobs:
           set -x
           curl https://mise.run | sh
           mise install
-      - name: "Run precious --lint"
+      - name: "Run precious lint --all"
         run: mise exec -- $HOME/.cargo/bin/precious --debug lint --all
-
