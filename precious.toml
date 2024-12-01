@@ -55,14 +55,7 @@ lint_failure_exit_codes = [1]
 [commands.prettier]
 type = "both"
 include = ["**/*.md", "**/*.yml"]
-cmd = [
-    "./node_modules/.bin/prettier",
-    "--no-config",
-    "--print-width",
-    "100",
-    "--prose-wrap",
-    "always",
-]
+cmd = ["prettier", "--no-config", "--print-width", "100", "--prose-wrap", "always"]
 lint-flags = "--check"
 tidy-flags = "--write"
 ok-exit-codes = 0
