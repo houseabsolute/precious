@@ -34,7 +34,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.toolchain }}
-          components: rustfmt
+          components: clippy,rustfmt
       - name: Run cargo install
         run: cargo install --path . --locked
       - name: Install mise
