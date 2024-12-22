@@ -132,10 +132,6 @@ jobs:
             toolchain: nightly
     steps:
       - uses: actions/checkout@v4
-      - name: Configure Git
-        run: |
-          git config --global user.email "jdoe@example.com"
-          git config --global user.name "J. Doe"
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
