@@ -132,14 +132,12 @@ jobs:
             toolchain: nightly
     steps:
       - uses: actions/checkout@v4
-      - name: Cache cargo & target directories
-        uses: Swatinem/rust-cache@v2
       - name: Configure Git
         run: |
           git config --global user.email "jdoe@example.com"
           git config --global user.name "J. Doe"
       - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
+        uses: houseabsolute/actions-rust-cross@v1
         with:
           command: "build"
           target: ${{ matrix.platform.target }}
@@ -151,7 +149,7 @@ jobs:
           # Ubuntu 16.04 as the base for some images.
           cross-version: 4090beca3cfffa44371a5bba524de3a578aa46c3
       - name: Run tests
-        uses: houseabsolute/actions-rust-cross@v0
+        uses: houseabsolute/actions-rust-cross@v1
         with:
           command: "test"
           target: ${{ matrix.platform.target }}
