@@ -31,7 +31,7 @@ jobs:
             target: x86_64-unknown-freebsd
             bin: precious
             name: precious-FreeBSD-x86_64.tar.gz
-            skip_tests: true
+            skip-tests: true
           - os-name: Linux-x86_64
             runs-on: ubuntu-20.04
             target: x86_64-unknown-linux-musl
@@ -52,25 +52,25 @@ jobs:
             target: i686-unknown-linux-musl
             bin: precious
             name: precious-Linux-i686-musl.tar.gz
-            skip_tests: true
+            skip-tests: true
           - os-name: Linux-powerpc
             runs-on: ubuntu-20.04
             target: powerpc-unknown-linux-gnu
             bin: precious
             name: precious-Linux-powerpc-gnu.tar.gz
-            skip_tests: true
+            skip-tests: true
           - os-name: Linux-powerpc64
             runs-on: ubuntu-20.04
             target: powerpc64-unknown-linux-gnu
             bin: precious
             name: precious-Linux-powerpc64-gnu.tar.gz
-            skip_tests: true
+            skip-tests: true
           - os-name: Linux-powerpc64le
             runs-on: ubuntu-20.04
             target: powerpc64le-unknown-linux-gnu
             bin: precious
             name: precious-Linux-powerpc64le.tar.gz
-            skip_tests: true
+            skip-tests: true
           - os-name: Linux-riscv64
             runs-on: ubuntu-20.04
             target: riscv64gc-unknown-linux-gnu
@@ -81,25 +81,25 @@ jobs:
             target: s390x-unknown-linux-gnu
             bin: precious
             name: precious-Linux-s390x-gnu.tar.gz
-            skip_tests: true
+            skip-tests: true
           - os-name: NetBSD-x86_64
             runs-on: ubuntu-20.04
             target: x86_64-unknown-netbsd
             bin: precious
             name: precious-NetBSD-x86_64.tar.gz
-            skip_tests: true
+            skip-tests: true
           - os-name: Windows-aarch64
             runs-on: windows-latest
             target: aarch64-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-aarch64.zip
-            skip_tests: true
+            skip-tests: true
           - os-name: Windows-i686
             runs-on: windows-latest
             target: i686-pc-windows-msvc
             bin: precious.exe
             name: precious-Windows-i686.zip
-            skip_tests: true
+            skip-tests: true
           - os-name: Windows-x86_64
             runs-on: windows-latest
             target: x86_64-pc-windows-msvc
@@ -151,7 +151,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           toolchain: ${{ matrix.toolchain }}
           args: "--locked --release"
-        if: ${{ !matrix.platform.skip_tests }}
+        if: ${{ !matrix.platform.skip-tests }}
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
