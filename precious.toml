@@ -87,7 +87,6 @@ lint_flags = "--diff"
 tidy_flags = "--write"
 ok_exit_codes = 0
 lint_failure_exit_codes = 1
-labels = ["default", "fast-tidy"]
 
 [commands.typos]
 type = "lint"
