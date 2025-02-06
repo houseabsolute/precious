@@ -132,6 +132,15 @@ jobs:
             toolchain: nightly
     steps:
       - uses: actions/checkout@v4
+      - name: Run tests
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: "test"
+          target: ${{ matrix.platform.target }}
+          toolchain: ${{ matrix.toolchain }}
+          args: "--locked --release"
+          cross-version: 4090beca3cfffa44371a5bba524de3a578aa46c3
+        if: ${{ !matrix.platform.skip-tests }}
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
@@ -144,14 +153,6 @@ jobs:
           # branch updated its images long ago, but the last cross release, 0.2.5, is still using
           # Ubuntu 16.04 as the base for some images.
           cross-version: 4090beca3cfffa44371a5bba524de3a578aa46c3
-      - name: Run tests
-        uses: houseabsolute/actions-rust-cross@v1
-        with:
-          command: "test"
-          target: ${{ matrix.platform.target }}
-          toolchain: ${{ matrix.toolchain }}
-          args: "--locked --release"
-        if: ${{ !matrix.platform.skip-tests }}
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
