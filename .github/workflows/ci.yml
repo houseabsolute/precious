@@ -139,7 +139,14 @@ jobs:
           target: ${{ matrix.platform.target }}
           toolchain: ${{ matrix.toolchain }}
           args: "--locked --release"
-          cross-version: 4090beca3cfffa44371a5bba524de3a578aa46c3
+          # This works around the issue in https://github.com/cross-rs/cross/issues/1450. The `main`
+          # branch updated its images long ago, but the last cross release, 0.2.5, is still using
+          # Ubuntu 16.04 as the base for some images.
+          #
+          # This also contains a fix for https://github.com/cross-rs/cross/issues/1619. Previously,
+          # we used an earlier commit, but this started erroring because some dependencies included
+          # cross config.
+          cross-version: 107433fa9d71d7eb506cd5bf5467bab89edb7a52
         if: ${{ !matrix.platform.skip-tests }}
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
@@ -149,10 +156,7 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           args: "--locked --release"
           strip: true
-          # This works around the issue in https://github.com/cross-rs/cross/issues/1450. The `main`
-          # branch updated its images long ago, but the last cross release, 0.2.5, is still using
-          # Ubuntu 16.04 as the base for some images.
-          cross-version: 4090beca3cfffa44371a5bba524de3a578aa46c3
+          cross-version: 107433fa9d71d7eb506cd5bf5467bab89edb7a52
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
