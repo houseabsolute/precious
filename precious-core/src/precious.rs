@@ -825,10 +825,7 @@ impl LintOrTidyRunner {
 
         let failures = results
             .into_iter()
-            .filter_map(|r| match r {
-                Ok(()) => None,
-                Err(e) => Some(e),
-            })
+            .filter_map(Result::err)
             .collect::<Vec<ActionFailure>>();
         if failures.is_empty() {
             Ok(None)

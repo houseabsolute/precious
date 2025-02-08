@@ -50,7 +50,7 @@ fn exec_output_summary(stdout: &str, stderr: &str) -> String {
     } else {
         output.push_str("\nStderr:\n");
         output.push_str(stderr);
-    };
+    }
     output.push('\n');
     output
 }

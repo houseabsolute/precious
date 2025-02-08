@@ -77,7 +77,7 @@ impl Finder {
                     .into());
                 }
             }
-        };
+        }
 
         let mut files = match self.mode.clone() {
             Mode::All => self.all_files()?,
@@ -219,7 +219,7 @@ impl Finder {
                     files.push(ent.into_path());
                 }
                 Err(e) => return Err(e.into()),
-            };
+            }
         }
 
         let excluder = self.excluder()?;
