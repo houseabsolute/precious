@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use log::debug;
-use once_cell::sync::{Lazy, OnceCell};
 use precious_helpers::exec;
 use pushd::Pushd;
 use regex::Regex;
@@ -11,6 +10,7 @@ use std::{
     fs,
     io::prelude::*,
     path::{Path, PathBuf},
+    sync::{LazyLock, OnceLock},
 };
 use tempfile::TempDir;
 
@@ -26,7 +26,7 @@ pub struct TestHelper {
     tests_data_gitignore_file: PathBuf,
 }
 
-static RERERE_RE: Lazy<Regex> = Lazy::new(|| Regex::new("Recorded preimage").unwrap());
+static RERERE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new("Recorded preimage").unwrap());
 
 impl TestHelper {
     const PATHS: &'static [&'static str] = &[
@@ -44,7 +44,7 @@ impl TestHelper {
     ];
 
     pub fn new() -> Result<Self> {
-        static LOGGER_INIT: OnceCell<bool> = OnceCell::new();
+        static LOGGER_INIT: OnceLock<bool> = OnceLock::new();
         LOGGER_INIT.get_or_init(|| {
             env_logger::builder().is_test(true).init();
             true

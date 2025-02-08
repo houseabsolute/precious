@@ -8,13 +8,13 @@ use crate::{
 use anyhow::Result;
 use clean_path::Clean;
 use log::{debug, error};
-use once_cell::sync::Lazy;
 use precious_helpers::exec;
 use regex::Regex;
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 use thiserror::Error;
 
@@ -47,7 +47,7 @@ pub enum FinderError {
     PrefixNotFound { path: PathBuf, prefix: PathBuf },
 }
 
-static KEEP_INDEX_RE: Lazy<Regex> = Lazy::new(|| Regex::new(".*").unwrap());
+static KEEP_INDEX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap());
 
 impl Finder {
     pub fn new(
