@@ -519,13 +519,7 @@ impl LintOrTidyRunner {
                 self.command.as_deref(),
                 self.label.as_deref(),
             )?;
-        self.run_all_commands(
-            "tidying",
-            tidiers,
-            |self_: &mut Self, files: &[PathBuf], tidier: &command::LintOrTidyCommand| {
-                self_.run_one_tidier(files, tidier)
-            },
-        )
+        self.run_all_commands("tidying", tidiers, Self::run_one_tidier)
     }
 
     fn lint(&mut self) -> Result<Exit> {
@@ -540,13 +534,7 @@ impl LintOrTidyRunner {
                 self.command.as_deref(),
                 self.label.as_deref(),
             )?;
-        self.run_all_commands(
-            "linting",
-            linters,
-            |self_: &mut Self, files: &[PathBuf], linter: &command::LintOrTidyCommand| {
-                self_.run_one_linter(files, linter)
-            },
-        )
+        self.run_all_commands("linting", linters, Self::run_one_linter)
     }
 
     fn run_all_commands<R>(
