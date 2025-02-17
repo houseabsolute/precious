@@ -19,7 +19,9 @@ command. It's features include:
 - Respects VCS ignore files and allows global and per-command excludes.
 - Language-agnostic, and it works the same way with single- or multi-language projects.
 - Easy integration with commit hooks and CI systems.
-- Commands are executed in parallel by default, with one process per CPU.
+- When a command needs to be invoked multiple times with different sets of files (for example, a
+  tidier that runs once per file), that command will be run multiple times in parallel, with one
+  process per CPU.
 - Commands can be grouped with labels, for example to just run a subset of commands for commit hooks
   and all commands in CI.
 
@@ -294,7 +296,8 @@ The root command takes the following flags:
 
 ### Parallel Execution
 
-Precious will always execute commands in parallel, with one process per CPU by default. The
+When `precious` needs to run the same command multiple times, for example once per file to be
+tidied, it will will always execute this in parallel, with one process per CPU by default. The
 execution is parallelized based on the command's invocation configuration. For example, on a 12 CPU
 system, a command that has `invoke = "per-file"` will be executed up to 12 times in parallel, with
 each command execution receiving one file.
