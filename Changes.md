@@ -1,12 +1,17 @@
 <!-- next-header -->
 
-## 0.7.4
+## 0.8.0
 
 - Reduced the verbosity of the info-level logs (seen with the `--verbose` flag). Previously, this
   would print out _all_ the files a command was operating on, which could be hundreds of files. Now
   it will only print a summary of the files. Similarly, info-level logs of the commands being run
   omit all of the paths if there is more than one path in the command being executed. Debug-level
   logs still include the full command.
+- The CLI args that set the log level, `--verbose`, `--debug`, and `--trace`, are now available on
+  both the main `precious` command, as well as all of its subcommands. This means you can now write
+  `precious lint --debug -a` instead of `precious --debug lint -a`. In order to support this without
+  breaking subcommands, the `--debug` arg no longer has a short flag version, because `-d` was
+  already being used by `precious lint` and `precious tidy` for the `--git-diff-from` arg. GH #76.
 
 ## 0.7.3 2024-06-16
 

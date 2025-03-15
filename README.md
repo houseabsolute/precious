@@ -288,11 +288,19 @@ The root command takes the following flags:
 | `-j`, `--jobs` `<jobs>`     | Number of parallel jobs (threads) to run (defaults to one per core) |
 | `-q`, `--quiet`             | Suppresses most output                                              |
 | `-a`, `--ascii`             | Replace super-fun Unicode symbols with terribly boring ASCII        |
-| `-v`, `--verbose`           | Enable verbose output                                               |
 | `-V`, `--version`           | Prints version information                                          |
-| `-d`, `--debug`             | Enable debugging output                                             |
-| `-t`, `--trace`             | Enable tracing output (maximum logging)                             |
 | `-h`, `--help`              | Prints help information                                             |
+
+### Logging Flags
+
+In addition, the root command and all subcommands accept the following flags to set the log level
+for `precious`:
+
+| Flag              | Description                             |
+| ----------------- | --------------------------------------- |
+| `-v`, `--verbose` | Enable verbose output                   |
+| `--debug`         | Enable debugging output                 |
+| `--trace`         | Enable tracing output (maximum logging) |
 
 ### Parallel Execution
 
