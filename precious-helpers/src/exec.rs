@@ -1,11 +1,19 @@
 use anyhow::{Context, Result};
 use itertools::Itertools;
 use log::{
-    Level::Debug,
-    {debug, error, log_enabled},
+    Level::{Debug, Info},
+    {debug, error, info, log_enabled, warn},
 };
 use regex::Regex;
-use std::{collections::HashMap, env, fs, path::Path, process};
+use std::{
+    collections::HashMap,
+    env, fs,
+    path::Path,
+    process,
+    sync::mpsc::{self, RecvTimeoutError},
+    thread::{self, JoinHandle},
+    time::Duration,
+};
 use thiserror::Error;
 use which::which;
 
@@ -156,9 +164,20 @@ fn output_from_command(
     exe: &str,
     args: &[&str],
 ) -> Result<process::Output> {
+    let estr = exec_string(exe, args);
+    let status = maybe_spawn_status_thread(estr.clone());
+
     let output = c.output()?;
     if let Some(code) = output.status.code() {
-        let estr = exec_string(exe, args);
+        if let Some((sender, thread)) = status {
+            if let Err(err) = sender.send(ThreadMessage::Terminate) {
+                warn!("Error terminating background status thread: {err}");
+            }
+            if let Err(err) = thread.join() {
+                warn!("Error joining background status thread: {err:?}");
+            }
+        }
+
         debug!("Ran [{}] and got exit code of {}", estr, code);
         if !ok_exit_codes.contains(&code) {
             return Err(Error::UnexpectedExitCode {
@@ -169,18 +188,45 @@ fn output_from_command(
             }
             .into());
         }
+    } else if output.status.success() {
+        error!("Ran {} successfully but it had no exit code", estr);
     } else {
-        let estr = exec_string(exe, args);
-        if output.status.success() {
-            error!("Ran {} successfully but it had no exit code", estr);
-        } else {
-            let signal = signal_from_status(output.status);
-            debug!("Ran {} which exited because of signal {}", estr, signal);
-            return Err(Error::ProcessKilledBySignal { cmd: estr, signal }.into());
-        }
+        let signal = signal_from_status(output.status);
+        debug!("Ran {} which exited because of signal {}", estr, signal);
+        return Err(Error::ProcessKilledBySignal { cmd: estr, signal }.into());
     }
 
     Ok(output)
+}
+
+enum ThreadMessage {
+    Terminate,
+}
+
+fn maybe_spawn_status_thread(
+    estr: String,
+) -> Option<(mpsc::Sender<ThreadMessage>, JoinHandle<()>)> {
+    if !log_enabled!(Info) {
+        return None;
+    }
+
+    let (sender, receiver) = mpsc::channel();
+    let handle = thread::spawn(move || loop {
+        match receiver.recv_timeout(Duration::from_secs(5)) {
+            Ok(ThreadMessage::Terminate) => {
+                break;
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                info!("Still running [{estr}]");
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                warn!("Got a disconnected error receiving message from main thread");
+                break;
+            }
+        }
+    });
+
+    Some((sender, handle))
 }
 
 fn exec_string(exe: &str, args: &[&str]) -> String {

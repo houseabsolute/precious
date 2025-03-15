@@ -12,6 +12,9 @@
   `precious lint --debug -a` instead of `precious --debug lint -a`. In order to support this without
   breaking subcommands, the `--debug` arg no longer has a short flag version, because `-d` was
   already being used by `precious lint` and `precious tidy` for the `--git-diff-from` arg. GH #76.
+- When run with `--verbose` or `--debug`, `precious` will print out a status message every 5 seconds
+  when running a command. This makes it clearer that things are still running, rather than totally
+  hung. GH #77.
 
 ## 0.7.3 2024-06-16
 
