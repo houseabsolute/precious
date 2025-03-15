@@ -93,14 +93,15 @@ pub struct App {
     quiet: bool,
 
     /// Enable verbose output
-    #[clap(long, short)]
+    #[clap(long, short, global = true)]
     verbose: bool,
     /// Enable debugging output
-    #[clap(long, short)]
+    #[clap(long, global = true)]
     debug: bool,
     /// Enable tracing output (maximum logging)
-    #[clap(long, short)]
+    #[clap(long, global = true)]
     trace: bool,
+
     #[clap(subcommand)]
     subcommand: Subcommand,
 }
