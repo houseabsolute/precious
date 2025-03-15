@@ -1,6 +1,6 @@
 <!-- next-header -->
 
-## 0.8.0
+## 0.8.0 2025-03-15
 
 - Reduced the verbosity of the info-level logs (seen with the `--verbose` flag). Previously, this
   would print out _all_ the files a command was operating on, which could be hundreds of files. Now
