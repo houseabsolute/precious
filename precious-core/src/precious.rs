@@ -83,8 +83,8 @@ pub struct App {
     #[clap(long, short)]
     config: Option<PathBuf>,
     /// Number of parallel jobs (threads) to run (defaults to one per core)
-    #[clap(long, short, default_value_t = 0)]
-    jobs: usize,
+    #[clap(long, short)]
+    jobs: Option<usize>,
     /// Replace super-fun Unicode symbols with terribly boring ASCII
     #[clap(long, short)]
     ascii: bool,
@@ -435,7 +435,7 @@ impl LintOrTidyRunner {
 
         let mode = Self::mode(&app)?;
         let quiet = app.quiet;
-        let jobs = app.jobs;
+        let jobs = app.jobs.unwrap_or_default();
         let (should_lint, paths, command, label) = match app.subcommand {
             Subcommand::Lint(a) => (true, a.paths, a.command, a.label),
             Subcommand::Tidy(a) => (false, a.paths, a.command, a.label),
