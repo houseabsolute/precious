@@ -1,19 +1,22 @@
 use anyhow::Result;
-use precious_helpers::exec;
+use precious_helpers::exec::Exec;
 use regex::Regex;
-use std::{collections::HashMap, env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 pub(crate) fn compile_precious() -> Result<()> {
     let cargo_build_re = Regex::new("Finished.+dev.+target")?;
-    let env = HashMap::new();
-    exec::run(
-        "cargo",
-        &["build", "--package", "precious"],
-        &env,
-        &[0],
-        Some(&[cargo_build_re]),
-        Some(&PathBuf::from("..")),
-    )?;
+
+    Exec::builder()
+        .exe("cargo")
+        .args(vec!["build", "--package", "precious"])
+        .ok_exit_codes(&[0])
+        .in_dir(Path::new(".."))
+        .ignore_stderr(vec![cargo_build_re])
+        .build()
+        .run()?;
     Ok(())
 }
 

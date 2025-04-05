@@ -2,7 +2,7 @@ use crate::paths::matcher::{Matcher, MatcherBuilder};
 use anyhow::Result;
 use itertools::Itertools;
 use log::{debug, info};
-use precious_helpers::exec;
+use precious_helpers::exec::Exec;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -431,26 +431,26 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let (mut cmd, before_paths_idx) =
-            self.command_for_paths(self.tidy_flags.as_deref(), &operating_on);
+        let (cmd, args) = self.cmd_and_args_for_exec(self.tidy_flags.as_deref(), &operating_on);
+
+        let exec = Exec::builder()
+            .exe(&cmd)
+            .args(args.iter().map(String::as_str).collect::<Vec<_>>())
+            .num_paths(operating_on.len())
+            .env(self.env.clone())
+            .ok_exit_codes(&self.ok_exit_codes)
+            .ignore_stderr(self.ignore_stderr.clone().unwrap_or_default())
+            .in_dir(&in_dir)
+            .build();
 
         info!(
             "Tidying [{}] with {} in [{}] using command [{}]",
-            files.iter().map(|p| p.to_string_lossy()).join(" "),
+            file_summary_for_log(files),
             self.name,
             in_dir.display(),
-            command_for_log(&cmd, before_paths_idx),
+            exec.loggable_command,
         );
-
-        let bin = cmd.remove(0);
-        exec::run(
-            &bin,
-            &cmd.iter().map(String::as_str).collect::<Vec<_>>(),
-            &self.env,
-            &self.ok_exit_codes,
-            self.ignore_stderr.as_deref(),
-            Some(&in_dir),
-        )?;
+        exec.run()?;
 
         if let Some(pm) = path_metadata {
             if self.paths_were_changed(pm)? {
@@ -474,26 +474,28 @@ impl LintOrTidyCommand {
 
         let in_dir = self.in_dir(files[0])?;
         let operating_on = self.operating_on(files, &in_dir)?;
-        let (mut cmd, before_paths_idx) =
-            self.command_for_paths(self.lint_flags.as_deref(), &operating_on);
+
+        let (cmd, args) = self.cmd_and_args_for_exec(self.lint_flags.as_deref(), &operating_on);
+
+        let exec = Exec::builder()
+            .exe(&cmd)
+            .args(args.iter().map(String::as_str).collect::<Vec<_>>())
+            .num_paths(operating_on.len())
+            .env(self.env.clone())
+            .ok_exit_codes(&self.ok_exit_codes)
+            .ignore_stderr(self.ignore_stderr.clone().unwrap_or_default())
+            .in_dir(&in_dir)
+            .build();
 
         info!(
             "Linting [{}] with {} in [{}] using command [{}]",
             file_summary_for_log(files),
             self.name,
             in_dir.display(),
-            command_for_log(&cmd, before_paths_idx),
+            exec.loggable_command,
         );
 
-        let bin = cmd.remove(0);
-        let result = exec::run(
-            &bin,
-            &cmd.iter().map(String::as_str).collect::<Vec<_>>(),
-            &self.env,
-            &self.ok_exit_codes,
-            self.ignore_stderr.as_deref(),
-            Some(&in_dir),
-        )?;
+        let result = exec.run()?;
 
         Ok(Some(LintOutcome {
             ok: !self.lint_failure_exit_codes.contains(&result.exit_code),
@@ -755,28 +757,28 @@ impl LintOrTidyCommand {
         })
     }
 
-    fn command_for_paths(
+    fn cmd_and_args_for_exec(
         &self,
         flags: Option<&[String]>,
         paths: &[PathBuf],
-    ) -> (Vec<String>, usize) {
-        let mut cmd = self.cmd.clone();
+    ) -> (String, Vec<String>) {
+        let mut args = self.cmd.clone();
+        let cmd = args.remove(0);
+
         if let Some(flags) = flags {
             for f in flags {
-                cmd.push(f.clone());
+                args.push(f.clone());
             }
         }
-
-        let idx = cmd.len();
 
         for p in paths {
             if let Some(pf) = &self.path_flag {
-                cmd.push(pf.clone());
+                args.push(pf.clone());
             }
-            cmd.push(p.to_string_lossy().to_string());
+            args.push(p.to_string_lossy().to_string());
         }
 
-        (cmd, idx)
+        (cmd, args)
     }
 
     pub(crate) fn paths_summary(&self, actual_invoke: ActualInvoke, paths: &[&Path]) -> String {
@@ -903,15 +905,6 @@ fn file_summary_for_log(files: &[&Path]) -> String {
     }
     let first3 = files.iter().take(3).map(|p| p.to_string_lossy()).join(" ");
     format!("{} ... and {} more", first3, files.len() - 3)
-}
-
-fn command_for_log(cmd: &[String], before_paths_idx: usize) -> String {
-    // If this is true, then there's only one path in the command.
-    if before_paths_idx == cmd.len() - 1 {
-        cmd.join(" ")
-    } else {
-        format!("{} <paths>", cmd[..before_paths_idx].join(" "))
-    }
 }
 
 fn replace_root(cmd: &[String], root: &Path) -> Vec<String> {
@@ -1678,67 +1671,6 @@ mod tests {
         assert!(command
             .maybe_path_metadata_for(ActualInvoke::Once, &[&cwd])?
             .is_none());
-
-        Ok(())
-    }
-
-    #[test]
-    #[parallel]
-    fn command_for_paths() -> Result<()> {
-        let command = LintOrTidyCommand {
-            cmd: vec![String::from("test")],
-            ..default_command()?
-        };
-        let paths = vec![PathBuf::from("app.go"), PathBuf::from("main.go")];
-
-        assert_eq!(
-            command.command_for_paths(None, &paths),
-            (
-                ["test", "app.go", "main.go"]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>(),
-                1
-            ),
-            "no flags",
-        );
-
-        let flags = vec![String::from("--flag")];
-        assert_eq!(
-            command.command_for_paths(Some(&flags), &paths),
-            (
-                ["test", "--flag", "app.go", "main.go"]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>(),
-                2
-            ),
-            "one flag",
-        );
-
-        let command = LintOrTidyCommand {
-            cmd: vec![String::from("test")],
-            path_flag: Some(String::from("--path-flag")),
-            ..default_command()?
-        };
-        assert_eq!(
-            command.command_for_paths(Some(&flags), &paths),
-            (
-                [
-                    "test",
-                    "--flag",
-                    "--path-flag",
-                    "app.go",
-                    "--path-flag",
-                    "main.go"
-                ]
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>(),
-                2
-            ),
-            "with path flags",
-        );
 
         Ok(())
     }

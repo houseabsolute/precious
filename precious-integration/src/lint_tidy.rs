@@ -1,7 +1,7 @@
 use crate::shared::{compile_precious, precious_path};
 use anyhow::{Context, Result};
 use itertools::Itertools;
-use precious_helpers::exec;
+use precious_helpers::exec::Exec;
 use precious_testhelper::TestHelper;
 use pretty_assertions::{assert_eq, assert_str_eq};
 use regex::{Captures, Regex};
@@ -50,23 +50,22 @@ fn all() -> Result<()> {
     let helper = set_up_for_tests()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
-    exec::run(
-        &precious,
-        &["lint", "--all"],
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
-    exec::run(
-        &precious,
-        &["tidy", "--all"],
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["tidy", "--all"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -78,23 +77,22 @@ fn git() -> Result<()> {
     helper.modify_files()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
-    exec::run(
-        &precious,
-        &["lint", "--git"],
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
-    exec::run(
-        &precious,
-        &["tidy", "--git"],
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--git"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["tidy", "--git"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -107,23 +105,22 @@ fn staged() -> Result<()> {
     helper.stage_all()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
-    exec::run(
-        &precious,
-        &["lint", "--staged"],
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
-    exec::run(
-        &precious,
-        &["tidy", "--staged"],
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--staged"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["tidy", "--staged"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -135,28 +132,26 @@ fn cli_paths() -> Result<()> {
     let files = helper.modify_files()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
+
     let mut args = vec!["lint"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    exec::run(
-        &precious,
-        &args,
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
+    Exec::builder()
+        .exe(&precious)
+        .args(args)
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
 
     let mut args = vec!["tidy"];
     args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
-    exec::run(
-        &precious,
-        &args,
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
+    Exec::builder()
+        .exe(&precious)
+        .args(args)
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -167,13 +162,25 @@ fn all_in_subdir() -> Result<()> {
     let helper = set_up_for_tests()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
 
     let mut cwd = helper.precious_root();
     cwd.push("src");
 
-    exec::run(&precious, &["lint", "--all"], &env, &[0], None, Some(&cwd))?;
-    exec::run(&precious, &["tidy", "--all"], &env, &[0], None, Some(&cwd))?;
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["tidy", "--all"])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -185,13 +192,25 @@ fn git_in_subdir() -> Result<()> {
     helper.modify_files()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
 
     let mut cwd = helper.precious_root();
     cwd.push("src");
 
-    exec::run(&precious, &["lint", "--git"], &env, &[0], None, Some(&cwd))?;
-    exec::run(&precious, &["tidy", "--git"], &env, &[0], None, Some(&cwd))?;
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--git"])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["tidy", "--git"])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -204,27 +223,25 @@ fn staged_in_subdir() -> Result<()> {
     helper.stage_all()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
 
     let mut cwd = helper.precious_root();
     cwd.push("src");
 
-    exec::run(
-        &precious,
-        &["lint", "--staged"],
-        &env,
-        &[0],
-        None,
-        Some(&cwd),
-    )?;
-    exec::run(
-        &precious,
-        &["tidy", "--staged"],
-        &env,
-        &[0],
-        None,
-        Some(&cwd),
-    )?;
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--staged"])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["tidy", "--staged"])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -236,27 +253,35 @@ fn cli_paths_in_subdir() -> Result<()> {
     helper.modify_files()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
 
     let mut cwd = helper.precious_root();
     cwd.push("src");
 
-    exec::run(
-        &precious,
-        &["lint", "module.rs", "../README.md", "../tests/data/foo.txt"],
-        &env,
-        &[0],
-        None,
-        Some(&cwd),
-    )?;
-    exec::run(
-        &precious,
-        &["tidy", "module.rs", "../README.md", "../tests/data/foo.txt"],
-        &env,
-        &[0],
-        None,
-        Some(&cwd),
-    )?;
+    Exec::builder()
+        .exe(&precious)
+        .args(vec![
+            "lint",
+            "module.rs",
+            "../README.md",
+            "../tests/data/foo.txt",
+        ])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec![
+            "tidy",
+            "module.rs",
+            "../README.md",
+            "../tests/data/foo.txt",
+        ])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -273,29 +298,27 @@ fn foo() -> u8   {
     helper.write_file("src/module.rs", content)?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
 
     let mut cwd = helper.precious_root();
     cwd.push("src");
 
     // This succeeds because we're not checking with rustfmt.
-    exec::run(
-        &precious,
-        &["lint", "--command", "true", "module.rs"],
-        &env,
-        &[0],
-        None,
-        Some(&cwd),
-    )?;
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--command", "true", "module.rs"])
+        .ok_exit_codes(&[0])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
+
     // This fails now that we check with rustfmt.
-    exec::run(
-        &precious,
-        &["lint", "module.rs"],
-        &env,
-        &[1],
-        None,
-        Some(&cwd),
-    )?;
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "module.rs"])
+        .ok_exit_codes(&[1])
+        .in_dir(&cwd)
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -309,58 +332,58 @@ fn exit_codes() -> Result<()> {
     let match_all_re = Regex::new(".*")?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
-    let out = exec::run(
-        &precious,
-        &["lint", "--all"],
-        &env,
-        &all_codes,
-        Some(&[match_all_re.clone()]),
-        Some(&helper.precious_root()),
-    )?;
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
     assert_eq!(out.exit_code, 0);
 
     helper.write_file("src/good.rs", "this is not valid rust")?;
 
-    let out = exec::run(
-        &precious,
-        &["lint", "--all"],
-        &env,
-        &all_codes,
-        Some(&[match_all_re.clone()]),
-        Some(&helper.precious_root()),
-    )?;
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
     assert_eq!(out.exit_code, 1);
 
-    let out = exec::run(
-        &precious,
-        &["foo", "--all"],
-        &env,
-        &all_codes,
-        Some(&[match_all_re.clone()]),
-        Some(&helper.precious_root()),
-    )?;
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["foo", "--all"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
     assert_eq!(out.exit_code, 2);
 
-    let out = exec::run(
-        &precious,
-        &["lint", "--foo"],
-        &env,
-        &all_codes,
-        Some(&[match_all_re.clone()]),
-        Some(&helper.precious_root()),
-    )?;
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--foo"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
     assert_eq!(out.exit_code, 2);
 
     helper.write_file("precious.toml", "this is not valid config")?;
-    let out = exec::run(
-        &precious,
-        &["lint", "--all"],
-        &env,
-        &all_codes,
-        Some(&[match_all_re.clone()]),
-        Some(&helper.precious_root()),
-    )?;
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
     assert_eq!(out.exit_code, 42);
 
     let config_missing_key = r#"
@@ -372,14 +395,14 @@ ok-exit-codes = 0
 lint-failure-exit-codes = 1
 "#;
     helper.write_file("precious.toml", config_missing_key)?;
-    let out = exec::run(
-        &precious,
-        &["lint", "--all"],
-        &env,
-        &all_codes,
-        Some(&[match_all_re.clone()]),
-        Some(&helper.precious_root()),
-    )?;
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
     assert_eq!(out.exit_code, 42);
 
     Ok(())
@@ -431,15 +454,14 @@ fn fix_is_tidy() -> Result<()> {
     let helper = set_up_for_tests()?;
 
     let precious = precious_path()?;
-    let env = HashMap::new();
-    exec::run(
-        &precious,
-        &["fix", "--all"],
-        &env,
-        &[0],
-        None,
-        Some(&helper.precious_root()),
-    )?;
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["fix", "--all"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
 
     Ok(())
 }
@@ -558,27 +580,19 @@ ok-exit-codes = 0
             helper.precious_root().to_string_lossy().to_string(),
         ),
     ]);
-    let _result = exec::run(
-        &precious,
-        &[
-            //"--debug",
-            "lint", "--all",
-        ],
-        &env,
-        &[0],
-        None, // Some(&[Regex::new(".*")?]),
-        Some(&helper.precious_root()),
-    )?;
-    // println!("STDERR");
-    // println!("{}", _result.stderr.as_deref().unwrap_or(""));
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&[0])
+        .env(env)
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
 
     let got = munge_invocation_output(td_path)?;
 
     let expect = expect.replace(" \\\n    ", " ");
-    // println!("GOT");
-    // println!("{got}");
-    // println!("EXPECT");
-    // println!("{expect}");
     assert_str_eq!(got, expect, "\n{config}");
 
     Ok(())

@@ -1,13 +1,12 @@
 use crate::shared::{compile_precious, precious_path};
 use anyhow::Result;
-use precious_helpers::exec::{self, Output};
+use precious_helpers::exec::{Exec, Output};
 use pushd::Pushd;
 use regex::Regex;
 use serial_test::serial;
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
 use std::{
-    collections::HashMap,
     fs::{self, File},
     path::Path,
 };
@@ -154,7 +153,6 @@ fn chdir_to_tempdir() -> Result<(TempDir, Pushd)> {
 
 fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<Output> {
     let precious = precious_path()?;
-    let env = HashMap::new();
     let mut args = vec!["config", "init"];
     for c in components {
         args.push("--component");
@@ -164,27 +162,25 @@ fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<
         args.push("--path");
         args.push(p);
     }
-    exec::run(
-        &precious,
-        &args,
-        &env,
-        &[0, 42],
-        Some(&[Regex::new(".*")?]),
-        None,
-    )
+
+    Exec::builder()
+        .exe(&precious)
+        .args(args)
+        .ok_exit_codes(&[0, 42])
+        .ignore_stderr(vec![Regex::new(".*")?])
+        .build()
+        .run()
 }
 
 fn init_with_auto() -> Result<Output> {
     let precious = precious_path()?;
-    let env = HashMap::new();
-    exec::run(
-        &precious,
-        &["config", "init", "--auto"],
-        &env,
-        &[0, 42],
-        Some(&[Regex::new(".*")?]),
-        None,
-    )
+
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["config", "init", "--auto"])
+        .ok_exit_codes(&[0, 42])
+        .build()
+        .run()
 }
 
 fn assert_file_exists(path: impl AsRef<Path>) -> Result<()> {

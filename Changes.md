@@ -1,5 +1,9 @@
 <!-- next-header -->
 
+- Made all info-level logging truncate the command being run when the full command contains many
+  paths. I missed some spots when I tried to do this in 0.8.0. This is a much more thorough change.
+  GH #80.
+
 ## 0.8.0 2025-03-15
 
 - Reduced the verbosity of the info-level logs (seen with the `--verbose` flag). Previously, this

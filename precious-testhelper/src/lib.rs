@@ -1,10 +1,9 @@
 use anyhow::{Context, Result};
 use log::debug;
-use precious_helpers::exec;
+use precious_helpers::exec::Exec;
 use pushd::Pushd;
 use regex::Regex;
 use std::{
-    collections::HashMap,
     env,
     ffi::OsString,
     fs,
@@ -92,19 +91,19 @@ impl TestHelper {
             self.write_file(p, content)?;
         }
 
-        self.run_git(&["init", "--initial-branch", "master"])?;
+        self.run_git(vec!["init", "--initial-branch", "master"])?;
 
         // If the tests are run in a totally clean environment they will blow
         // up if this isnt't set. This fixes
         // https://github.com/houseabsolute/precious/issues/15.
-        self.run_git(&["config", "user.email", "precious@example.com"])?;
+        self.run_git(vec!["config", "user.email", "precious@example.com"])?;
         // With this on I get line ending warnings from git on Windows if I
         // don't write out files with CRLF. Disabling this simplifies things
         // greatly.
-        self.run_git(&["config", "core.autocrlf", "false"])?;
+        self.run_git(vec!["config", "core.autocrlf", "false"])?;
 
         self.stage_all()?;
-        self.run_git(&["commit", "-m", "initial commit"])?;
+        self.run_git(vec!["commit", "-m", "initial commit"])?;
 
         Ok(())
     }
@@ -143,17 +142,17 @@ impl TestHelper {
     }
 
     pub fn stage_all(&self) -> Result<()> {
-        self.run_git(&["add", "."])
+        self.run_git(vec!["add", "."])
     }
 
     pub fn stage_some(&self, files: &[&Path]) -> Result<()> {
         let mut cmd = vec!["add"];
         cmd.append(&mut files.iter().map(|f| f.to_str().unwrap()).collect());
-        self.run_git(&cmd)
+        self.run_git(cmd)
     }
 
     pub fn commit_all(&self) -> Result<()> {
-        self.run_git(&["commit", "-a", "-m", "committed"])
+        self.run_git(vec!["commit", "-a", "-m", "committed"])
     }
 
     const ROOT_GITIGNORE: &'static str = "
@@ -184,14 +183,14 @@ generated.*
             args.push("-b");
         }
         args.push(branch);
-        exec::run(
-            "git",
-            &args,
-            &HashMap::new(),
-            &[0],
-            None,
-            Some(&self.git_root),
-        )?;
+
+        Exec::builder()
+            .exe("git")
+            .args(args)
+            .ok_exit_codes(&[0])
+            .in_dir(&self.git_root)
+            .build()
+            .run()?;
         Ok(())
     }
 
@@ -201,15 +200,14 @@ generated.*
             expect_codes.push(1);
         }
 
-        exec::run(
-            "git",
-            &["merge", "--quiet", "--no-ff", "--no-commit", "master"],
-            &HashMap::new(),
-            &expect_codes,
-            // If rerere is enabled, it prints to stderr.
-            Some(&[RERERE_RE.clone()]),
-            Some(&self.git_root),
-        )?;
+        Exec::builder()
+            .exe("git")
+            .args(vec!["merge", "--quiet", "--no-ff", "--no-commit", "master"])
+            .ok_exit_codes(&expect_codes)
+            .in_dir(&self.git_root)
+            .ignore_stderr(vec![RERERE_RE.clone()])
+            .build()
+            .run()?;
         Ok(())
     }
 
@@ -223,15 +221,14 @@ generated.*
         ])
     }
 
-    fn run_git(&self, args: &[&str]) -> Result<()> {
-        exec::run(
-            "git",
-            args,
-            &HashMap::new(),
-            &[0],
-            None,
-            Some(&self.git_root),
-        )?;
+    fn run_git(&self, args: Vec<&str>) -> Result<()> {
+        Exec::builder()
+            .exe("git")
+            .args(args)
+            .ok_exit_codes(&[0])
+            .in_dir(&self.git_root)
+            .build()
+            .run()?;
         Ok(())
     }
 

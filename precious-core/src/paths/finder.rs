@@ -8,10 +8,9 @@ use crate::{
 use anyhow::Result;
 use clean_path::Clean;
 use log::{debug, error};
-use precious_helpers::exec;
+use precious_helpers::exec::Exec;
 use regex::Regex;
 use std::{
-    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -109,14 +108,13 @@ impl Finder {
             return Ok(r.clone());
         }
 
-        let res = exec::run(
-            "git",
-            &["rev-parse", "--show-toplevel"],
-            &HashMap::new(),
-            &[0],
-            None,
-            Some(&self.project_root),
-        )?;
+        let res = Exec::builder()
+            .exe("git")
+            .args(vec!["rev-parse", "--show-toplevel"])
+            .ok_exit_codes(&[0])
+            .in_dir(&self.project_root)
+            .build()
+            .run()?;
 
         let stdout = res.stdout.ok_or(FinderError::CouldNotDetermineRepoRoot)?;
         self.git_root = Some(PathBuf::from(stdout.trim()));
@@ -158,13 +156,13 @@ impl Finder {
 
     fn git_modified_files(&mut self) -> Result<Vec<PathBuf>> {
         debug!("Getting modified files according to git");
-        self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM", "HEAD"])
+        self.files_from_git(vec!["diff", "--name-only", "--diff-filter=ACM", "HEAD"])
     }
 
     fn git_staged_files(&mut self) -> Result<Vec<PathBuf>> {
         debug!("Getting staged files according to git");
         self.maybe_git_stash()?;
-        self.files_from_git(&["diff", "--cached", "--name-only", "--diff-filter=ACM"])
+        self.files_from_git(vec!["diff", "--cached", "--name-only", "--diff-filter=ACM"])
     }
 
     fn maybe_git_stash(&mut self) -> Result<()> {
@@ -178,16 +176,14 @@ impl Finder {
         mm.push("MERGE_MODE");
 
         if !mm.exists() {
-            exec::run(
-                "git",
-                &["stash", "--keep-index"],
-                &HashMap::new(),
-                &[0],
-                // If there is a post-checkout hook, git will show any output
-                // it prints to stdout on stderr instead.
-                Some(&[KEEP_INDEX_RE.clone()]),
-                Some(&git_root),
-            )?;
+            Exec::builder()
+                .exe("git")
+                .args(vec!["stash", "--keep-index"])
+                .ok_exit_codes(&[0])
+                .ignore_stderr(vec![KEEP_INDEX_RE.clone()])
+                .in_dir(&git_root)
+                .build()
+                .run()?;
             self.stashed = true;
         }
 
@@ -196,7 +192,7 @@ impl Finder {
 
     fn git_modified_since(&mut self, since: &str) -> Result<Vec<PathBuf>> {
         let since_dot = format!("{since:}...");
-        self.files_from_git(&["diff", "--name-only", "--diff-filter=ACM", &since_dot])
+        self.files_from_git(vec!["diff", "--name-only", "--diff-filter=ACM", &since_dot])
     }
 
     fn walkdir_files(&self, root: &Path) -> Result<Vec<PathBuf>> {
@@ -230,19 +226,18 @@ impl Finder {
             .collect::<Vec<_>>())
     }
 
-    fn files_from_git(&mut self, args: &[&str]) -> Result<Vec<PathBuf>> {
+    fn files_from_git(&mut self, args: Vec<&str>) -> Result<Vec<PathBuf>> {
         let git_root = self.git_root()?;
-        let result = exec::run(
-            "git",
-            args,
-            &HashMap::new(),
-            &[0],
-            None,
-            Some(&self.project_root),
-        )?;
+        let output = Exec::builder()
+            .exe("git")
+            .args(args)
+            .ok_exit_codes(&[0])
+            .in_dir(&self.project_root)
+            .build()
+            .run()?;
         let excluder = self.excluder()?;
 
-        match result.stdout {
+        match output.stdout {
             Some(s) => Ok(
                 // In the common case where the git repo root and project root
                 // are the same, this isn't necessary, because git will give
@@ -262,7 +257,7 @@ impl Finder {
                             f.push(&pb);
                             if !f.exists() {
                                 debug!(
-                                    "The staged file at {rel:} was deleted so it will be ignored.",
+                                    "The staged file at {rel:} (abs path {}) was deleted so it will be ignored.",f.display(),
                                 );
                                 return None;
                             }
@@ -328,14 +323,13 @@ impl Drop for Finder {
             return;
         }
 
-        let res = exec::run(
-            "git",
-            &["stash", "pop"],
-            &HashMap::new(),
-            &[0],
-            None,
-            Some(&self.project_root),
-        );
+        let res = Exec::builder()
+            .exe("git")
+            .args(vec!["stash", "pop"])
+            .ok_exit_codes(&[0])
+            .in_dir(&self.project_root)
+            .build()
+            .run();
 
         if res.is_ok() {
             return;
