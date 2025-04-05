@@ -43,5 +43,7 @@ jobs:
           set -x
           curl https://mise.run | sh
           mise install
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Run precious lint --all"
         run: mise exec -- $HOME/.cargo/bin/precious --debug lint --all
