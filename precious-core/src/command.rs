@@ -73,7 +73,7 @@ impl fmt::Display for Invoke {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ActualInvoke {
     PerFile,
     PerDir,
