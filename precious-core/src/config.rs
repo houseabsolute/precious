@@ -1,7 +1,6 @@
 use crate::command::{self, Invoke, LintOrTidyCommandType, PathArgs, WorkingDir};
 use anyhow::Result;
 use indexmap::IndexMap;
-use log::warn;
 use serde::{de, de::Deserializer, Deserialize};
 use std::{
     collections::HashMap,
@@ -26,10 +25,6 @@ pub struct CommandConfig {
     pub(crate) working_dir: Option<WorkingDir>,
     #[serde(default, alias = "path-args")]
     pub(crate) path_args: Option<PathArgs>,
-    #[serde(default, alias = "run-mode")]
-    pub(crate) run_mode: Option<OldRunMode>,
-    #[serde(default)]
-    pub(crate) chdir: Option<bool>,
     #[serde(deserialize_with = "string_or_seq_string")]
     pub(crate) cmd: Vec<String>,
     #[serde(default)]
@@ -68,16 +63,6 @@ pub struct CommandConfig {
     pub(crate) labels: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub(crate) enum OldRunMode {
-    #[serde(rename = "files")]
-    Files,
-    #[serde(rename = "dirs")]
-    Dirs,
-    #[serde(rename = "root")]
-    Root,
-}
-
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(default, deserialize_with = "string_or_seq_string")]
@@ -89,10 +74,6 @@ pub struct Config {
 pub(crate) enum ConfigError {
     #[error("File at {} cannot be read: {error:}", file.display())]
     FileCannotBeRead { file: PathBuf, error: String },
-    #[error(
-        "The {name:} command mixes old command params (run_mode or chdir) with new command params (invoke, working-dir, or path-args)"
-    )]
-    CannotMixOldAndNewCommandParams { name: String },
     #[error(r#"Cannot set invoke = "per-file" and path-args = "{path_args:}""#)]
     CannotInvokePerFileWithPathArgs { path_args: PathArgs },
     #[error(r#"Cannot set invoke = "per-dir" and path-args = "{path_args:}""#)]
@@ -429,14 +410,8 @@ impl CommandConfig {
         project_root: &Path,
         name: String,
     ) -> Result<command::LintOrTidyCommandParams> {
-        let (invoke, working_dir, path_args) = Self::invoke_args(
-            &name,
-            self.run_mode,
-            self.chdir,
-            self.invoke,
-            self.working_dir,
-            self.path_args,
-        )?;
+        let (invoke, working_dir, path_args) =
+            Self::invoke_args(self.invoke, self.working_dir, self.path_args)?;
         Ok(command::LintOrTidyCommandParams {
             project_root: project_root.to_owned(),
             name,
@@ -459,54 +434,10 @@ impl CommandConfig {
     }
 
     fn invoke_args(
-        name: &str,
-        run_mode: Option<OldRunMode>,
-        chdir: Option<bool>,
         invoke: Option<Invoke>,
         working_dir: Option<WorkingDir>,
         path_args: Option<PathArgs>,
     ) -> Result<(Invoke, WorkingDir, PathArgs)> {
-        if (run_mode.is_some() || chdir.is_some())
-            && (invoke.is_some() || working_dir.is_some() || path_args.is_some())
-        {
-            return Err(ConfigError::CannotMixOldAndNewCommandParams {
-                name: name.to_owned(),
-            }
-            .into());
-        }
-
-        // This translates the old config options into their equivalent new
-        // options.
-        if run_mode.is_some() || chdir.is_some() {
-            let (article, plural, options) = match (run_mode, chdir) {
-                (Some(_), None) => ("a ", "", "run-mode"),
-                (None, Some(_)) => ("a ", "", "chdir"),
-                _ => ("", "s", "run-mode and chdir"),
-            };
-            warn!("The {name} command is using {article:}deprecated config option{plural:}: {options}");
-
-            match (run_mode, chdir) {
-                (Some(OldRunMode::Files) | None, Some(false) | None) => {
-                    return Ok((Invoke::PerFile, WorkingDir::Root, PathArgs::File))
-                }
-                (Some(OldRunMode::Files) | None, Some(true)) => {
-                    return Ok((Invoke::PerFile, WorkingDir::Dir, PathArgs::File))
-                }
-                (Some(OldRunMode::Dirs), Some(false) | None) => {
-                    return Ok((Invoke::PerDir, WorkingDir::Root, PathArgs::Dir))
-                }
-                (Some(OldRunMode::Dirs), Some(true)) => {
-                    return Ok((Invoke::PerDir, WorkingDir::Dir, PathArgs::None))
-                }
-                (Some(OldRunMode::Root), Some(false) | None) => {
-                    return Ok((Invoke::Once, WorkingDir::Root, PathArgs::Dot))
-                }
-                (Some(OldRunMode::Root), Some(true)) => {
-                    return Ok((Invoke::Once, WorkingDir::Root, PathArgs::None))
-                }
-            }
-        }
-
         let invoke = invoke.unwrap_or(Invoke::PerFile);
         let working_dir = working_dir.unwrap_or(WorkingDir::Root);
         let path_args = path_args.unwrap_or(PathArgs::File);
@@ -548,125 +479,6 @@ mod tests {
     use serial_test::parallel;
     use test_case::test_case;
 
-    #[test_case(
-        Some("files"),
-        Some(false),
-        Invoke::PerFile,
-        WorkingDir::Root,
-        PathArgs::File ;
-        "files + false"
-    )]
-    #[test_case(
-        Some("files"),
-        Some(true),
-        Invoke::PerFile,
-        WorkingDir::Dir,
-        PathArgs::File ;
-        "files + true"
-    )]
-    #[test_case(
-        Some("dirs"),
-        Some(false),
-        Invoke::PerDir,
-        WorkingDir::Root,
-        PathArgs::Dir ;
-        "dirs + false"
-    )]
-    #[test_case(
-        Some("dirs"),
-        Some(true),
-        Invoke::PerDir,
-        WorkingDir::Dir,
-        PathArgs::None ;
-        "dirs + true"
-    )]
-    #[test_case(
-        Some("root"),
-        Some(false),
-        Invoke::Once,
-        WorkingDir::Root,
-        PathArgs::Dot ;
-        "root + false"
-    )]
-    #[test_case(
-        Some("root"),
-        Some(true),
-        Invoke::Once,
-        WorkingDir::Root,
-        PathArgs::None ;
-        "root + true"
-    )]
-    #[test_case(
-        Some("files"),
-        None,
-        Invoke::PerFile,
-        WorkingDir::Root,
-        PathArgs::File ;
-        "files + None"
-    )]
-    #[test_case(
-        Some("dirs"),
-        None,
-        Invoke::PerDir,
-        WorkingDir::Root,
-        PathArgs::Dir ;
-        "dirs + None"
-    )]
-    #[test_case(
-        Some("root"),
-        None,
-        Invoke::Once,
-        WorkingDir::Root,
-        PathArgs::Dot ;
-        "root + None"
-    )]
-    #[test_case(
-        None,
-        Some(true),
-        Invoke::PerFile,
-        WorkingDir::Dir,
-        PathArgs::File ;
-        "None + true"
-    )]
-    #[parallel]
-    fn pre_0_4_0_command_config(
-        run_mode: Option<&str>,
-        chdir: Option<bool>,
-        invoke: Invoke,
-        working_dir: WorkingDir,
-        path_args: PathArgs,
-    ) -> Result<()> {
-        let root = Path::new("/does-not-matter");
-        let mut toml_text = String::from(
-            r#"
-                [commands.c1]
-                type    = "tidy"
-                include = "**/*.rs"
-                cmd     = "cmd"
-                ok-exit-codes = 0
-            "#,
-        );
-        if let Some(run_mode) = run_mode {
-            toml_text.push_str(&format!("run-mode = \"{run_mode}\"\n"));
-        }
-        if let Some(chdir) = chdir {
-            toml_text.push_str(&format!("chdir = {chdir}\n"));
-        }
-
-        let config: Config = toml::from_str(&toml_text)?;
-        let params = config
-            .commands
-            .into_iter()
-            .next()
-            .map(|(name, conf)| conf.into_command_params(root, name))
-            .unwrap()?;
-        assert_eq!(params.invoke, invoke, "invoke");
-        assert_eq!(params.working_dir, working_dir, "working_dir");
-        assert_eq!(params.path_args, path_args, "path_args");
-
-        Ok(())
-    }
-
     #[test]
     #[parallel]
     fn command_order_is_preserved1() -> Result<()> {
@@ -680,11 +492,11 @@ mod tests {
             lint-failure-exit-codes = 1
 
             [commands.clippy]
-            type     = "lint"
-            include  = "**/*.rs"
-            run-mode = "root"
-            chdir    = true
-            cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
+            type      = "lint"
+            include   = "**/*.rs"
+            invoke    = "once"
+            path-args = "none"
+            cmd       = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok-exit-codes = 0
             lint-failure-exit-codes = 101
 
@@ -715,11 +527,11 @@ mod tests {
     fn command_order_is_preserved2() -> Result<()> {
         let toml_text = r#"
             [commands.clippy]
-            type     = "lint"
-            include  = "**/*.rs"
-            run-mode = "root"
-            chdir    = true
-            cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
+            type      = "lint"
+            include   = "**/*.rs"
+            invoke    = "once"
+            path-args = "none"
+            cmd       = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok-exit-codes = 0
             lint-failure-exit-codes = 101
 
@@ -767,11 +579,11 @@ mod tests {
             lint-failure-exit-codes = 1
 
             [commands.clippy]
-            type     = "lint"
-            include  = "**/*.rs"
-            run-mode = "root"
-            chdir    = true
-            cmd      = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
+            type      = "lint"
+            include   = "**/*.rs"
+            invoke    = "once"
+            path-args = "none"
+            cmd       = "$PRECIOUS_ROOT/dev/bin/force-clippy.sh"
             ok-exit-codes = 0
             lint-failure-exit-codes = 101
 
@@ -873,8 +685,6 @@ mod tests {
             path_args: Some(path_args),
             include: vec![String::from("**/*.rs")],
             exclude: vec![],
-            run_mode: None,
-            chdir: None,
             cmd: vec![String::from("some-linter")],
             env: Default::default(),
             lint_flags: vec![],
@@ -914,8 +724,6 @@ mod tests {
             path_args: None,
             include: vec![String::from("**/*.rs")],
             exclude: vec![],
-            run_mode: None,
-            chdir: None,
             cmd: vec![String::from("some-linter")],
             env: Default::default(),
             lint_flags: vec![],

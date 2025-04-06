@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+- Removed support for the deprecated `run-mode` and `chdir` config keys. See
+  [the docs on upgrading to the new configuration keys](https://github.com/houseabsolute/precious/blob/master/docs/upgrade-from-0.3.0-to-0.4.0.md).
 - When running `precious config init`, the top-level `exclude` key was incorrectly generated as
   `excludes`. Fixed by @oalders (Olaf Alders). GH #84.
 
