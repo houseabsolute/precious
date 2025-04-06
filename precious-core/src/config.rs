@@ -46,7 +46,7 @@ pub struct CommandConfig {
         deserialize_with = "string_or_seq_string"
     )]
     pub(crate) tidy_flags: Vec<String>,
-    #[serde(default = "empty_string", alias = "path-flag")]
+    #[serde(default = "String::new", alias = "path-flag")]
     pub(crate) path_flag: String,
     #[serde(alias = "ok-exit-codes", deserialize_with = "u8_or_seq_u8")]
     pub(crate) ok_exit_codes: Vec<u8>,
@@ -76,10 +76,6 @@ pub(crate) enum OldRunMode {
     Dirs,
     #[serde(rename = "root")]
     Root,
-}
-
-fn empty_string() -> String {
-    String::new()
 }
 
 #[derive(Clone, Debug, Deserialize)]
