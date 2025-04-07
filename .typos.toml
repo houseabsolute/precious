@@ -1,4 +1,8 @@
 [default.extend-words]
-# These are golangci-lint imports
+# These are golangci-lint linters, used int he config gen for Go.
 decorder = "decorder"
 importas = "importas"
+# These are field names in the precious code.
+excluder = "excluder"
+includer = "includer"
+typ = "typ"
