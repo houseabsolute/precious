@@ -404,7 +404,7 @@ fn print_config(
     for (name, c) in config.command_info() {
         table.add_row(vec![
             Cell::new(name),
-            Cell::new(c.command_type),
+            Cell::new(c.typ),
             Cell::new(c.cmd.join(" ")),
         ]);
     }
@@ -565,15 +565,11 @@ impl LintOrTidyRunner {
     fn run_all_commands<R>(
         &mut self,
         action: &str,
-        commands: Vec<command::LintOrTidyCommand>,
+        commands: Vec<command::Command>,
         run_command: R,
     ) -> Result<Exit>
     where
-        R: Fn(
-            &mut Self,
-            &[PathBuf],
-            &command::LintOrTidyCommand,
-        ) -> Result<Option<Vec<ActionFailure>>>,
+        R: Fn(&mut Self, &[PathBuf], &command::Command) -> Result<Option<Vec<ActionFailure>>>,
     {
         if commands.is_empty() {
             if let Some(c) = &self.command {
@@ -667,7 +663,7 @@ impl LintOrTidyRunner {
     fn run_one_tidier(
         &mut self,
         files: &[PathBuf],
-        t: &command::LintOrTidyCommand,
+        t: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self,
                       actual_invoke: ActualInvoke,
@@ -727,7 +723,7 @@ impl LintOrTidyRunner {
     fn run_one_linter(
         &mut self,
         files: &[PathBuf],
-        l: &command::LintOrTidyCommand,
+        l: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self,
                       actual_invoke: ActualInvoke,
@@ -802,7 +798,7 @@ impl LintOrTidyRunner {
         &mut self,
         what: &str,
         files: &[PathBuf],
-        c: &command::LintOrTidyCommand,
+        c: &command::Command,
         runner: R,
     ) -> Result<Option<Vec<ActionFailure>>>
     where

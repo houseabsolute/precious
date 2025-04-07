@@ -15,7 +15,7 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum LintOrTidyCommandType {
+pub enum CommandType {
     #[serde(rename = "lint")]
     Lint,
     #[serde(rename = "tidy")]
@@ -24,22 +24,22 @@ pub enum LintOrTidyCommandType {
     Both,
 }
 
-impl LintOrTidyCommandType {
+impl CommandType {
     fn what(self) -> &'static str {
         match self {
-            LintOrTidyCommandType::Lint => "linter",
-            LintOrTidyCommandType::Tidy => "tidier",
-            LintOrTidyCommandType::Both => "linter/tidier",
+            CommandType::Lint => "linter",
+            CommandType::Tidy => "tidier",
+            CommandType::Both => "linter/tidier",
         }
     }
 }
 
-impl fmt::Display for LintOrTidyCommandType {
+impl fmt::Display for CommandType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            LintOrTidyCommandType::Lint => "lint",
-            LintOrTidyCommandType::Tidy => "tidy",
-            LintOrTidyCommandType::Both => "both",
+            CommandType::Lint => "lint",
+            CommandType::Tidy => "tidy",
+            CommandType::Both => "both",
         })
     }
 }
@@ -164,10 +164,10 @@ enum CommandError {
 
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct LintOrTidyCommand {
+pub struct Command {
     project_root: PathBuf,
     pub name: String,
-    typ: LintOrTidyCommandType,
+    typ: CommandType,
     filter: Filter,
     invocation: Invocation,
     execution: Execution,
@@ -200,10 +200,10 @@ struct Execution {
 }
 
 #[derive(Debug)]
-pub struct LintOrTidyCommandParams {
+pub struct CommandParams {
     pub project_root: PathBuf,
     pub name: String,
-    pub command_type: LintOrTidyCommandType,
+    pub typ: CommandType,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub invoke: Invoke,
@@ -249,11 +249,11 @@ struct PathInfo {
 
 // This should be safe because we never mutate the Command struct in any of its
 // methods.
-unsafe impl Sync for LintOrTidyCommand {}
+unsafe impl Sync for Command {}
 
-impl LintOrTidyCommand {
-    pub fn new(params: LintOrTidyCommandParams) -> Result<LintOrTidyCommand> {
-        if let LintOrTidyCommandType::Both = params.command_type {
+impl Command {
+    pub fn new(params: CommandParams) -> Result<Command> {
+        if let CommandType::Both = params.typ {
             if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
                 return Err(CommandError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
             }
@@ -275,10 +275,10 @@ impl LintOrTidyCommand {
 
         let cmd = replace_root(&params.cmd, &params.project_root);
         let root = params.project_root.clone();
-        Ok(LintOrTidyCommand {
+        Ok(Command {
             project_root: params.project_root,
             name: params.name,
-            typ: params.command_type,
+            typ: params.typ,
             filter: Filter {
                 includer: MatcherBuilder::new(&root).with(&params.include)?.build()?,
                 include: params.include,
@@ -439,7 +439,7 @@ impl LintOrTidyCommand {
         actual_invoke: ActualInvoke,
         files: &[&Path],
     ) -> Result<Option<TidyOutcome>> {
-        self.require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)?;
+        self.require_is_not_command_type("tidy", CommandType::Lint)?;
 
         if !self.should_act_on_files(actual_invoke, files)? {
             return Ok(None);
@@ -485,7 +485,7 @@ impl LintOrTidyCommand {
         actual_invoke: ActualInvoke,
         files: &[&Path],
     ) -> Result<Option<LintOutcome>> {
-        self.require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)?;
+        self.require_is_not_command_type("lint", CommandType::Tidy)?;
 
         if !self.should_act_on_files(actual_invoke, files)? {
             return Ok(None);
@@ -530,7 +530,7 @@ impl LintOrTidyCommand {
     fn require_is_not_command_type(
         &self,
         method: &'static str,
-        not_allowed: LintOrTidyCommandType,
+        not_allowed: CommandType,
     ) -> Result<()> {
         if not_allowed == self.typ {
             return Err(CommandError::CannotMethodWithCommand {
@@ -956,12 +956,12 @@ mod tests {
         MatcherBuilder::new("/").with(globs)?.build()
     }
 
-    fn default_command() -> LintOrTidyCommand {
-        LintOrTidyCommand {
+    fn default_command() -> Command {
+        Command {
             // These params will be ignored
             project_root: PathBuf::new(),
             name: String::new(),
-            typ: LintOrTidyCommandType::Lint,
+            typ: CommandType::Lint,
             filter: Filter {
                 includer: matcher(&[]).unwrap(),
                 include: vec![],
@@ -1160,14 +1160,14 @@ mod tests {
     #[parallel]
     fn require_is_not_command_type_with_lint_command() -> Result<()> {
         let mut command = default_command();
-        command.typ = LintOrTidyCommandType::Lint;
+        command.typ = CommandType::Lint;
 
         assert!(command
-            .require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)
+            .require_is_not_command_type("lint", CommandType::Tidy)
             .is_ok());
         assert_eq!(
             command
-                .require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)
+                .require_is_not_command_type("tidy", CommandType::Lint)
                 .unwrap_err()
                 .downcast::<CommandError>()
                 .unwrap(),
@@ -1185,14 +1185,14 @@ mod tests {
     #[parallel]
     fn require_is_not_command_type_with_tidy_command() -> Result<()> {
         let mut command = default_command();
-        command.typ = LintOrTidyCommandType::Tidy;
+        command.typ = CommandType::Tidy;
 
         assert!(command
-            .require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)
+            .require_is_not_command_type("tidy", CommandType::Lint)
             .is_ok());
         assert_eq!(
             command
-                .require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)
+                .require_is_not_command_type("lint", CommandType::Tidy)
                 .unwrap_err()
                 .downcast::<CommandError>()
                 .unwrap(),
@@ -1210,13 +1210,13 @@ mod tests {
     #[parallel]
     fn require_is_not_command_type_with_both_command() -> Result<()> {
         let mut command = default_command();
-        command.typ = LintOrTidyCommandType::Both;
+        command.typ = CommandType::Both;
 
         assert!(command
-            .require_is_not_command_type("tidy", LintOrTidyCommandType::Lint)
+            .require_is_not_command_type("tidy", CommandType::Lint)
             .is_ok());
         assert!(command
-            .require_is_not_command_type("lint", LintOrTidyCommandType::Tidy)
+            .require_is_not_command_type("lint", CommandType::Tidy)
             .is_ok());
 
         Ok(())
@@ -1228,7 +1228,7 @@ mod tests {
         let mut command = default_command();
         command.project_root = PathBuf::from("/foo/bar");
         command.name = String::from("Test");
-        command.typ = LintOrTidyCommandType::Lint;
+        command.typ = CommandType::Lint;
         command.filter.includer = matcher(&["**/*.go", "!this/file.go"])?;
         command.filter.excluder = matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?;
 
@@ -1273,7 +1273,7 @@ mod tests {
         let mut command = default_command();
         command.project_root = PathBuf::from("/foo/bar");
         command.name = String::from("Test");
-        command.typ = LintOrTidyCommandType::Lint;
+        command.typ = CommandType::Lint;
         command.filter.includer = matcher(&["**/*.go", "!this/file.go"])?;
         command.filter.excluder = matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?;
         command.invocation.invoke = Invoke::PerDir;
@@ -1324,7 +1324,7 @@ mod tests {
         let mut command = default_command();
         command.project_root = PathBuf::from("/foo/bar");
         command.name = String::from("Test");
-        command.typ = LintOrTidyCommandType::Lint;
+        command.typ = CommandType::Lint;
         command.filter.includer = matcher(&["**/*.go", "!this/file.go"])?;
         command.filter.excluder = matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?;
         command.invocation.invoke = Invoke::Once;

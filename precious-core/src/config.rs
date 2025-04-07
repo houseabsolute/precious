@@ -1,4 +1,4 @@
-use crate::command::{self, Invoke, LintOrTidyCommandType, PathArgs, WorkingDir};
+use crate::command::{self, CommandType, Invoke, PathArgs, WorkingDir};
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{de, de::Deserializer, Deserialize};
@@ -14,7 +14,7 @@ use thiserror::Error;
 #[allow(clippy::module_name_repetitions)]
 pub struct CommandConfig {
     #[serde(rename = "type")]
-    pub(crate) command_type: LintOrTidyCommandType,
+    pub(crate) typ: CommandType,
     #[serde(deserialize_with = "string_or_seq_string")]
     pub(crate) include: Vec<String>,
     #[serde(default, deserialize_with = "string_or_seq_string")]
@@ -352,8 +352,8 @@ impl Config {
         project_root: &Path,
         command: Option<&str>,
         label: Option<&str>,
-    ) -> Result<Vec<command::LintOrTidyCommand>> {
-        self.into_commands(project_root, command, label, LintOrTidyCommandType::Tidy)
+    ) -> Result<Vec<command::Command>> {
+        self.into_commands(project_root, command, label, CommandType::Tidy)
     }
 
     pub(crate) fn into_lint_commands(
@@ -361,8 +361,8 @@ impl Config {
         project_root: &Path,
         command: Option<&str>,
         label: Option<&str>,
-    ) -> Result<Vec<command::LintOrTidyCommand>> {
-        self.into_commands(project_root, command, label, LintOrTidyCommandType::Lint)
+    ) -> Result<Vec<command::Command>> {
+        self.into_commands(project_root, command, label, CommandType::Lint)
     }
 
     fn into_commands(
@@ -370,9 +370,9 @@ impl Config {
         project_root: &Path,
         command: Option<&str>,
         label: Option<&str>,
-        command_type: LintOrTidyCommandType,
-    ) -> Result<Vec<command::LintOrTidyCommand>> {
-        let mut commands: Vec<command::LintOrTidyCommand> = vec![];
+        typ: CommandType,
+    ) -> Result<Vec<command::Command>> {
+        let mut commands: Vec<command::Command> = vec![];
         for (name, c) in self.commands {
             if let Some(c) = command {
                 if name != c {
@@ -384,7 +384,7 @@ impl Config {
                 continue;
             }
 
-            if c.command_type != command_type && c.command_type != LintOrTidyCommandType::Both {
+            if c.typ != typ && c.typ != CommandType::Both {
                 continue;
             }
 
@@ -400,8 +400,8 @@ impl Config {
 }
 
 impl CommandConfig {
-    fn into_command(self, project_root: &Path, name: String) -> Result<command::LintOrTidyCommand> {
-        let n = command::LintOrTidyCommand::new(self.into_command_params(project_root, name)?)?;
+    fn into_command(self, project_root: &Path, name: String) -> Result<command::Command> {
+        let n = command::Command::new(self.into_command_params(project_root, name)?)?;
         Ok(n)
     }
 
@@ -409,13 +409,13 @@ impl CommandConfig {
         self,
         project_root: &Path,
         name: String,
-    ) -> Result<command::LintOrTidyCommandParams> {
+    ) -> Result<command::CommandParams> {
         let (invoke, working_dir, path_args) =
             Self::invoke_args(self.invoke, self.working_dir, self.path_args)?;
-        Ok(command::LintOrTidyCommandParams {
+        Ok(command::CommandParams {
             project_root: project_root.to_owned(),
             name,
-            command_type: self.command_type,
+            typ: self.typ,
             include: self.include,
             exclude: self.exclude,
             invoke,
@@ -679,7 +679,7 @@ mod tests {
         expect_err: ConfigError,
     ) -> Result<()> {
         let config = CommandConfig {
-            command_type: LintOrTidyCommandType::Lint,
+            typ: CommandType::Lint,
             invoke: Some(invoke),
             working_dir: Some(working_dir),
             path_args: Some(path_args),
@@ -718,7 +718,7 @@ mod tests {
         expect_match: bool,
     ) -> Result<()> {
         let config = CommandConfig {
-            command_type: LintOrTidyCommandType::Lint,
+            typ: CommandType::Lint,
             invoke: None,
             working_dir: None,
             path_args: None,
