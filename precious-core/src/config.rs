@@ -4,8 +4,7 @@ use indexmap::IndexMap;
 use serde::{de, de::Deserializer, Deserialize};
 use std::{
     collections::HashMap,
-    fmt, fs,
-    marker::PhantomData,
+    fs,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
@@ -84,250 +83,81 @@ pub(crate) enum ConfigError {
     Toml(#[from] toml::de::Error),
 }
 
-// Copied from https://stackoverflow.com/a/43627388 - CC-BY-SA 3.0
+// Provided by Claude.ai. This is much simpler than how this used to work.
 fn string_or_seq_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct StringOrVec(PhantomData<Vec<String>>);
-
-    impl<'de> de::Visitor<'de> for StringOrVec {
-        type Value = Vec<String>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("string or list of strings")
-        }
-
-        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(vec![value.to_owned()])
-        }
-
-        fn visit_seq<S>(self, visitor: S) -> Result<Self::Value, S::Error>
-        where
-            S: de::SeqAccess<'de>,
-        {
-            Deserialize::deserialize(de::value::SeqAccessDeserializer::new(visitor))
-        }
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        String(String),
+        Vec(Vec<String>),
     }
 
-    deserializer.deserialize_any(StringOrVec(PhantomData))
+    match StringOrVec::deserialize(deserializer)? {
+        StringOrVec::String(s) => Ok(vec![s]),
+        StringOrVec::Vec(v) => Ok(v),
+    }
 }
 
-#[allow(clippy::too_many_lines)]
 fn u8_or_seq_u8<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct U8OrVec(PhantomData<Vec<u8>>);
-
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    impl<'de> de::Visitor<'de> for U8OrVec {
-        type Value = Vec<u8>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("integer or list of integers, each from 0-255")
-        }
-
-        fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if value < 0 {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(i64::from(value)),
-                    &"an integer from 0-255",
-                ));
-            }
-
-            Ok(vec![value as u8])
-        }
-
-        fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if value < 0 || value > i16::from(u8::MAX) {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(i64::from(value)),
-                    &"an integer from 0-255",
-                ));
-            }
-
-            Ok(vec![value as u8])
-        }
-
-        fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if value < 0 || value > i32::from(u8::MAX) {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(i64::from(value)),
-                    &"an integer from 0-255",
-                ));
-            }
-
-            Ok(vec![value as u8])
-        }
-
-        fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if value < 0 || value > i64::from(u8::MAX) {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Signed(value),
-                    &"an integer from 0-255",
-                ));
-            }
-
-            Ok(vec![value as u8])
-        }
-
-        fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(vec![value])
-        }
-
-        fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if value > u16::from(u8::MAX) {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Unsigned(u64::from(value)),
-                    &"an integer from 0-255",
-                ));
-            }
-
-            Ok(vec![value as u8])
-        }
-
-        fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if value > u32::from(u8::MAX) {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Unsigned(u64::from(value)),
-                    &"an integer from 0-255",
-                ));
-            }
-
-            Ok(vec![value as u8])
-        }
-
-        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            if value > u64::from(u8::MAX) {
-                return Err(de::Error::invalid_type(
-                    de::Unexpected::Unsigned(value),
-                    &"an integer from 0-255",
-                ));
-            }
-
-            Ok(vec![value as u8])
-        }
-
-        fn visit_seq<S>(self, visitor: S) -> Result<Self::Value, S::Error>
-        where
-            S: de::SeqAccess<'de>,
-        {
-            Deserialize::deserialize(de::value::SeqAccessDeserializer::new(visitor))
-        }
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum U8OrVec {
+        U8(u8),
+        Vec(Vec<u8>),
     }
 
-    deserializer.deserialize_any(U8OrVec(PhantomData))
+    match U8OrVec::deserialize(deserializer)? {
+        U8OrVec::U8(s) => Ok(vec![s]),
+        U8OrVec::Vec(v) => Ok(v),
+    }
 }
 
 fn working_dir<'de, D>(deserializer: D) -> Result<Option<WorkingDir>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct WorkingDirOrChdirTo(PhantomData<Option<WorkingDir>>);
-
-    impl<'de> de::Visitor<'de> for WorkingDirOrChdirTo {
-        type Value = Option<WorkingDir>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str(r#"one of "root", "dir", or a chdir-to map"#)
-        }
-
-        fn visit_none<E>(self) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(None)
-        }
-
-        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            deserializer.deserialize_any(WorkingDirOrChdirTo(PhantomData))
-        }
-
-        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            match value {
-                "root" => Ok(Some(WorkingDir::Root)),
-                "dir" => Ok(Some(WorkingDir::Dir)),
-                _ => Err(E::invalid_value(
-                    de::Unexpected::Str(value),
-                    &r#""root" or "dir""#,
-                )),
-            }
-        }
-
-        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-        where
-            A: de::MapAccess<'de>,
-        {
-            let mut kv_pairs: Vec<(String, String)> = vec![];
-            while let Some((k, v)) = map.next_entry::<String, String>()? {
-                if !(&k == "chdir_to" || &k == "chdir-to") {
-                    return Err(<A::Error as de::Error>::invalid_value(
-                        de::Unexpected::Str(&k),
-                        &r#"the only valid key for a working-dir map is "chdir-to""#,
-                    ));
-                }
-                if v.is_empty() {
-                    return Err(<A::Error as de::Error>::invalid_value(
-                        de::Unexpected::Seq,
-                        &r#"the "chdir-to" key cannot be empty"#,
-                    ));
-                }
-                kv_pairs.push((k, v));
-            }
-
-            if kv_pairs.is_empty() {
-                return Err(<A::Error as de::Error>::invalid_value(
-                    de::Unexpected::Map,
-                    &r#"the "working-dir" cannot be an empty map"#,
-                ));
-            }
-
-            if kv_pairs.len() > 1 {
-                return Err(<A::Error as de::Error>::invalid_value(
-                    de::Unexpected::Map,
-                    &r#"the "working-dir" map must contain one key, "chdir-to""#,
-                ));
-            }
-
-            Ok(Some(WorkingDir::ChdirTo(PathBuf::from(&kv_pairs[0].1))))
-        }
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum WorkingDirSerialization {
+        Simple(String),
+        ChdirTo(HashMap<String, String>),
     }
 
-    deserializer.deserialize_any(WorkingDirOrChdirTo(PhantomData))
+    match WorkingDirSerialization::deserialize(deserializer)? {
+        WorkingDirSerialization::Simple(s) => match s.as_str().try_into() {
+            Ok(w) => Ok(Some(w)),
+            Err(_) => Err(de::Error::invalid_value(
+                de::Unexpected::Str(&s),
+                &r#"one of "root", "dir", or chdir-to = "path""#,
+            )),
+        },
+        WorkingDirSerialization::ChdirTo(c) => {
+            if c.len() != 1 {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Map,
+                    &r#"a map with a single key, "chdir-to""#,
+                ));
+            }
+            let (key, value) = c
+                .into_iter()
+                .next()
+                .expect("we already know there is exactly 1 entry");
+            if key != "chdir-to" {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Map,
+                    &r#"a map with a single key, "chdir-to""#,
+                ));
+            }
+
+            Ok(Some(WorkingDir::ChdirTo(PathBuf::from(value))))
+        }
+    }
 }
 
 const DEFAULT_LABEL: &str = "default";

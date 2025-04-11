@@ -98,6 +98,18 @@ pub enum WorkingDir {
     ChdirTo(PathBuf),
 }
 
+impl TryFrom<&str> for WorkingDir {
+    type Error = &'static str;
+
+    fn try_from(from: &str) -> Result<WorkingDir, Self::Error> {
+        match from {
+            "root" => Ok(WorkingDir::Root),
+            "dir" => Ok(WorkingDir::Dir),
+            _ => Err("expected one of `root` or `dir`"),
+        }
+    }
+}
+
 impl fmt::Display for WorkingDir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
