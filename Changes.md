@@ -1,5 +1,7 @@
 <!-- next-header -->
 
+## 0.9.0 2025-05-26
+
 - Made all info-level logging truncate the command being run when the full command contains many
   paths. I missed some spots when I tried to do this in 0.8.0. This is a much more thorough change.
   GH #80.
