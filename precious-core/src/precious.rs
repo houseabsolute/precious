@@ -86,10 +86,10 @@ pub struct App {
     #[clap(long, short)]
     jobs: Option<usize>,
     /// Replace super-fun Unicode symbols with terribly boring ASCII
-    #[clap(long, short)]
+    #[clap(long, global = true)]
     ascii: bool,
     /// Suppresses most output
-    #[clap(long, short)]
+    #[clap(long, short, global = true)]
     quiet: bool,
 
     /// Enable verbose output
