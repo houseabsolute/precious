@@ -414,6 +414,14 @@ pub struct LintOrTidyRunner {
     label: Option<String>,
 }
 
+macro_rules! maybe_println {
+    ($self:expr, $($arg:tt)*) => {
+        if !$self.quiet {
+            println!("{}", format!($($arg)*))
+        }
+    };
+}
+
 impl LintOrTidyRunner {
     fn new(
         app: App,
@@ -648,36 +656,33 @@ impl LintOrTidyRunner {
          -> Option<Result<(), ActionFailure>> {
             match t.tidy(actual_invoke, files) {
                 Ok(Some(TidyOutcome::Changed)) => {
-                    if !s.quiet {
-                        println!(
-                            "{} Tidied by {}:    {}",
-                            s.chars.tidied,
-                            t.name,
-                            t.paths_summary(actual_invoke, files),
-                        );
-                    }
+                    maybe_println!(
+                        s,
+                        "{} Tidied by {}:    {}",
+                        s.chars.tidied,
+                        t.name,
+                        t.paths_summary(actual_invoke, files),
+                    );
                     Some(Ok(()))
                 }
                 Ok(Some(TidyOutcome::Unchanged)) => {
-                    if !s.quiet {
-                        println!(
-                            "{} Unchanged by {}: {}",
-                            s.chars.unchanged,
-                            t.name,
-                            t.paths_summary(actual_invoke, files),
-                        );
-                    }
+                    maybe_println!(
+                        s,
+                        "{} Unchanged by {}: {}",
+                        s.chars.unchanged,
+                        t.name,
+                        t.paths_summary(actual_invoke, files),
+                    );
                     Some(Ok(()))
                 }
                 Ok(Some(TidyOutcome::Unknown)) => {
-                    if !s.quiet {
-                        println!(
-                            "{} Maybe changed by {}: {}",
-                            s.chars.unknown,
-                            t.name,
-                            t.paths_summary(actual_invoke, files),
-                        );
-                    }
+                    maybe_println!(
+                        s,
+                        "{} Maybe changed by {}: {}",
+                        s.chars.unknown,
+                        t.name,
+                        t.paths_summary(actual_invoke, files),
+                    );
                     Some(Ok(()))
                 }
                 Ok(None) => None,
@@ -712,14 +717,13 @@ impl LintOrTidyRunner {
             match l.lint(actual_invoke, files) {
                 Ok(Some(lo)) => {
                     if lo.ok {
-                        if !s.quiet {
-                            println!(
-                                "{} Passed {}: {}",
-                                s.chars.lint_free,
-                                l.name,
-                                l.paths_summary(actual_invoke, files),
-                            );
-                        }
+                        maybe_println!(
+                            s,
+                            "{} Passed {}: {}",
+                            s.chars.lint_free,
+                            l.name,
+                            l.paths_summary(actual_invoke, files),
+                        );
                         Some(Ok(()))
                     } else {
                         println!(
