@@ -308,6 +308,7 @@ The root command and all subcommands accept the following flags to set the outpu
 | Flag         | Description                                                  |
 | ------------ | ------------------------------------------------------------ |
 | `--ascii`    | Replace super-fun Unicode symbols with terribly boring ASCII |
+| `--no-color` | Pass this to disable the use of ANSI colors in the output    |
 
 ### Parallel Execution
 

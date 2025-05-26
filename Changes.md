@@ -3,6 +3,8 @@
 - Made all info-level logging truncate the command being run when the full command contains many
   paths. I missed some spots when I tried to do this in 0.8.0. This is a much more thorough change.
   GH #80.
+- Added a new `--no-color` flag that suppresses all ANSI colors in the output. Requested by
+  @danielcompton (Daniel Compton). GH #82.
 - Made the `--ascii` flag global, so it can be used in all subcommands. This required removing the
   short flag `-a`, since that would conflict with the short flag for `--all`.
 - Made the `--quiet` flag global as well.

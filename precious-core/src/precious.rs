@@ -7,7 +7,7 @@ use crate::{
     vcs,
 };
 use anyhow::{Error, Result};
-use clap::{ArgGroup, Parser};
+use clap::{ArgAction, ArgGroup, Parser};
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 use fern::{
     colors::{Color, ColoredLevelConfig},
@@ -91,6 +91,9 @@ pub struct App {
     /// Suppresses most output
     #[clap(long, short, global = true)]
     quiet: bool,
+    /// Pass this to disable the use of ANSI colors in the output
+    #[clap(long = "no-color", action = ArgAction::SetFalse, global = true)]
+    color: bool,
 
     /// Enable verbose output
     #[clap(long, short, global = true)]
@@ -209,10 +212,21 @@ impl App {
             log::LevelFilter::Warn
         };
 
+        let use_color = self.color;
         let level_colors = line_colors.info(Color::Green).debug(Color::Black);
 
         Dispatch::new()
             .format(move |out, message, record| {
+                if !use_color {
+                    out.finish(format_args!(
+                        "[{target}][{level}] {message}",
+                        target = record.target(),
+                        level = record.level(),
+                        message = message,
+                    ));
+                    return;
+                }
+
                 out.finish(format_args!(
                     "{color_line}[{target}][{level}{color_line}] {message}\x1B[0m",
                     color_line = format_args!(
@@ -408,6 +422,7 @@ pub struct LintOrTidyRunner {
     command: Option<String>,
     chars: chars::Chars,
     quiet: bool,
+    color: bool,
     thread_pool: ThreadPool,
     should_lint: bool,
     paths: Vec<PathBuf>,
@@ -458,6 +473,7 @@ impl LintOrTidyRunner {
             command,
             chars: c,
             quiet,
+            color: app.color,
             thread_pool: ThreadPoolBuilder::new().num_threads(jobs).build()?,
             should_lint,
             paths,
@@ -614,8 +630,11 @@ impl LintOrTidyRunner {
         let (status, error) = if failures.is_empty() {
             (0, None)
         } else {
-            let red = format!("\x1B[{}m", Color::Red.to_fg_str());
-            let ansi_off = "\x1B[0m";
+            let (red, ansi_off) = if self.color {
+                (format!("\x1B[{}m", Color::Red.to_fg_str()), "\x1B[0m")
+            } else {
+                (String::new(), "")
+            };
             let plural = if failures.len() > 1 { 's' } else { '\0' };
 
             let error = format!(
