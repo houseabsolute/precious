@@ -507,7 +507,7 @@ impl LintOrTidyRunner {
     fn run(&mut self) -> i8 {
         match self.run_subcommand() {
             Ok(e) => {
-                debug!("{:?}", e);
+                debug!("{e:?}");
                 if let Some(err) = e.error {
                     print!("{err}");
                 }
@@ -517,7 +517,7 @@ impl LintOrTidyRunner {
                 e.status
             }
             Err(e) => {
-                error!("Failed to run precious: {}", e);
+                error!("Failed to run precious: {e}");
                 42
             }
         }
