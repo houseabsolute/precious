@@ -516,7 +516,7 @@ impl LintOrTidyRunner {
     }
 
     fn tidy(&mut self) -> Result<Exit> {
-        println!("{} Tidying {}", self.chars.ring, self.mode);
+        maybe_println!(self, "{} Tidying {}", self.chars.ring, self.mode);
 
         let tidiers = self
             .config
@@ -532,7 +532,7 @@ impl LintOrTidyRunner {
     }
 
     fn lint(&mut self) -> Result<Exit> {
-        println!("{} Linting {}", self.chars.ring, self.mode);
+        maybe_println!(self, "{} Linting {}", self.chars.ring, self.mode);
 
         let linters = self
             .config

@@ -6,6 +6,8 @@
 - Made the `--ascii` flag global, so it can be used in all subcommands. This required removing the
   short flag `-a`, since that would conflict with the short flag for `--all`.
 - Made the `--quiet` flag global as well.
+- When the `--quiet` flag is set, `precious` will no longer print _any_ output in the case where all
+  commands succeed.
 
 ## 0.8.0 2025-03-15
 
