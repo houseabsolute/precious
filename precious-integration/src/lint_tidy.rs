@@ -620,8 +620,6 @@ fn munge_invocation_output(output_dir: &Path) -> Result<String> {
         got.push_str(&output);
     }
 
-    // println!("RAW GOT");
-    // println!("{got}");
     let output_re = Regex::new(
         r"(?x)
            ----\n
