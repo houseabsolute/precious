@@ -16,8 +16,7 @@ use tempfile::TempDir;
 pub struct TestHelper {
     // While we never access this field we need to hold onto the tempdir or
     // else the directory it references will be deleted.
-    _tempdir: Option<TempDir>,
-    _preserved_tempdir: Option<PathBuf>,
+    _tempdir: TempDir,
     git_root: PathBuf,
     precious_root: PathBuf,
     paths: Vec<PathBuf>,
@@ -49,18 +48,19 @@ impl TestHelper {
             true
         });
 
-        let td = tempfile::Builder::new()
+        let mut td = tempfile::Builder::new()
             .prefix("precious-testhelper-")
             .tempdir()?;
+        if let Ok(p) = env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
+            if !(p.is_empty() || p == "0") {
+                td.disable_cleanup(true);
+            }
+        }
+
         let root = maybe_canonicalize(td.path())?;
 
-        let (tempdir, preserved_tempdir) = match env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
-            Ok(v) if !(v.is_empty() || v == "0") => (None, Some(td.into_path())),
-            _ => (Some(td), None),
-        };
         let helper = TestHelper {
-            _tempdir: tempdir,
-            _preserved_tempdir: preserved_tempdir,
+            _tempdir: td,
             git_root: root.clone(),
             precious_root: root,
             paths: Self::PATHS.iter().map(PathBuf::from).collect(),

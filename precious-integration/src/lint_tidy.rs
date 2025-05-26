@@ -6,7 +6,11 @@ use precious_testhelper::TestHelper;
 use pretty_assertions::{assert_eq, assert_str_eq};
 use regex::{Captures, Regex};
 use serial_test::serial;
-use std::{collections::HashMap, env, fs, path::PathBuf};
+use std::{
+    collections::HashMap,
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 const CONFIG: &str = r#"
 exclude = [
@@ -561,19 +565,19 @@ ok-exit-codes = 0
         fs::write(&precious_toml, full_config)?;
     }
 
-    let td = tempfile::Builder::new()
+    let mut td = tempfile::Builder::new()
         .prefix("precious-integration-")
         .tempdir()?;
-    let td_path = td.path().to_path_buf();
-    let (_output_dir, _preserved_tempdir) = match env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
-        Ok(v) if !(v.is_empty() || v == "0") => (None, Some(td.into_path())),
-        _ => (Some(td), None),
-    };
+    if let Ok(p) = env::var("PRECIOUS_TESTS_PRESERVE_TEMPDIR") {
+        if !(p.is_empty() || p == "0") {
+            td.disable_cleanup(true);
+        }
+    }
 
     let env = HashMap::from([
         (
             String::from("PRECIOUS_INTEGRATION_TEST_OUTPUT_DIR"),
-            td_path.to_string_lossy().to_string(),
+            td.path().to_string_lossy().to_string(),
         ),
         (
             String::from("PRECIOUS_INTEGRATION_TEST_ROOT"),
@@ -590,7 +594,7 @@ ok-exit-codes = 0
         .build()
         .run()?;
 
-    let got = munge_invocation_output(td_path)?;
+    let got = munge_invocation_output(td.path())?;
 
     let expect = expect.replace(" \\\n    ", " ");
     assert_str_eq!(got, expect, "\n{config}");
@@ -598,7 +602,7 @@ ok-exit-codes = 0
     Ok(())
 }
 
-fn munge_invocation_output(output_dir: PathBuf) -> Result<String> {
+fn munge_invocation_output(output_dir: &Path) -> Result<String> {
     let mut got = String::new();
     for entry in fs::read_dir(output_dir)? {
         let entry = entry?;
