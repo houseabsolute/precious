@@ -15,7 +15,7 @@ use thiserror::Error;
 #[allow(clippy::module_name_repetitions)]
 pub struct CommandConfig {
     #[serde(rename = "type")]
-    pub(crate) typ: LintOrTidyCommandType,
+    pub(crate) command_type: LintOrTidyCommandType,
     #[serde(deserialize_with = "string_or_seq_string")]
     pub(crate) include: Vec<String>,
     #[serde(default, deserialize_with = "string_or_seq_string")]
@@ -393,7 +393,7 @@ impl Config {
         project_root: &Path,
         command: Option<&str>,
         label: Option<&str>,
-        typ: LintOrTidyCommandType,
+        command_type: LintOrTidyCommandType,
     ) -> Result<Vec<command::LintOrTidyCommand>> {
         let mut commands: Vec<command::LintOrTidyCommand> = vec![];
         for (name, c) in self.commands {
@@ -407,7 +407,7 @@ impl Config {
                 continue;
             }
 
-            if c.typ != typ && c.typ != LintOrTidyCommandType::Both {
+            if c.command_type != command_type && c.command_type != LintOrTidyCommandType::Both {
                 continue;
             }
 
@@ -444,7 +444,7 @@ impl CommandConfig {
         Ok(command::LintOrTidyCommandParams {
             project_root: project_root.to_owned(),
             name,
-            typ: self.typ,
+            command_type: self.command_type,
             include: self.include,
             exclude: self.exclude,
             invoke,
@@ -871,7 +871,7 @@ mod tests {
         expect_err: ConfigError,
     ) -> Result<()> {
         let config = CommandConfig {
-            typ: LintOrTidyCommandType::Lint,
+            command_type: LintOrTidyCommandType::Lint,
             invoke: Some(invoke),
             working_dir: Some(working_dir),
             path_args: Some(path_args),
@@ -912,7 +912,7 @@ mod tests {
         expect_match: bool,
     ) -> Result<()> {
         let config = CommandConfig {
-            typ: LintOrTidyCommandType::Lint,
+            command_type: LintOrTidyCommandType::Lint,
             invoke: None,
             working_dir: None,
             path_args: None,

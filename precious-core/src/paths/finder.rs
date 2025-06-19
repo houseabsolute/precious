@@ -129,7 +129,7 @@ impl Finder {
 
     fn files_from_cli(&self, cli_paths: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
         debug!("Using the list of files passed from the command line");
-        let excluder = self.excluder()?;
+        let exclude_matcher = self.exclude_matcher()?;
 
         let mut files: Vec<PathBuf> = vec![];
         for rel_to_cwd in cli_paths {
@@ -139,7 +139,7 @@ impl Finder {
             }
 
             let rel_to_root = self.path_relative_to_project_root(&full)?;
-            if excluder.path_matches(&rel_to_root, full.is_dir()) {
+            if exclude_matcher.path_matches(&rel_to_root, full.is_dir()) {
                 continue;
             }
 
@@ -218,11 +218,11 @@ impl Finder {
             }
         }
 
-        let excluder = self.excluder()?;
+        let exclude_matcher = self.exclude_matcher()?;
         Ok(self
             .paths_relative_to_project_root(&self.project_root, files)?
             .into_iter()
-            .filter(|f| !excluder.path_matches(f, false))
+            .filter(|f| !exclude_matcher.path_matches(f, false))
             .collect::<Vec<_>>())
     }
 
@@ -235,7 +235,7 @@ impl Finder {
             .in_dir(&self.project_root)
             .build()
             .run()?;
-        let excluder = self.excluder()?;
+        let exclude_matcher = self.exclude_matcher()?;
 
         match output.stdout {
             Some(s) => Ok(
@@ -249,7 +249,7 @@ impl Finder {
                     s.lines()
                         .filter_map(|rel| {
                             let pb = PathBuf::from(rel);
-                            if excluder.path_matches(&pb, false) {
+                            if exclude_matcher.path_matches(&pb, false) {
                                 return None;
                             }
 
@@ -270,7 +270,7 @@ impl Finder {
         }
     }
 
-    fn excluder(&self) -> Result<Matcher> {
+    fn exclude_matcher(&self) -> Result<Matcher> {
         MatcherBuilder::new(&self.project_root)
             .with(&self.exclude_globs)?
             .with(vcs::DIRS)?

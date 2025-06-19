@@ -148,11 +148,11 @@ enum CommandError {
     )]
     CommandWhichIsBothRequiresLintOrTidyFlags,
 
-    #[error("Cannot {method:} with the {command:} command, which is a {typ:}")]
+    #[error("Cannot {method:} with the {command:} command, which is a {command_type:}")]
     CannotMethodWithCommand {
         method: &'static str,
         command: String,
-        typ: &'static str,
+        command_type: &'static str,
     },
 
     #[error("Path {path:} has no parent")]
@@ -167,10 +167,10 @@ enum CommandError {
 pub struct LintOrTidyCommand {
     project_root: PathBuf,
     pub name: String,
-    typ: LintOrTidyCommandType,
-    includer: Matcher,
+    command_type: LintOrTidyCommandType,
+    include_matcher: Matcher,
     include: Vec<String>,
-    excluder: Matcher,
+    exclude_matcher: Matcher,
     invoke: Invoke,
     working_dir: WorkingDir,
     path_args: PathArgs,
@@ -188,7 +188,7 @@ pub struct LintOrTidyCommand {
 pub struct LintOrTidyCommandParams {
     pub project_root: PathBuf,
     pub name: String,
-    pub typ: LintOrTidyCommandType,
+    pub command_type: LintOrTidyCommandType,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub invoke: Invoke,
@@ -238,7 +238,7 @@ unsafe impl Sync for LintOrTidyCommand {}
 
 impl LintOrTidyCommand {
     pub fn new(params: LintOrTidyCommandParams) -> Result<LintOrTidyCommand> {
-        if let LintOrTidyCommandType::Both = params.typ {
+        if let LintOrTidyCommandType::Both = params.command_type {
             if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
                 return Err(CommandError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
             }
@@ -266,10 +266,10 @@ impl LintOrTidyCommand {
         Ok(LintOrTidyCommand {
             project_root: params.project_root,
             name: params.name,
-            typ: params.typ,
-            includer: MatcherBuilder::new(&root).with(&params.include)?.build()?,
+            command_type: params.command_type,
+            include_matcher: MatcherBuilder::new(&root).with(&params.include)?.build()?,
             include: params.include,
-            excluder: MatcherBuilder::new(&root).with(&params.exclude)?.build()?,
+            exclude_matcher: MatcherBuilder::new(&root).with(&params.exclude)?.build()?,
             invoke: params.invoke,
             working_dir: params.working_dir,
             path_args: params.path_args,
@@ -509,11 +509,11 @@ impl LintOrTidyCommand {
         method: &'static str,
         not_allowed: LintOrTidyCommandType,
     ) -> Result<()> {
-        if not_allowed == self.typ {
+        if not_allowed == self.command_type {
             return Err(CommandError::CannotMethodWithCommand {
                 method,
                 command: self.name.clone(),
-                typ: self.typ.what(),
+                command_type: self.command_type.what(),
             }
             .into());
         }
@@ -526,7 +526,7 @@ impl LintOrTidyCommand {
                 let f = &files[0];
                 // This check isn't strictly necessary since we default to not
                 // matching, but the debug output is helpful.
-                if self.excluder.path_matches(f, false) {
+                if self.exclude_matcher.path_matches(f, false) {
                     debug!(
                         "File {} is excluded for the {} command",
                         f.display(),
@@ -534,7 +534,7 @@ impl LintOrTidyCommand {
                     );
                     return Ok(false);
                 }
-                if self.includer.path_matches(f, false) {
+                if self.include_matcher.path_matches(f, false) {
                     debug!(
                         "File {} is included for the {} command",
                         f.display(),
@@ -550,7 +550,7 @@ impl LintOrTidyCommand {
                         path: files[0].to_string_lossy().to_string(),
                     })?;
                 for f in files {
-                    if self.excluder.path_matches(f, false) {
+                    if self.exclude_matcher.path_matches(f, false) {
                         debug!(
                             "File {} is excluded for the {} command",
                             f.display(),
@@ -558,7 +558,7 @@ impl LintOrTidyCommand {
                         );
                         continue;
                     }
-                    if self.includer.path_matches(f, false) {
+                    if self.include_matcher.path_matches(f, false) {
                         debug!(
                             "Directory {} is included for the {} command because it contains {} which is included",
                             dir.display(),
@@ -576,7 +576,7 @@ impl LintOrTidyCommand {
             }
             ActualInvoke::Once => {
                 for f in files {
-                    if self.excluder.path_matches(f, false) {
+                    if self.exclude_matcher.path_matches(f, false) {
                         debug!(
                             "File {} is excluded for the {} command",
                             f.display(),
@@ -584,7 +584,7 @@ impl LintOrTidyCommand {
                         );
                         continue;
                     }
-                    if self.includer.path_matches(f, false) {
+                    if self.include_matcher.path_matches(f, false) {
                         debug!(
                             "File {} is included for the {} command",
                             f.display(),
@@ -739,10 +739,10 @@ impl LintOrTidyCommand {
     }
 
     fn file_matches_rules(&self, file: &Path) -> bool {
-        if self.excluder.path_matches(file, false) {
+        if self.exclude_matcher.path_matches(file, false) {
             return false;
         }
-        if self.includer.path_matches(file, false) {
+        if self.include_matcher.path_matches(file, false) {
             return true;
         }
         false
@@ -938,10 +938,10 @@ mod tests {
             // These params will be ignored
             project_root: PathBuf::new(),
             name: String::new(),
-            typ: LintOrTidyCommandType::Lint,
-            includer: matcher(&[])?,
+            command_type: LintOrTidyCommandType::Lint,
+            include_matcher: matcher(&[])?,
             include: vec![],
-            excluder: matcher(&[])?,
+            exclude_matcher: matcher(&[])?,
             invoke: Invoke::PerFile,
             working_dir: WorkingDir::Root,
             path_args: PathArgs::File,
@@ -961,7 +961,7 @@ mod tests {
     fn files_to_args_sets_per_file() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
-            includer: matcher(&["**/*.go"])?,
+            include_matcher: matcher(&["**/*.go"])?,
             ..default_command()?
         };
         let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
@@ -993,7 +993,7 @@ mod tests {
     fn files_to_args_sets_per_file_or_dir() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFileOrDir(3),
-            includer: matcher(&["**/*.go"])?,
+            include_matcher: matcher(&["**/*.go"])?,
             ..default_command()?
         };
         let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
@@ -1033,7 +1033,7 @@ mod tests {
     fn files_to_args_sets_per_file_or_once() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFileOrOnce(3),
-            includer: matcher(&["**/*.go"])?,
+            include_matcher: matcher(&["**/*.go"])?,
             ..default_command()?
         };
         let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
@@ -1074,7 +1074,7 @@ mod tests {
     fn files_to_args_sets_per_dir() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerDir,
-            includer: matcher(&["**/*.go"])?,
+            include_matcher: matcher(&["**/*.go"])?,
             ..default_command()?
         };
         let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
@@ -1105,7 +1105,7 @@ mod tests {
     fn files_to_args_sets_once() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::Once,
-            includer: matcher(&["**/*.go"])?,
+            include_matcher: matcher(&["**/*.go"])?,
             ..default_command()?
         };
         let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
@@ -1136,7 +1136,7 @@ mod tests {
     #[parallel]
     fn require_is_not_command_type_with_lint_command() -> Result<()> {
         let command = LintOrTidyCommand {
-            typ: LintOrTidyCommandType::Lint,
+            command_type: LintOrTidyCommandType::Lint,
             ..default_command()?
         };
         assert!(command
@@ -1151,7 +1151,7 @@ mod tests {
             CommandError::CannotMethodWithCommand {
                 method: "tidy",
                 command: command.name,
-                typ: "linter",
+                command_type: "linter",
             },
         );
 
@@ -1162,7 +1162,7 @@ mod tests {
     #[parallel]
     fn require_is_not_command_type_with_tidy_command() -> Result<()> {
         let command = LintOrTidyCommand {
-            typ: LintOrTidyCommandType::Tidy,
+            command_type: LintOrTidyCommandType::Tidy,
             ..default_command()?
         };
         assert!(command
@@ -1177,7 +1177,7 @@ mod tests {
             CommandError::CannotMethodWithCommand {
                 method: "lint",
                 command: command.name,
-                typ: "tidier",
+                command_type: "tidier",
             },
         );
 
@@ -1188,7 +1188,7 @@ mod tests {
     #[parallel]
     fn require_is_not_command_type_with_both_command() -> Result<()> {
         let command = LintOrTidyCommand {
-            typ: LintOrTidyCommandType::Both,
+            command_type: LintOrTidyCommandType::Both,
             ..default_command()?
         };
         assert!(command
@@ -1207,9 +1207,9 @@ mod tests {
         let command = LintOrTidyCommand {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
-            typ: LintOrTidyCommandType::Lint,
-            includer: matcher(&["**/*.go", "!this/file.go"])?,
-            excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
+            command_type: LintOrTidyCommandType::Lint,
+            include_matcher: matcher(&["**/*.go", "!this/file.go"])?,
+            exclude_matcher: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             ..default_command()?
         };
 
@@ -1254,9 +1254,9 @@ mod tests {
         let command = LintOrTidyCommand {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
-            typ: LintOrTidyCommandType::Lint,
-            includer: matcher(&["**/*.go", "!this/file.go"])?,
-            excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
+            command_type: LintOrTidyCommandType::Lint,
+            include_matcher: matcher(&["**/*.go", "!this/file.go"])?,
+            exclude_matcher: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             invoke: Invoke::PerDir,
             path_args: PathArgs::Dir,
             ..default_command()?
@@ -1307,9 +1307,9 @@ mod tests {
         let command = LintOrTidyCommand {
             project_root: PathBuf::from("/foo/bar"),
             name: String::from("Test"),
-            typ: LintOrTidyCommandType::Lint,
-            includer: matcher(&["**/*.go", "!this/file.go"])?,
-            excluder: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
+            command_type: LintOrTidyCommandType::Lint,
+            include_matcher: matcher(&["**/*.go", "!this/file.go"])?,
+            exclude_matcher: matcher(&["foo/**/*", "!foo/some/file.go", "baz/bar/**/quux/*"])?,
             invoke: Invoke::Once,
             ..default_command()?
         };
@@ -1613,7 +1613,7 @@ mod tests {
     fn maybe_path_metadata_for_per_file() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
-            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            include_matcher: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
             ..default_command()?
         };
         let helper = TestHelper::new()?.with_git_repo()?;
@@ -1632,8 +1632,8 @@ mod tests {
     fn maybe_path_metadata_for_per_dir() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
-            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
-            excluder: MatcherBuilder::new("/")
+            include_matcher: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            exclude_matcher: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1680,8 +1680,8 @@ mod tests {
     fn paths_were_not_changed_when_only_mtime_changes() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
-            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
-            excluder: MatcherBuilder::new("/")
+            include_matcher: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            exclude_matcher: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1706,8 +1706,8 @@ mod tests {
     fn paths_were_changed_when_size_changes() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
-            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
-            excluder: MatcherBuilder::new("/")
+            include_matcher: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            exclude_matcher: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1732,8 +1732,8 @@ mod tests {
     fn paths_were_changed_when_content_changes() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerFile,
-            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
-            excluder: MatcherBuilder::new("/")
+            include_matcher: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            exclude_matcher: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1761,8 +1761,8 @@ mod tests {
     fn paths_were_changed_when_dir_has_new_file() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerDir,
-            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
-            excluder: MatcherBuilder::new("/")
+            include_matcher: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            exclude_matcher: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?
@@ -1806,8 +1806,8 @@ mod tests {
     fn paths_were_changed_when_dir_has_file_deleted() -> Result<()> {
         let command = LintOrTidyCommand {
             invoke: Invoke::PerDir,
-            includer: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
-            excluder: MatcherBuilder::new("/")
+            include_matcher: MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?,
+            exclude_matcher: MatcherBuilder::new("/")
                 .with(&["**/can_ignore.rs"])?
                 .build()?,
             ..default_command()?

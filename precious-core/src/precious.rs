@@ -404,7 +404,7 @@ fn print_config(
     for (name, c) in config.command_info() {
         table.add_row(vec![
             Cell::new(name),
-            Cell::new(c.typ),
+            Cell::new(c.command_type),
             Cell::new(c.cmd.join(" ")),
         ]);
     }
