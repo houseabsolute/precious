@@ -139,7 +139,7 @@ pub struct CommonArgs {
     #[clap(long, short)]
     staged: bool,
     /// Run against files that are different as compared with the given
-    /// `<REF>`. This can be a branch name, like `master`, or an ref name like
+    /// `<REF>`. This can be a branch name, like `master`, or a ref name like
     /// `HEAD~6` or `master@{2.days.ago}`. See `git help rev-parse` for more
     /// options. Note that this will _not_ see files with uncommitted changes
     /// in the local working directory.
