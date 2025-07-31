@@ -1,5 +1,8 @@
 <!-- next-header -->
 
+- When running `precious config init`, the top-level `exclude` key was incorrectly generated as
+  `excludes`. Fixed by @oalders (Olaf Alders). GH #84.
+
 ## 0.9.0 2025-05-26
 
 - Made all info-level logging truncate the command being run when the full command contains many

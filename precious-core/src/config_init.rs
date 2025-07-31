@@ -626,10 +626,10 @@ fn excludes_toml(excludes: &HashSet<&str>) -> String {
     }
 
     if excludes.len() == 1 {
-        format!("excludes = [\"{}\"]", excludes.iter().next().unwrap(),)
+        format!("exclude = [\"{}\"]", excludes.iter().next().unwrap(),)
     } else {
         format!(
-            "excludes = [\n{}\n]",
+            "exclude = [\n{}\n]",
             excludes
                 .iter()
                 .sorted()
