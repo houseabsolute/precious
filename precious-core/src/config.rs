@@ -285,7 +285,7 @@ impl CommandConfig {
                     );
                 }
             }
-            (Invoke::Once, &WorkingDir::Dir, _) => {
+            (Invoke::Once | Invoke::OnceByDir, &WorkingDir::Dir, _) => {
                 return Err(ConfigError::CannotInvokeOnceWithWorkingDirEqDir.into());
             }
             _ => (),

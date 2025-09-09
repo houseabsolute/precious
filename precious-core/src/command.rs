@@ -58,6 +58,8 @@ pub enum Invoke {
     PerDirOrOnce(usize),
     #[serde(rename = "once")]
     Once,
+    #[serde(rename = "once-by-dir")]
+    OnceByDir,
 }
 
 impl fmt::Display for Invoke {
@@ -69,6 +71,7 @@ impl fmt::Display for Invoke {
             Invoke::PerDir => write!(f, r#"invoke = "per-dir""#),
             Invoke::PerDirOrOnce(n) => write!(f, "invoke.per-dir-or-once = {n}"),
             Invoke::Once => write!(f, r#"invoke = "once""#),
+            Invoke::OnceByDir => write!(f, r#"invoke = "once-by-dir""#),
         }
     }
 }
@@ -422,6 +425,15 @@ impl Command {
                 vec![files.sorted().map(PathBuf::as_path).collect()],
                 ActualInvoke::Once,
             ),
+            // All directories in one Vec as a batch.
+            Invoke::OnceByDir => {
+                let files_vec: Vec<&Path> = files.map(PathBuf::as_path).collect();
+                let unique_dirs: Vec<&Path> = Self::files_by_dir(&files_vec)?
+                    .into_keys()
+                    .sorted()
+                    .collect();
+                (vec![unique_dirs], ActualInvoke::Once)
+            }
         })
     }
 
@@ -1161,6 +1173,28 @@ mod tests {
                     baz.as_path(),
                     test_foo.as_path(),
                 ]],
+                ActualInvoke::Once,
+            ),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn files_to_args_sets_once_by_dir() -> Result<()> {
+        let mut command = default_command();
+        command.invocation.invoke = Invoke::OnceByDir;
+        command.filter.includer = matcher(&["**/*.go"])?;
+
+        let files = &["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            command.files_to_args_sets(files)?,
+            (
+                vec![vec![Path::new(""), Path::new("subdir"), Path::new("test"),]],
                 ActualInvoke::Once,
             ),
         );

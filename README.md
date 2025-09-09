@@ -145,11 +145,12 @@ command.
 
 The `invoke` key tells `precious` how the command should be invoked.
 
-| Value        | Description                                                            |
-| ------------ | ---------------------------------------------------------------------- |
-| `"per-file"` | Run this command once for each matching file. **This is the default.** |
-| `"per-dir"`  | Run this command once for each matching directory.                     |
-| `"once"`     | Run this command once.                                                 |
+| Value           | Description                                                            |
+| --------------- | ---------------------------------------------------------------------- |
+| `"per-file"`    | Run this command once for each matching file. **This is the default.** |
+| `"per-dir"`     | Run this command once for each matching directory.                     |
+| `"once"`        | Run this command once with all matching files as arguments.            |
+| `"once-by-dir"` | Run this command once with all matching directories as arguments.      |
 
 There are some experimental options for the `invoke` key as well. **The exact names or the details
 of how they operate may change in a future release.**
