@@ -1,11 +1,10 @@
 # Invocation Examples
 
-The following examples illustrate how `precious` executes a command with different invocation
-options.
+The following examples illustrate how `precious` executes a command with different combinations of
+the invocation options `invoke`, `path-args`, and `working-dir`.
 
 For these examples we will assume that the command is configured to execute for any file ending in
-`.go`. The executable is `some-linter` and only takes paths as argument. The file tree looks like
-this:
+`.go`. The executable is `some-linter`. The file tree looks like this:
 
 ```
 example
@@ -169,7 +168,7 @@ some-linter /example/pkg2/subpkg/subpkg.go
 
 - **Runs once per directory**
 - **Working directory is the root**
-- **Relative directory path as pargument**
+- **Relative directory path as argument**
 
 ```toml
 [commands.some-linter]
@@ -189,7 +188,7 @@ some-linter pkg2/subpkg
 
 - **Runs once per directory**
 - **Working directory is the root**
-- **Absolute directory path as pargument**
+- **Absolute directory path as argument**
 
 ```toml
 [commands.some-linter]
