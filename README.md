@@ -158,7 +158,7 @@ of how they operate may change in a future release.**
 | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <code>&nbsp;.per&#x2011;file&#x2011;or&#x2011;dir&nbsp;=&nbsp;n&nbsp;</code>  | If the number of matching files is less than `n`, run this command once for each matching file. Otherwise run it once for each matching directory. |
 | <code>&nbsp;.per&#x2011;file&#x2011;or&#x2011;once&nbsp;=&nbsp;n&nbsp;</code> | If the number of matching files is less than `n`, run this command once for each matching file. Otherwise run it once.                             |
-| <code>&nbsp;.per&#x2011;dir&#x2011;or&#x2011;dir&nbsp;=&nbsp;n&nbsp;</code>   | If the number of matching directories is less than `n`, run this command once for each matching directory. Otherwise run it once.                  |
+| <code>&nbsp;.per&#x2011;dir&#x2011;or&#x2011;once&nbsp;=&nbsp;n&nbsp;</code>  | If the number of matching directories is less than `n`, run this command once for each matching directory. Otherwise run it once.                  |
 
 These are written like this:
 
