@@ -229,9 +229,9 @@ working-dir = "root"
 working-dir.chdir-to = "whatever"
 ```
 
-You cannot invoke a command once per directory from a root without passing the directory name or a
-list of file names. If you want to run a command once per directory with no path arguments or using
-`.` as the path then you _must_ set `working-dir = "dir"`.
+You cannot invoke a command once per directory from a fixed root directory without passing the
+directory name or a list of file names. If you want to run a command once per directory with no path
+arguments or using `.` as the path then you _must_ set `working-dir = "dir"`.
 
 ```
 invoke = "once"
