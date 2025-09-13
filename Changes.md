@@ -1,4 +1,4 @@
-<!-- next-header -->
+## 0.10.0 2025-09-13
 
 - Removed support for the deprecated `run-mode` and `chdir` config keys. See
   [the docs on upgrading to the new configuration keys](https://github.com/houseabsolute/precious/blob/master/docs/upgrade-from-0.3.0-to-0.4.0.md).
