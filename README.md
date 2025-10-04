@@ -338,6 +338,27 @@ When you run `precious` you must tell it what paths to operate on. There are sev
 | Staged files according to git, with unstaged changes stashed | <code>&#x2011;&#x2011;staged&#x2011;with&#x2011;stash</code>               | This is like `--stashed`, but it will stash unstaged changes while it runs and pop the stash at the end. This ensures that commands only run against the staged version of your codebase. This can cause issues with many editors or other tools that watch for file changes, so exercise care with this flag. Be careful when using this option in scripts because of this issue. |
 | Paths given on CLI                                           |                                                                            | If you don't pass any of the above flags then `precious` will expect one or more paths to be passed on the command line after all other flags. If any of these paths are directories then that entire directory tree will be included.                                                                                                                                             |
 
+#### Output When Tidying Files
+
+When tidying files, `precious` determines whether files are changed by a tidying command by
+calculating a checksum for a file before it's tidied, and then recalculating that checksum after the
+tidying command runs.
+
+When you run `precious tidy`, you will see output like one of these three options:
+
+    ✨ Unchanged by some-tidier: README.md
+
+    💧 Tidied by some-tidier:    README.md
+
+    🤷🏽 Maybe changed by some-tidier: 98 files matching ...
+
+The first two output options should be obvious.
+
+The last one happens if the command is configured with `invoke = "once"`. When operating on all
+files, this could be a huge number of files, so `precious` simply skips this checksumming. That
+means that it can't determine whether the file was actually changed by the tidying command, which is
+why it says "maybe changed".
+
 #### Running One Command
 
 You can tidy or lint with just a single command by passing the `--command` flag:
