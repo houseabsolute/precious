@@ -1267,6 +1267,7 @@ lint-failure-exit-codes = [1]
     }
 
     #[test]
+    #[serial]
     fn print_config() -> Result<()> {
         let config = r#"
             [commands.foo]
