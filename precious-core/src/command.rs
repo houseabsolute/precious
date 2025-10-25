@@ -259,10 +259,6 @@ struct PathInfo {
     hash: md5::Digest,
 }
 
-// This should be safe because we never mutate the Command struct in any of its
-// methods.
-unsafe impl Sync for Command {}
-
 impl Command {
     pub fn new(params: CommandParams) -> Result<Command> {
         if let CommandType::Both = params.typ {
