@@ -29,9 +29,9 @@ log.workspace = true
 precious-core.workspace = true
 
 [workspace.dependencies]
-anyhow = { version = "1.0.99", default-features = false }
-bon = { version = "3.7.2", default-features = false }
-clap = { version = "4.5.47", default-features = false, features = [
+anyhow = { version = "1.0.100", default-features = false }
+bon = { version = "3.8.1", default-features = false }
+clap = { version = "4.5.50", default-features = false, features = [
     "cargo",
     "derive",
     "std",
@@ -42,10 +42,10 @@ comfy-table = { version = "7.2.1", default-features = false }
 env_logger = { version = "0.11.8", default-features = false }
 fern = { version = ">= 0.5.0, < 0.7.0", default-features = false, features = ["colored"] }
 filetime = { version = "0.2.26", default-features = false }
-ignore = { version = "0.4.23", default-features = false }
-indexmap = { version = "2.11.1", default-features = false, features = ["serde", "std"] }
+ignore = { version = "0.4.24", default-features = false }
+indexmap = { version = "2.12.0", default-features = false, features = ["serde", "std"] }
 itertools = { version = "0.14.0", default-features = true }
-libc = { version = "0.2.175", default-features = false }
+libc = { version = "0.2.177", default-features = false }
 log = { version = "0.4.28", default-features = false }
 md5 = { version = "0.8.0", default-features = false }
 mitsein = { version = "0.8.0", default-features = false, features = ["itertools", "std"] }
@@ -57,13 +57,13 @@ pretty_assertions = { version = "1.4.1", default-features = true }
 prettytable = { version = "0.10.0", default-features = false }
 pushd = { version = "0.0.2", default-features = false }
 rayon = { version = "1.11.0", default-features = false }
-regex = { version = "1.11.2", default-features = true }
-serde = { version = "1.0.219", default-features = true, features = ["derive"] }
+regex = { version = "1.12.2", default-features = true }
+serde = { version = "1.0.228", default-features = true, features = ["derive"] }
 serial_test = { version = "3.2.0", default-features = false }
-tempfile = { version = "3.22.0", default-features = false }
+tempfile = { version = "3.23.0", default-features = false }
 test-case = { version = "3.3.1", default-features = false }
-thiserror = { version = "2.0.16", default-features = true }
-toml = { version = "0.9.5", default-features = false, features = [
+thiserror = { version = "2.0.17", default-features = true }
+toml = { version = "0.9.8", default-features = false, features = [
     "parse",
     "preserve_order",
     "serde",
