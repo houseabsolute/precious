@@ -262,7 +262,7 @@ generated.*
         let parent = full.parent().unwrap();
         debug!("creating dir at {}", parent.display());
         fs::create_dir_all(parent)
-            .with_context(|| format!("Creating dir at {}", parent.display(),))?;
+            .with_context(|| format!("Creating dir at {}", parent.display()))?;
         debug!("writing file at {}", full.display());
         let mut file = fs::File::create(full.clone())
             .context(format!("Creating file at {}", full.display()))?;

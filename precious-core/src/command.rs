@@ -1,5 +1,5 @@
 use crate::paths::matcher::{Matcher, MatcherBuilder};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use itertools::Itertools;
 use log::{debug, info};
 use mitsein::prelude::*;
@@ -291,7 +291,11 @@ impl Command {
             params
                 .ignore_stderr
                 .into_iter()
-                .map(|i| Regex::new(&i).map_err(Into::into))
+                .map(|i| {
+                    Regex::new(&i).with_context(|| {
+                        format!("Failed to compile ignore_stderr regex pattern {i}")
+                    })
+                })
                 .collect::<Result<Vec<_>>>()?
         };
 
@@ -299,12 +303,40 @@ impl Command {
         let root = params.project_root.clone();
         Ok(Command {
             project_root: params.project_root,
-            name: params.name,
+            name: params.name.clone(),
             typ: params.typ,
             filter: Filter {
-                includer: MatcherBuilder::new(&root).with(&params.include)?.build()?,
+                includer: MatcherBuilder::new(&root)
+                    .with(&params.include)
+                    .with_context(|| {
+                        format!(
+                            r#"Failed to create include matcher for command "{}""#,
+                            params.name
+                        )
+                    })?
+                    .build()
+                    .with_context(|| {
+                        format!(
+                            r#"Failed to build include matcher for command "{}""#,
+                            params.name
+                        )
+                    })?,
                 include: params.include,
-                excluder: MatcherBuilder::new(&root).with(&params.exclude)?.build()?,
+                excluder: MatcherBuilder::new(&root)
+                    .with(&params.exclude)
+                    .with_context(|| {
+                        format!(
+                            r#"Failed to create exclude matcher for command "{}""#,
+                            params.name
+                        )
+                    })?
+                    .build()
+                    .with_context(|| {
+                        format!(
+                            r#"Failed to build exclude matcher for command "{}""#,
+                            params.name
+                        )
+                    })?,
             },
             invocation: Invocation {
                 invoke: params.invoke,
@@ -522,10 +554,27 @@ impl Command {
             return Ok(None);
         }
 
-        let path_metadata = self.maybe_path_metadata_for(actual_invoke, files)?;
+        let path_metadata = self
+            .maybe_path_metadata_for(actual_invoke, files)
+            .with_context(|| {
+                format!(
+                    r#"Failed to collect path metadata for tidy command "{}""#,
+                    self.name
+                )
+            })?;
 
-        let in_dir = self.in_dir(files[0])?;
-        let operating_on = self.operating_on(files, &in_dir)?;
+        let in_dir = self.in_dir(files[0]).with_context(|| {
+            format!(
+                r#"Failed to determine working directory before running tidy command "{}""#,
+                self.name
+            )
+        })?;
+        let operating_on = self.operating_on(files, &in_dir).with_context(|| {
+            format!(
+                r#"Failed to prepare file arguments for tidy command "{}""#,
+                self.name
+            )
+        })?;
         let (cmd, args) =
             self.cmd_and_args_for_exec(self.execution.tidy_flags.as_deref(), &operating_on);
 
@@ -546,10 +595,16 @@ impl Command {
             in_dir.display(),
             exec.loggable_command,
         );
-        exec.run()?;
+        exec.run()
+            .with_context(|| format!(r#"Tidy command "{}" failed to execute"#, self.name))?;
 
         if let Some(pm) = path_metadata {
-            if self.paths_were_changed(pm)? {
+            if self.paths_were_changed(pm).with_context(|| {
+                format!(
+                    r#"Failed to determine if files were changed by tidy command "{}""#,
+                    self.name
+                )
+            })? {
                 return Ok(Some(TidyOutcome::Changed));
             }
             return Ok(Some(TidyOutcome::Unchanged));
@@ -568,8 +623,18 @@ impl Command {
             return Ok(None);
         }
 
-        let in_dir = self.in_dir(files[0])?;
-        let operating_on = self.operating_on(files, &in_dir)?;
+        let in_dir = self.in_dir(files[0]).with_context(|| {
+            format!(
+                r#"Failed to determine working directory before running lint command "{}""#,
+                self.name
+            )
+        })?;
+        let operating_on = self.operating_on(files, &in_dir).with_context(|| {
+            format!(
+                r#"Failed to prepare file arguments for lint command "{}""#,
+                self.name
+            )
+        })?;
 
         let (cmd, args) =
             self.cmd_and_args_for_exec(self.execution.lint_flags.as_deref(), &operating_on);
@@ -592,7 +657,9 @@ impl Command {
             exec.loggable_command,
         );
 
-        let result = exec.run()?;
+        let result = exec
+            .run()
+            .with_context(|| format!(r#"Lint command "{}" failed to execute"#, self.name))?;
 
         Ok(Some(LintOutcome {
             ok: !self
@@ -723,11 +790,14 @@ impl Command {
                 .sorted()
                 .map(|r| self.path_relative_to(r, in_dir))
                 .collect::<Vec<_>>()),
-            PathArgs::Dir => Ok(Self::files_by_dir_hashmap(files)?
-                .into_keys()
-                .sorted()
-                .map(|r| self.path_relative_to(r, in_dir))
-                .collect::<Vec<_>>()),
+            PathArgs::Dir => Self::files_by_dir_hashmap(files)
+                .context(r#"Failed to group files by directory for path-args = "dir""#)
+                .map(|fm| {
+                    fm.into_keys()
+                        .sorted()
+                        .map(|r| self.path_relative_to(r, in_dir))
+                        .collect::<Vec<_>>()
+                }),
             PathArgs::None => Ok(vec![]),
             PathArgs::Dot => Ok(vec![PathBuf::from(".")]),
             PathArgs::AbsoluteFile => Ok(files
@@ -739,17 +809,20 @@ impl Command {
                     abs
                 })
                 .collect()),
-            PathArgs::AbsoluteDir => Ok(Self::files_by_dir_hashmap(files)?
-                .into_keys()
-                .map(|d| {
-                    let mut abs = self.project_root.clone();
-                    if d.components().count() != 0 {
-                        abs.push(d);
-                    }
-                    abs
-                })
-                .sorted()
-                .collect()),
+            PathArgs::AbsoluteDir => Self::files_by_dir_hashmap(files)
+                .context(r#"Failed to group files by directory for path-args = "absolute-dir""#)
+                .map(|fm| {
+                    fm.into_keys()
+                        .map(|d| {
+                            let mut abs = self.project_root.clone();
+                            if d.components().count() != 0 {
+                                abs.push(d);
+                            }
+                            abs
+                        })
+                        .sorted()
+                        .collect()
+                }),
         }
     }
 
@@ -808,20 +881,39 @@ impl Command {
         full_path.push(path);
 
         if full_path.is_file() {
-            let meta = Self::metadata_for_file(&full_path)?;
+            let meta = Self::metadata_for_file(&full_path).with_context(|| {
+                format!("Failed to get metadata for file {}", full_path.display())
+            })?;
             path_map.insert(full_path, meta);
         } else if full_path.is_dir() {
             dir = Some(path.to_path_buf());
-            for entry in fs::read_dir(full_path)? {
-                let entry = entry?;
+            let entries = fs::read_dir(&full_path)
+                .with_context(|| format!("Failed to read directory {}", full_path.display()))?;
+            for entry in entries {
+                let entry = entry.with_context(|| {
+                    format!(
+                        "Failed to read directory entry from {}",
+                        full_path.display()
+                    )
+                })?;
                 let path = entry.path();
                 if path.is_file() && self.file_matches_rules(&path) {
-                    let meta = entry.metadata()?;
-                    let hash = md5::compute(fs::read(&path)?);
+                    let meta = entry.metadata().with_context(|| {
+                        format!("Failed to get metadata for file {}", path.display())
+                    })?;
+                    let hash = md5::compute(fs::read(&path).with_context(|| {
+                        format!("Failed to read file {} for MD5 hashing", path.display())
+                    })?);
+                    let mtime = meta.modified().with_context(|| {
+                        format!(
+                            "Failed to get modification time for file {}",
+                            path.display()
+                        )
+                    })?;
                     path_map.insert(
                         path,
                         PathInfo {
-                            mtime: meta.modified()?,
+                            mtime,
                             size: meta.len(),
                             hash,
                         },
@@ -853,11 +945,22 @@ impl Command {
     }
 
     fn metadata_for_file(file: &Path) -> Result<PathInfo> {
-        let meta = fs::metadata(file)?;
+        let meta = fs::metadata(file)
+            .with_context(|| format!("Failed to get metadata for file {}", file.display()))?;
+        let mtime = meta.modified().with_context(|| {
+            format!(
+                "Failed to get modification time for file {}",
+                file.display()
+            )
+        })?;
+        let hash =
+            md5::compute(fs::read(file).with_context(|| {
+                format!("Failed to read file {} for MD5 hashing", file.display())
+            })?);
         Ok(PathInfo {
-            mtime: meta.modified()?,
+            mtime,
             size: meta.len(),
-            hash: md5::compute(fs::read(file)?),
+            hash,
         })
     }
 
@@ -927,14 +1030,24 @@ impl Command {
                 // If the file no longer exists the command must've deleted
                 // it.
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
-                Err(e) => return Err(e.into()),
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("Failed to get metadata for file {}", prev_file.display())
+                    })
+                }
             };
             // If the mtime is unchanged we don't need to compare anything
             // else. Unfortunately there's no guarantee a command won't modify
             // the mtime even if it doesn't change the file's contents, so we
             // cannot assume anything was changed just because the mtime
             // changed. For example, Perl::Tidy does this :(
-            if prev_meta.mtime == current_meta.modified()? {
+            let current_mtime = current_meta.modified().with_context(|| {
+                format!(
+                    "Failed to get modification time for file {}",
+                    prev_file.display()
+                )
+            })?;
+            if prev_meta.mtime == current_mtime {
                 continue;
             }
 
@@ -944,19 +1057,30 @@ impl Command {
             }
 
             // Otherwise we need to compare the content hash.
-            if prev_meta.hash != md5::compute(fs::read(prev_file)?) {
+            let current_hash = md5::compute(fs::read(prev_file).with_context(|| {
+                format!(
+                    "Failed to read file {} for MD5 hashing",
+                    prev_file.display()
+                )
+            })?);
+            if prev_meta.hash != current_hash {
                 return Ok(true);
             }
         }
 
         if let Some(dir) = prev.dir {
-            let entries = match fs::read_dir(dir) {
+            let entries = match fs::read_dir(&dir) {
                 Ok(rd) => rd,
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
-                Err(e) => return Err(e.into()),
+                Err(e) => {
+                    return Err(e)
+                        .with_context(|| format!("Failed to read directory {}", dir.display()))
+                }
             };
             for entry in entries {
-                let entry = entry?;
+                let entry = entry.with_context(|| {
+                    format!("Failed to read directory entry from {}", dir.display())
+                })?;
                 let path = entry.path();
                 if path.is_file()
                     && self.file_matches_rules(&path)
@@ -971,7 +1095,7 @@ impl Command {
     }
 
     pub fn config_key(&self) -> String {
-        format!("commands.{}", Self::maybe_toml_quote(&self.name),)
+        format!("commands.{}", Self::maybe_toml_quote(&self.name))
     }
 
     fn maybe_toml_quote(name: &str) -> String {
@@ -1013,7 +1137,7 @@ fn file_summary_for_log(files: &Slice1<&Path>) -> String {
         return files.iter().map(|p| p.to_string_lossy()).join(" ");
     }
     let first3 = files.iter().take(3).map(|p| p.to_string_lossy()).join(" ");
-    format!("{} ... and {} more", first3, files.len().get() - 3,)
+    format!("{} ... and {} more", first3, files.len().get() - 3)
 }
 
 fn replace_root(cmd: &[String], root: &Path) -> Vec<String> {
@@ -1417,7 +1541,7 @@ mod tests {
         for i in include.iter() {
             let files: Vec1<&Path> = i.iter1().map(Path::new).collect1();
             assert!(
-                command.should_act_on_files(ActualInvoke::PerDir, &files,)?,
+                command.should_act_on_files(ActualInvoke::PerDir, &files)?,
                 "{}",
                 i.join(", ")
             );
@@ -1432,7 +1556,7 @@ mod tests {
         for e in exclude.iter() {
             let files: Vec1<&Path> = e.iter1().map(Path::new).collect1();
             assert!(
-                !command.should_act_on_files(ActualInvoke::PerDir, &files,)?,
+                !command.should_act_on_files(ActualInvoke::PerDir, &files)?,
                 "{}",
                 e.join(", ")
             );
@@ -1462,7 +1586,7 @@ mod tests {
             let files: Vec1<&Path> = i[1..].iter().map(Path::new).try_collect1().unwrap();
             let name = dir.clone();
             assert!(
-                command.should_act_on_files(ActualInvoke::Once, &files,)?,
+                command.should_act_on_files(ActualInvoke::Once, &files)?,
                 "{}",
                 name.display()
             );
@@ -1483,7 +1607,7 @@ mod tests {
             let files: Vec1<&Path> = e[1..].iter().map(Path::new).try_collect1().unwrap();
             let name = dir.clone();
             assert!(
-                !command.should_act_on_files(ActualInvoke::Once, &files,)?,
+                !command.should_act_on_files(ActualInvoke::Once, &files)?,
                 "{}",
                 name.display()
             );
@@ -1538,7 +1662,7 @@ mod tests {
 
         let files = vec1![Path::new("file1"), Path::new("subdir/file2")];
         assert_eq!(
-            command.operating_on(&files, &command.project_root,)?,
+            command.operating_on(&files, &command.project_root)?,
             vec![PathBuf::from("."), PathBuf::from("subdir")],
         );
 
@@ -2042,7 +2166,7 @@ mod tests {
         command.invocation.invoke = actual_invoke.as_invoke();
         command.filter.include = include.iter().map(|i| i.to_string()).collect();
         let paths: Vec1<&Path> = paths.iter1().map(Path::new).collect1();
-        assert_eq!(&command.paths_summary(actual_invoke, &paths,), expect,);
+        assert_eq!(&command.paths_summary(actual_invoke, &paths), expect);
 
         Ok(())
     }

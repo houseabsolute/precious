@@ -6,13 +6,13 @@ use precious_core::precious;
 fn main() {
     let app = precious::app();
     if let Err(e) = app.init_logger() {
-        eprintln!("Error creating logger: {e}");
+        eprintln!("Error creating logger: {e:?}");
         std::process::exit(42);
     }
     let status = match app.run() {
         Ok(s) => s,
         Err(e) => {
-            error!("{e}");
+            error!("{e:?}");
             42
         }
     };

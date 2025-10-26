@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use std::path::Path;
 
@@ -18,14 +18,19 @@ impl MatcherBuilder {
 
     pub fn with(mut self, globs: &[impl AsRef<str>]) -> Result<Self> {
         for g in globs {
-            self.builder.add_line(None, g.as_ref())?;
+            self.builder.add_line(None, g.as_ref()).with_context(|| {
+                format!(r#"Failed to add glob pattern "{}" to matcher"#, g.as_ref())
+            })?;
         }
         Ok(self)
     }
 
     pub fn build(self) -> Result<Matcher> {
         Ok(Matcher {
-            gitignore: self.builder.build()?,
+            gitignore: self
+                .builder
+                .build()
+                .context("Failed to build gitignore matcher")?,
         })
     }
 }

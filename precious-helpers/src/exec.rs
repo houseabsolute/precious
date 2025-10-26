@@ -123,7 +123,9 @@ impl<'a> Exec<'a> {
             .into());
         }
 
-        let cmd = self.as_command()?;
+        let cmd = self
+            .as_command()
+            .with_context(|| format!("Failed to prepare command '{}'", self.exe))?;
 
         if log_enabled!(Debug) {
             debug!(
@@ -143,12 +145,15 @@ impl<'a> Exec<'a> {
             .with_context(|| format!(r"Failed to execute command `{}`", self.full_command()))?;
 
         if log_enabled!(Debug) && !output.stdout.is_empty() {
-            debug!("Stdout was:\n{}", String::from_utf8(output.stdout.clone())?);
+            let stdout = String::from_utf8(output.stdout.clone())
+                .context("Failed to decode stdout as UTF-8")?;
+            debug!("Stdout was:\n{stdout}");
         }
 
         let code = output.status.code().unwrap_or(-1);
         if !output.stderr.is_empty() {
-            let stderr = String::from_utf8(output.stderr.clone())?;
+            let stderr = String::from_utf8(output.stderr.clone())
+                .context("Failed to decode stderr as UTF-8")?;
             if log_enabled!(Debug) {
                 debug!("Stderr was:\n{stderr}");
             }
@@ -175,7 +180,12 @@ impl<'a> Exec<'a> {
     fn output_from_command(&self, mut c: process::Command) -> Result<process::Output> {
         let status = self.maybe_spawn_status_thread();
 
-        let output = c.output()?;
+        let output = c.output().with_context(|| {
+            format!(
+                "Failed to get output from command `{}`",
+                self.full_command()
+            )
+        })?;
         if let Some((sender, thread)) = status {
             if let Err(err) = sender.send(ThreadMessage::Terminate) {
                 warn!("Error terminating background status thread: {err}");
@@ -197,11 +207,15 @@ impl<'a> Exec<'a> {
             return if self.ok_exit_codes.contains(&code) {
                 Ok(output)
             } else {
+                let stdout = String::from_utf8(output.stdout)
+                    .context("Failed to decode command stdout as UTF-8")?;
+                let stderr = String::from_utf8(output.stderr)
+                    .context("Failed to decode command stderr as UTF-8")?;
                 Err(Error::UnexpectedExitCode {
                     cmd: self.full_command(),
                     code,
-                    stdout: String::from_utf8(output.stdout)?,
-                    stderr: String::from_utf8(output.stderr)?,
+                    stdout,
+                    stderr,
                 }
                 .into())
             };
@@ -224,11 +238,15 @@ impl<'a> Exec<'a> {
             self.full_command(),
             signal
         );
+        let stdout = String::from_utf8(output.stdout)
+            .context("Failed to decode command stdout as UTF-8 for signal error")?;
+        let stderr = String::from_utf8(output.stderr)
+            .context("Failed to decode command stderr as UTF-8 for signal error")?;
         Err(Error::ProcessKilledBySignal {
             cmd: self.full_command(),
             signal,
-            stdout: String::from_utf8(output.stdout)?,
-            stderr: String::from_utf8(output.stderr)?,
+            stdout,
+            stderr,
         }
         .into())
     }

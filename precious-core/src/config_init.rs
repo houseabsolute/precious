@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::ValueEnum;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -498,14 +498,16 @@ pub(crate) fn write_config_files(
     components: &[InitComponent],
     path: &Path,
 ) -> Result<()> {
-    if env::current_dir()?.join(path).exists() {
+    let cwd = env::current_dir().with_context(|| "Failed to get current working directory")?;
+    if cwd.join(path).exists() {
         return Err(ConfigInitError::FileExists {
             path: path.to_owned(),
         }
         .into());
     }
 
-    let elements = config_elements(auto, components)?;
+    let elements =
+        config_elements(auto, components).with_context(|| "Failed to generate config elements")?;
 
     let mut toml = excludes_toml(&elements.excludes);
 
@@ -518,10 +520,14 @@ pub(crate) fn write_config_files(
     println!();
     println!("Writing {}", path.display());
 
-    let mut precious_toml = File::create(path)?;
-    precious_toml.write_all(toml.as_bytes())?;
+    let mut precious_toml = File::create(path)
+        .with_context(|| format!("Failed to create config file at {}", path.display()))?;
+    precious_toml
+        .write_all(toml.as_bytes())
+        .with_context(|| format!("Failed to write config data to {}", path.display()))?;
 
-    write_extra_files(&elements.extra_files)?;
+    write_extra_files(&elements.extra_files)
+        .with_context(|| format!("Failed to write extra files for {components:?} components"))?;
 
     println!();
     println!("The generated precious.toml requires the following tools to be installed:");
@@ -574,14 +580,16 @@ fn auto_or_component(auto: bool, components: &[InitComponent]) -> Result<Vec<Ini
     }
 
     let mut components: HashSet<InitComponent> = HashSet::new();
-    let cwd = env::current_dir()?;
+    let cwd =
+        env::current_dir().context("Failed to get current working directory for auto detection")?;
     debug!(
         "Looking at all files under {} to determine which components to include.",
         cwd.display(),
     );
 
     for result in ignore::WalkBuilder::new(&cwd).hidden(false).build() {
-        let entry = result?;
+        let entry =
+            result.with_context(|| format!("Failed to walk directory {}", cwd.display()))?;
         // The only time this is `None` is when the entry is for stdin, which
         // will never happen here.
         if !entry.file_type().unwrap().is_file() {
@@ -626,7 +634,7 @@ fn excludes_toml(excludes: &HashSet<&str>) -> String {
     }
 
     if excludes.len() == 1 {
-        format!("exclude = [\"{}\"]", excludes.iter().next().unwrap(),)
+        format!(r#"exclude = ["{}"]"#, excludes.iter().next().unwrap())
     } else {
         format!(
             "exclude = [\n{}\n]",
@@ -675,17 +683,25 @@ fn write_extra_files(extra_files: &HashMap<PathBuf, ConfigInitFile>) -> Result<(
         println!(" generated");
 
         if let Some(parent) = p.parent() {
-            create_dir_all(parent)?;
+            create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
         }
-        let mut file = File::create(p)?;
+        let mut file =
+            File::create(p).with_context(|| format!("Failed to create file {}", p.display()))?;
         let f = extra_files.get(p).unwrap();
-        file.write_all(f.content.trim_start().as_bytes())?;
+        file.write_all(f.content.trim_start().as_bytes())
+            .with_context(|| format!("Failed to write content to file {}", p.display()))?;
 
         #[cfg(unix)]
         if f.is_executable {
-            let mut perms = file.metadata()?.permissions();
+            let mut perms = file
+                .metadata()
+                .with_context(|| format!("Failed to get metadata for {}", p.display()))?
+                .permissions();
             perms.set_mode(0o755);
-            file.set_permissions(perms)?;
+            file.set_permissions(perms).with_context(|| {
+                format!("Failed to set executable permissions on {}", p.display())
+            })?;
         }
     }
 

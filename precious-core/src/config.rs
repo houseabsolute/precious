@@ -1,5 +1,5 @@
 use crate::command::{self, CommandType, Invoke, PathArgs, WorkingDir};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use serde::{de, de::Deserializer, Deserialize};
 use std::{
@@ -164,17 +164,16 @@ const DEFAULT_LABEL: &str = "default";
 
 impl Config {
     pub(crate) fn new(file: &Path) -> Result<Config> {
-        match fs::read(file) {
-            Err(e) => Err(ConfigError::FileCannotBeRead {
-                file: file.to_path_buf(),
-                error: e.to_string(),
-            }
-            .into()),
-            Ok(bytes) => {
-                let s = String::from_utf8(bytes)?;
-                Ok(toml::from_str(&s)?)
-            }
-        }
+        let bytes = fs::read(file).map_err(|e| ConfigError::FileCannotBeRead {
+            file: file.to_path_buf(),
+            error: e.to_string(),
+        })?;
+
+        let content = String::from_utf8(bytes)
+            .with_context(|| format!("Config file at {} contains invalid UTF-8", file.display()))?;
+
+        toml::from_str::<Config>(&content)
+            .with_context(|| format!("Failed to parse config file at {} as TOML", file.display()))
     }
 
     pub(crate) fn into_tidy_commands(
@@ -218,7 +217,8 @@ impl Config {
                 continue;
             }
 
-            commands.push(c.into_command(project_root, name)?);
+            let cmd = c.try_into_command(project_root, &name)?;
+            commands.push(cmd);
         }
 
         Ok(commands)
@@ -230,21 +230,28 @@ impl Config {
 }
 
 impl CommandConfig {
-    fn into_command(self, project_root: &Path, name: String) -> Result<command::Command> {
-        let n = command::Command::new(self.into_command_params(project_root, name)?)?;
-        Ok(n)
+    fn try_into_command(self, project_root: &Path, name: &str) -> Result<command::Command> {
+        let params = self
+            .into_command_params(project_root, name)
+            .with_context(|| format!(r#"Failed to build parameters for command "{name}""#))?;
+        let cmd = command::Command::new(params)
+            .with_context(|| format!(r#"Failed to create command "{name}" from parameters"#))?;
+        Ok(cmd)
     }
 
     fn into_command_params(
         self,
         project_root: &Path,
-        name: String,
+        name: &str,
     ) -> Result<command::CommandParams> {
         let (invoke, working_dir, path_args) =
-            Self::invoke_args(self.invoke, self.working_dir, self.path_args)?;
+            Self::invoke_args(self.invoke, self.working_dir, self.path_args).context(
+                "Invalid configuration combination for command invoke/working-dir/path-args",
+            )?;
+
         Ok(command::CommandParams {
             project_root: project_root.to_owned(),
-            name,
+            name: name.to_string(),
             typ: self.typ,
             include: self.include,
             exclude: self.exclude,
@@ -526,7 +533,7 @@ mod tests {
             ignore_stderr: vec![],
             labels: vec![],
         };
-        let res = config.into_command(Path::new("."), String::from("some-linter"));
+        let res = config.try_into_command(Path::new("."), String::from("some-linter"));
         let err = res.unwrap_err().downcast::<ConfigError>().unwrap();
         assert_eq!(err, expect_err);
 

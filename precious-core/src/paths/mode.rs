@@ -21,7 +21,7 @@ impl fmt::Display for Mode {
                 f,
                 "files staged for a git commit, stashing unstaged content"
             ),
-            Mode::GitDiffFrom(from) => write!(f, "files modified as compared to {from:}",),
+            Mode::GitDiffFrom(from) => write!(f, "files modified as compared to {from:}"),
         }
     }
 }

@@ -6,7 +6,7 @@ use crate::{
     paths::{self, finder::Finder},
     vcs,
 };
-use anyhow::{Error, Result};
+use anyhow::{Context, Error, Result};
 use clap::{ArgAction, ArgGroup, Parser};
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 use fern::{
@@ -258,7 +258,8 @@ impl App {
                     init_args.auto,
                     &init_args.component,
                     &init_args.path,
-                )?;
+                )
+                .context("Failed to initialize config files")?;
                 return Ok(0);
             }
         }
@@ -272,7 +273,8 @@ impl App {
             Subcommand::Config(args) => {
                 match args.subcommand {
                     ConfigSubcommand::List => {
-                        print_config(output, &config_file, config)?;
+                        print_config(output, &config_file, config)
+                            .context("Failed to print config")?;
                     }
                     ConfigSubcommand::Init(_) => {
                         unreachable!("This is handled earlier")
@@ -292,10 +294,12 @@ impl App {
     }
 
     fn load_config(&self) -> Result<(PathBuf, PathBuf, PathBuf, config::Config)> {
-        let cwd = env::current_dir()?;
-        let project_root = project_root(self.config.as_deref(), &cwd)?;
+        let cwd = env::current_dir().context("Failed to get current working directory")?;
+        let project_root = project_root(self.config.as_deref(), &cwd)
+            .context("Failed to determine project root")?;
         let config_file = self.config_file(&project_root);
-        let config = config::Config::new(&config_file)?;
+        let config = config::Config::new(&config_file)
+            .with_context(|| format!("Failed to load config from {}", config_file.display()))?;
 
         Ok((cwd, project_root, config_file, config))
     }
@@ -510,8 +514,8 @@ impl LintOrTidyRunner {
         match self.run_subcommand() {
             Ok(e) => {
                 debug!("{e:?}");
-                if let Some(err) = e.error {
-                    print!("{err}");
+                if let Some(e) = e.error {
+                    print!("{e:?}");
                 }
                 if let Some(msg) = e.message {
                     println!("{} {}", self.chars.empty, msg);
@@ -519,7 +523,7 @@ impl LintOrTidyRunner {
                 e.status
             }
             Err(e) => {
-                error!("Failed to run precious: {e}");
+                error!("Failed to run precious: {e:?}");
                 42
             }
         }
@@ -545,7 +549,8 @@ impl LintOrTidyRunner {
                 &self.project_root,
                 self.command.as_deref(),
                 self.label.as_deref(),
-            )?;
+            )
+            .context("Failed to get tidy commands from config")?;
         self.run_all_commands("tidying", tidiers, Self::run_one_tidier)
     }
 
@@ -560,7 +565,8 @@ impl LintOrTidyRunner {
                 &self.project_root,
                 self.command.as_deref(),
                 self.label.as_deref(),
-            )?;
+            )
+            .context("Failed to get lint commands from config")?;
         self.run_all_commands("linting", linters, Self::run_one_linter)
     }
 
@@ -599,13 +605,23 @@ impl LintOrTidyRunner {
             _ => vec![],
         };
 
-        match self.finder()?.files(cli_paths)? {
+        let files = self
+            .finder()
+            .context("Failed to create file finder")?
+            .files(cli_paths)
+            .with_context(|| format!("Failed to find files for {action}"))?;
+
+        match files {
             None => Ok(Self::no_files_exit()),
             Some(files) => {
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for c in commands {
                     debug!(r"Command config for {}: {}", c.name, c.config_debug());
-                    if let Some(mut failures) = run_command(self, &files, &c)? {
+                    if let Some(mut failures) =
+                        run_command(self, &files, &c).with_context(|| {
+                            format!(r#"Failed to run command "{}" for {action}"#, c.name)
+                        })?
+                    {
                         all_failures.append(&mut failures);
                     }
                 }
@@ -618,7 +634,7 @@ impl LintOrTidyRunner {
     fn finder(&mut self) -> Result<Finder> {
         Finder::new(
             self.mode.clone(),
-            self.project_root.clone(),
+            &self.project_root,
             self.cwd.clone(),
             self.config.exclude.clone(),
         )
@@ -806,7 +822,12 @@ impl LintOrTidyRunner {
     where
         R: Fn(&Self, ActualInvoke, &Slice1<&Path>) -> Option<Result<(), ActionFailure>> + Sync,
     {
-        let (sets, actual_invoke) = c.files_to_args_sets(files)?;
+        let (sets, actual_invoke) = c.files_to_args_sets(files).with_context(|| {
+            format!(
+                r#"Failed to prepare file argument sets for command "{}""#,
+                c.name
+            )
+        })?;
 
         let start = Instant::now();
         let results = self

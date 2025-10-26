@@ -5,7 +5,7 @@ use crate::{
     },
     vcs,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clean_path::Clean;
 use log::{debug, error};
 use mitsein::prelude::*;
@@ -40,10 +40,10 @@ pub enum FinderError {
     #[error("Path passed on the command line does not exist: {}", path.display())]
     NonExistentPathOnCli { path: PathBuf },
 
-    #[error("Could not determine the repo root by running \"git rev-parse --show-toplevel\"")]
+    #[error(r#"Could not determine the repo root by running "git rev-parse --show-toplevel""#)]
     CouldNotDetermineRepoRoot,
 
-    #[error("The path \"{}\" does not contain \"{}\" as a prefix", path.display(), prefix.display())]
+    #[error(r#"The path "{}" does not contain "{}" as a prefix"#, path.display(), prefix.display())]
     PrefixNotFound { path: PathBuf, prefix: PathBuf },
 }
 
@@ -52,13 +52,20 @@ static KEEP_INDEX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap
 impl Finder {
     pub fn new(
         mode: Mode,
-        project_root: PathBuf,
+        project_root: &Path,
         cwd: PathBuf,
         exclude_globs: Vec<String>,
     ) -> Result<Finder> {
+        let canonical_root = fs::canonicalize(project_root).with_context(|| {
+            format!(
+                "Failed to canonicalize project root path {}",
+                project_root.display()
+            )
+        })?;
+
         Ok(Finder {
             mode,
-            project_root: fs::canonicalize(project_root)?,
+            project_root: canonical_root,
             git_root: None,
             cwd,
             exclude_globs,
@@ -80,11 +87,19 @@ impl Finder {
         }
 
         let mut files = match self.mode.clone() {
-            Mode::All => self.all_files()?,
-            Mode::FromCli => self.files_from_cli(cli_paths)?,
-            Mode::GitModified => self.git_modified_files()?,
-            Mode::GitStaged | Mode::GitStagedWithStash => self.git_staged_files()?,
-            Mode::GitDiffFrom(ref from) => self.git_modified_since(from)?,
+            Mode::All => self.all_files().context("Failed to get all files")?,
+            Mode::FromCli => self
+                .files_from_cli(cli_paths)
+                .context("Failed to get files from command line")?,
+            Mode::GitModified => self
+                .git_modified_files()
+                .context("Failed to get git-modified files")?,
+            Mode::GitStaged | Mode::GitStagedWithStash => self
+                .git_staged_files()
+                .context("Failed to get git-staged files")?,
+            Mode::GitDiffFrom(ref from) => self
+                .git_modified_since(from)
+                .with_context(|| format!(r#"Failed to get files modified since "{from}""#))?,
         };
         files.sort();
 
@@ -119,9 +134,13 @@ impl Finder {
             .ok_exit_codes(&[0])
             .in_dir(&self.project_root)
             .build()
-            .run()?;
+            .run()
+            .context("Failed to run git rev-parse to determine repository root")?;
 
-        let stdout = res.stdout.ok_or(FinderError::CouldNotDetermineRepoRoot)?;
+        let stdout = res
+            .stdout
+            .ok_or(FinderError::CouldNotDetermineRepoRoot)
+            .context("git rev-parse did not produce output")?;
         self.git_root = Some(PathBuf::from(stdout.trim()));
 
         Ok(self.git_root.clone().unwrap())
@@ -203,13 +222,19 @@ impl Finder {
     fn walkdir_files(&self, root: &Path) -> Result<Vec<PathBuf>> {
         let mut exclude_globs = ignore::overrides::OverrideBuilder::new(root);
         for d in vcs::DIRS {
-            exclude_globs.add(&format!("!{d}/**/*"))?;
+            exclude_globs
+                .add(&format!("!{d}/**/*"))
+                .with_context(|| format!("Failed to add VCS directory override pattern for {d}"))?;
         }
+
+        let overrides = exclude_globs
+            .build()
+            .context("Failed to build directory override patterns")?;
 
         let mut files: Vec<PathBuf> = vec![];
         for result in ignore::WalkBuilder::new(root)
             .hidden(false)
-            .overrides(exclude_globs.build()?)
+            .overrides(overrides)
             .build()
         {
             match result {
@@ -219,28 +244,39 @@ impl Finder {
                     }
                     files.push(ent.into_path());
                 }
-                Err(e) => return Err(e.into()),
+                Err(e) => {
+                    return Err(e)
+                        .with_context(|| format!("Failed to walk directory {}", root.display()))?
+                }
             }
         }
 
-        let exclude_matcher = self.exclude_matcher()?;
+        let exclude_matcher = self
+            .exclude_matcher()
+            .context("Failed to build exclude matcher")?;
         Ok(self
-            .paths_relative_to_project_root(&self.project_root, files)?
+            .paths_relative_to_project_root(&self.project_root, files)
+            .context("Failed to compute paths relative to project root")?
             .into_iter()
             .filter(|f| !exclude_matcher.path_matches(f, false))
             .collect::<Vec<_>>())
     }
 
     fn files_from_git(&mut self, args: Vec<&str>) -> Result<Vec<PathBuf>> {
-        let git_root = self.git_root()?;
+        let git_root = self
+            .git_root()
+            .context("Failed to determine git root while getting file list")?;
         let output = Exec::builder()
             .exe("git")
             .args(args)
             .ok_exit_codes(&[0])
             .in_dir(&self.project_root)
             .build()
-            .run()?;
-        let exclude_matcher = self.exclude_matcher()?;
+            .run()
+            .context("Failed to run git to get list of files")?;
+        let exclude_matcher = self
+            .exclude_matcher()
+            .context("Failed to build exclude matcher for git files")?;
 
         match output.stdout {
             Some(s) => Ok(
@@ -277,9 +313,12 @@ impl Finder {
 
     fn exclude_matcher(&self) -> Result<Matcher> {
         MatcherBuilder::new(&self.project_root)
-            .with(&self.exclude_globs)?
-            .with(vcs::DIRS)?
+            .with(&self.exclude_globs)
+            .context("Failed to add exclude globs to matcher")?
+            .with(vcs::DIRS)
+            .context("Failed to add VCS directories to matcher")?
             .build()
+            .context("Failed to build exclude matcher")
     }
 
     // We want to make all files relative. This lets us consistently produce
@@ -310,12 +349,24 @@ impl Finder {
         // If the directory given is just "." then the first clean() removes
         // that and we then strip the prefix, leaving an empty string. The
         // second clean turns that back into ".".
-        Ok(fs::canonicalize(path)?
-            .clean()
+        let canonical = fs::canonicalize(path)
+            .with_context(|| format!("Failed to canonicalize path {}", path.display()))?
+            .clean();
+
+        Ok(canonical
             .strip_prefix(&self.project_root)
-            .map_err(|_| FinderError::PrefixNotFound {
-                path: path.to_path_buf(),
-                prefix: self.project_root.clone(),
+            .map_err(|_| {
+                anyhow::anyhow!(FinderError::PrefixNotFound {
+                    path: path.to_path_buf(),
+                    prefix: self.project_root.clone(),
+                })
+            })
+            .with_context(|| {
+                format!(
+                    "Failed to make path {} relative to project root {}",
+                    path.display(),
+                    self.project_root.display()
+                )
             })?
             .to_path_buf()
             .clean())
@@ -368,7 +419,7 @@ mod tests {
         cwd: PathBuf,
         exclude: Vec<String>,
     ) -> Result<Finder> {
-        Finder::new(mode, root, cwd, exclude)
+        Finder::new(mode, &root, cwd, exclude)
     }
 
     #[cfg(not(target_os = "windows"))]
