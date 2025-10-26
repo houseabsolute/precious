@@ -533,7 +533,7 @@ mod tests {
             ignore_stderr: vec![],
             labels: vec![],
         };
-        let res = config.try_into_command(Path::new("."), String::from("some-linter"));
+        let res = config.try_into_command(Path::new("."), "some-linter");
         let err = res.unwrap_err().downcast::<ConfigError>().unwrap();
         assert_eq!(err, expect_err);
 

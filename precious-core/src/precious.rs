@@ -20,6 +20,7 @@ use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
     env,
     fmt::Write,
+    fs,
     io::stdout,
     num::NonZeroUsize,
     path::{Path, PathBuf},
@@ -322,7 +323,12 @@ impl App {
 fn project_root(config_file: Option<&Path>, cwd: &Path) -> Result<PathBuf> {
     if let Some(file) = config_file {
         if let Some(p) = file.parent() {
-            return Ok(p.to_path_buf());
+            if p.to_string_lossy().is_empty() {
+                return Ok(cwd.to_path_buf());
+            }
+            return fs::canonicalize(p).with_context(|| {
+                format!("Canonicalizing config file parent path {}", p.display())
+            });
         }
         return Err(PreciousError::ConfigFileHasNoParent {
             file: file.to_path_buf(),
@@ -1012,6 +1018,28 @@ lint-failure-exit-codes = [1]
 
         let lt = app.new_lint_or_tidy_runner()?;
         assert_eq!(lt.project_root, src_dir);
+
+        Ok(())
+    }
+
+    #[test_case(None, true; "no config file specified, in project root")]
+    #[test_case(None, false; "no config file specified, in subdir")]
+    #[test_case(Some("precious.toml"), true; "precious.toml in project root")]
+    #[test_case(Some("./precious.toml"), true; "./precious.toml in project root")]
+    #[test_case(Some("../precious.toml"), false; "../precious.toml in subdir")]
+    #[serial]
+    fn project_root(config_file: Option<&str>, in_project_root: bool) -> Result<()> {
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let _pushd = if in_project_root {
+            helper.pushd_to_git_root()?
+        } else {
+            helper.pushd_to_subdir()?
+        };
+
+        let cwd = env::current_dir()?;
+
+        let root = super::project_root(config_file.map(Path::new), &cwd)?;
+        assert_eq!(root, helper.precious_root());
 
         Ok(())
     }

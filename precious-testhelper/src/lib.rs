@@ -122,6 +122,12 @@ impl TestHelper {
         Ok(Pushd::new(self.git_root.clone())?)
     }
 
+    pub fn pushd_to_subdir(&self) -> Result<Pushd> {
+        let mut subdir = self.git_root.clone();
+        subdir.push("src");
+        Ok(Pushd::new(subdir)?)
+    }
+
     pub fn git_root(&self) -> PathBuf {
         self.git_root.clone()
     }

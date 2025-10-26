@@ -1,3 +1,8 @@
+## 0.10.1
+
+- Fixed a bug when calling `precious -c precious.toml`, where it would fail with an error like
+  `Failed to run precious: No such file or directory`. Reported by Olaf Alders (@oalders). GH #89.
+
 ## 0.10.0 2025-09-13
 
 - Removed support for the deprecated `run-mode` and `chdir` config keys. See
