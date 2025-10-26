@@ -1089,7 +1089,7 @@ lint-failure-exit-codes = [1]
         let helper = TestHelper::new()?
             .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
             .with_git_repo()?;
-        (action)(&helper)?;
+        action(&helper)?;
 
         let mut src_dir = helper.precious_root();
         src_dir.push("src");
