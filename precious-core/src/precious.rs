@@ -15,11 +15,13 @@ use fern::{
 };
 use itertools::Itertools;
 use log::{debug, error, info};
+use mitsein::prelude::*;
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
     env,
     fmt::Write,
     io::stdout,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -569,7 +571,7 @@ impl LintOrTidyRunner {
         run_command: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, &[PathBuf], &command::Command) -> Result<Option<Vec<ActionFailure>>>,
+        R: Fn(&mut Self, &Slice1<PathBuf>, &command::Command) -> Result<Option<Vec<ActionFailure>>>,
     {
         if commands.is_empty() {
             if let Some(c) = &self.command {
@@ -662,12 +664,12 @@ impl LintOrTidyRunner {
 
     fn run_one_tidier(
         &mut self,
-        files: &[PathBuf],
+        files: &Slice1<PathBuf>,
         t: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self,
                       actual_invoke: ActualInvoke,
-                      files: &[&Path]|
+                      files: &Slice1<&Path>|
          -> Option<Result<(), ActionFailure>> {
             match t.tidy(actual_invoke, files) {
                 Ok(Some(TidyOutcome::Changed)) => {
@@ -722,12 +724,12 @@ impl LintOrTidyRunner {
 
     fn run_one_linter(
         &mut self,
-        files: &[PathBuf],
+        files: &Slice1<PathBuf>,
         l: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self,
                       actual_invoke: ActualInvoke,
-                      files: &[&Path]|
+                      files: &Slice1<&Path>|
          -> Option<Result<(), ActionFailure>> {
             match l.lint(actual_invoke, files) {
                 Ok(Some(lo)) => {
@@ -755,7 +757,7 @@ impl LintOrTidyRunner {
                         }
                         if let Ok(ga) = env::var("GITHUB_ACTIONS") {
                             if !ga.is_empty() {
-                                if files.len() == 1 {
+                                if files.len() == NonZeroUsize::new(1).unwrap() {
                                     println!(
                                         "::error file={}::Linting with {} failed",
                                         files[0].display(),
@@ -797,12 +799,12 @@ impl LintOrTidyRunner {
     fn run_parallel<R>(
         &mut self,
         what: &str,
-        files: &[PathBuf],
+        files: &Slice1<PathBuf>,
         c: &command::Command,
         runner: R,
     ) -> Result<Option<Vec<ActionFailure>>>
     where
-        R: Fn(&Self, ActualInvoke, &[&Path]) -> Option<Result<(), ActionFailure>> + Sync,
+        R: Fn(&Self, ActualInvoke, &Slice1<&Path>) -> Option<Result<(), ActionFailure>> + Sync,
     {
         let (sets, actual_invoke) = c.files_to_args_sets(files)?;
 
@@ -999,7 +1001,7 @@ lint-failure-exit-codes = [1]
         "--all",
         &[],
         Box::new(|_| Ok(())),
-        &[
+        &vec1![
             "README.md",
             "can_ignore.x",
             "merge-conflict-file",
@@ -1022,7 +1024,7 @@ lint-failure-exit-codes = [1]
             th.modify_files()?;
             Ok(())
         }),
-        &["src/module.rs", "tests/data/foo.txt"] ;
+        &vec1!["src/module.rs", "tests/data/foo.txt"] ;
         "--git"
     )]
     #[test_case(
@@ -1033,21 +1035,21 @@ lint-failure-exit-codes = [1]
             th.stage_all()?;
             Ok(())
         }),
-        &["src/module.rs", "tests/data/foo.txt"] ;
+        &vec1!["src/module.rs", "tests/data/foo.txt"] ;
         "--staged"
     )]
     #[test_case(
         "",
         &["main.rs", "module.rs"],
         Box::new(|_| Ok(())),
-        &["src/main.rs", "src/module.rs"] ;
+        &vec1!["src/main.rs", "src/module.rs"] ;
         "file paths from cli"
     )]
     #[test_case(
         "",
         &["."],
         Box::new(|_| Ok(())),
-        &[
+        &vec1![
             "src/bar.rs",
             "src/can_ignore.rs",
             "src/main.rs",
@@ -1061,7 +1063,7 @@ lint-failure-exit-codes = [1]
         flag: &str,
         paths: &[&str],
         action: FinderTestAction,
-        expect: &[&str],
+        expect: &Slice1<&str>,
     ) -> Result<()> {
         let helper = TestHelper::new()?
             .with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?
@@ -1085,7 +1087,7 @@ lint-failure-exit-codes = [1]
         assert_eq!(
             lt.finder()?
                 .files(paths.iter().map(PathBuf::from).collect())?,
-            Some(expect.iter().map(PathBuf::from).collect::<Vec<_>>()),
+            Some(expect.iter1().map(PathBuf::from).collect1()),
             "finder_uses_project_root: {} [{}]",
             if flag.is_empty() { "<none>" } else { flag },
             paths.join(" ")

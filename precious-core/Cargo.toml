@@ -19,6 +19,7 @@ indexmap.workspace = true
 itertools.workspace = true
 log.workspace = true
 md5.workspace = true
+mitsein.workspace = true
 pathdiff.workspace = true
 precious-helpers.workspace = true
 rayon.workspace = true

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use log::debug;
+use mitsein::prelude::*;
 use precious_helpers::exec::Exec;
 use pushd::Pushd;
 use regex::Regex;
@@ -139,6 +140,12 @@ impl TestHelper {
         let mut files = self.paths.clone();
         files.sort();
         files
+    }
+
+    pub fn all_files1(&self) -> Vec1<PathBuf> {
+        let mut files = self.paths.clone();
+        files.sort();
+        files.try_into().unwrap()
     }
 
     pub fn stage_all(&self) -> Result<()> {

@@ -8,6 +8,7 @@ use crate::{
 use anyhow::Result;
 use clean_path::Clean;
 use log::{debug, error};
+use mitsein::prelude::*;
 use precious_helpers::exec::Exec;
 use regex::Regex;
 use std::{
@@ -65,7 +66,7 @@ impl Finder {
         })
     }
 
-    pub fn files(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec<PathBuf>>> {
+    pub fn files(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec1<PathBuf>>> {
         match self.mode {
             Mode::FromCli => (),
             _ => {
@@ -100,7 +101,11 @@ impl Finder {
             };
         }
 
-        Ok(Some(files))
+        Ok(Some(
+            files
+                .try_into()
+                .expect("we already checked that this is not empty"),
+        ))
     }
 
     fn git_root(&mut self) -> Result<PathBuf> {
@@ -393,7 +398,7 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
         let mut finder = new_finder(Mode::All, helper.precious_root())?;
-        assert_eq!(finder.files(vec![])?, Some(helper.all_files()));
+        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
         Ok(())
     }
 
@@ -405,7 +410,7 @@ mod tests {
         cwd.push("src");
 
         let mut finder = new_finder_with_cwd(Mode::All, helper.precious_root(), cwd)?;
-        assert_eq!(finder.files(vec![])?, Some(helper.all_files()));
+        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
         Ok(())
     }
 
@@ -417,6 +422,7 @@ mod tests {
         let mut expect = testhelper::TestHelper::non_ignored_files();
         expect.append(&mut gitignores);
         expect.sort();
+        let expect = Vec1::try_from(expect).unwrap();
 
         let mut finder = new_finder(Mode::All, helper.precious_root())?;
         assert_eq!(finder.files(vec![])?, Some(expect));
@@ -434,7 +440,7 @@ mod tests {
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(helper.all_files()));
+        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
         Ok(())
     }
 
@@ -453,7 +459,7 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
         assert_eq!(finder.files(vec![])?, Some(modified));
         Ok(())
@@ -463,7 +469,7 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_changes_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_cwd(Mode::GitModified, helper.precious_root(), cwd)?;
@@ -496,7 +502,7 @@ mod tests {
         helper.stage_all()?;
         helper.commit_all()?;
 
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
@@ -516,7 +522,7 @@ mod tests {
         helper.stage_all()?;
         helper.commit_all()?;
 
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
@@ -536,7 +542,7 @@ mod tests {
         let helper = testhelper::TestHelper::new()?
             .with_precious_root_in_subdir("subdir")
             .with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         let mut project_root = helper.git_root();
         project_root.push("subdir");
         let mut finder = new_finder(Mode::GitModified, project_root)?;
@@ -548,7 +554,7 @@ mod tests {
     #[parallel]
     fn git_modified_mode_includes_staged() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.stage_some(&[&modified[0]])?;
         let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
         assert_eq!(finder.files(vec![])?, Some(modified));
@@ -570,7 +576,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
 
         {
             let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
@@ -591,7 +597,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_with_changes_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
 
         let mut cwd = helper.precious_root();
         cwd.push("src");
@@ -633,7 +639,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         let mut finder = new_finder_with_excludes(
@@ -650,7 +656,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         let mut cwd = helper.precious_root();
@@ -669,7 +675,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_with_stash_stashes_unindexed() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.stage_all()?;
         let unstaged = "tests/data/bar.txt";
         helper.write_file(PathBuf::from(unstaged), "new content")?;
@@ -726,7 +732,7 @@ mod tests {
         let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
         assert_eq!(
             finder.files(vec![])?,
-            Some(vec![PathBuf::from("merge-conflict-here")]),
+            Some(vec1![PathBuf::from("merge-conflict-here")]),
         );
         assert!(!finder.stashed);
         Ok(())
@@ -741,7 +747,10 @@ mod tests {
         helper.delete_file(modified.remove(0))?;
 
         let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(
+            finder.files(vec![])?,
+            Some(Vec1::try_from(modified).unwrap())
+        );
         Ok(())
     }
 
@@ -759,7 +768,7 @@ mod tests {
         )?;
         assert_eq!(finder.files(vec![])?, None);
 
-        let modified = helper.modify_files()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.commit_all()?;
 
         let mut finder = new_finder(
@@ -780,7 +789,8 @@ mod tests {
             .into_iter()
             .filter(|p| p.starts_with("tests/"))
             .sorted()
-            .collect::<Vec<PathBuf>>();
+            .try_collect1()
+            .unwrap();
         assert_eq!(finder.files(vec![PathBuf::from("tests")])?, Some(expect));
         Ok(())
     }
@@ -797,7 +807,8 @@ mod tests {
             .into_iter()
             .filter(|p| p.starts_with("src/"))
             .sorted()
-            .collect::<Vec<PathBuf>>();
+            .try_collect1()
+            .unwrap();
         assert_eq!(finder.files(vec![PathBuf::from(".")])?, Some(expect));
         Ok(())
     }
@@ -812,7 +823,8 @@ mod tests {
         let expect = ["src/main.rs", "src/module.rs"]
             .iter()
             .map(PathBuf::from)
-            .collect::<Vec<PathBuf>>();
+            .try_collect1()
+            .unwrap();
         assert_eq!(
             finder.files(vec![PathBuf::from("main.rs"), PathBuf::from("module.rs")])?,
             Some(expect),
@@ -833,7 +845,7 @@ mod tests {
         )?;
         assert_eq!(
             finder.files(vec![PathBuf::from(".")])?,
-            Some(helper.all_files()),
+            Some(helper.all_files1()),
         );
         Ok(())
     }
@@ -859,7 +871,8 @@ mod tests {
         ]
         .iter()
         .map(PathBuf::from)
-        .collect();
+        .try_collect1()
+        .unwrap();
         assert_eq!(finder.files(vec![PathBuf::from(".")])?, Some(expect));
         Ok(())
     }
@@ -875,7 +888,7 @@ mod tests {
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = vec![helper.all_files().pop().unwrap()];
+        let expect = vec1![helper.all_files().pop().unwrap()];
         let cli_paths = vec![
             helper.all_files().pop().unwrap(),
             PathBuf::from("vendor/foo/bar.txt"),
@@ -897,7 +910,11 @@ mod tests {
             cwd,
             vec!["src/main.rs".to_string()],
         )?;
-        let expect = ["src/module.rs"].iter().map(PathBuf::from).collect();
+        let expect = ["src/module.rs"]
+            .iter()
+            .map(PathBuf::from)
+            .try_collect1()
+            .unwrap();
         let cli_paths = ["main.rs", "module.rs"].iter().map(PathBuf::from).collect();
         assert_eq!(finder.files(cli_paths)?, Some(expect));
         Ok(())
