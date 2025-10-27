@@ -1,6 +1,7 @@
-## 0.10.1
+## 0.10.1 2025-10-27
 
-- Fixed a bug when calling `precious -c precious.toml`, where it would fail with an error like
+- Fixed a bug when calling `precious -c precious.toml`, without a directory in the path to the
+  config file. This would fail with an error like
   `Failed to run precious: No such file or directory`. Reported by Olaf Alders (@oalders). GH #89.
 
 ## 0.10.0 2025-09-13
