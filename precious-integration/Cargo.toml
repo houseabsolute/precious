@@ -24,3 +24,6 @@ tempfile.workspace = true
 name = "integration_tests"
 path = "src/tests.rs"
 harness = true
+
+[lints]
+workspace = true

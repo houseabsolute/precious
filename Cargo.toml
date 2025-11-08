@@ -11,14 +11,6 @@ version.workspace = true
 categories = ["development-tools"]
 keywords = ["beautifier", "linter", "pretty-printer", "tidier"]
 
-[workspace.package]
-authors = ["Dave Rolsky <autarch@urth.org>"]
-edition = "2021"
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-repository = "https://github.com/houseabsolute/precious"
-version = "0.10.1"
-
 [[bin]]
 name = "precious"
 path = "precious/src/main.rs"
@@ -27,6 +19,23 @@ doc = false
 [dependencies]
 log.workspace = true
 precious-core.workspace = true
+
+[package.metadata.release]
+tag-name = "v{{version}}"
+
+[lints]
+workspace = true
+
+[workspace]
+members = ["precious-helpers", "precious-core", "precious-integration", "precious-testhelper"]
+
+[workspace.package]
+authors = ["Dave Rolsky <autarch@urth.org>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/houseabsolute/precious"
+version = "0.10.1"
 
 [workspace.dependencies]
 anyhow = { version = "1.0.100", default-features = false }
@@ -70,8 +79,8 @@ toml = { version = "0.9.8", default-features = false, features = [
 ] }
 which = { version = ">= 3.0.0, < 5.0.0", default-features = false }
 
-[workspace]
-members = ["precious-helpers", "precious-core", "precious-integration", "precious-testhelper"]
-
-[package.metadata.release]
-tag-name = "v{{version}}"
+[workspace.lints.clippy]
+fallible_impl_from = "deny"
+wildcard_enum_match_arm = "deny"
+unneeded_field_pattern = "deny"
+fn_params_excessive_bools = "deny"

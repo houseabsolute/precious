@@ -76,7 +76,11 @@ impl Finder {
     pub fn files(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec1<PathBuf>>> {
         match self.mode {
             Mode::FromCli => (),
-            _ => {
+            Mode::All
+            | Mode::GitModified
+            | Mode::GitStaged
+            | Mode::GitStagedWithStash
+            | Mode::GitDiffFrom(_) => {
                 if !cli_paths.is_empty() {
                     return Err(FinderError::GotPathsFromCliWithWrongMode {
                         mode: self.mode.clone(),
@@ -109,7 +113,7 @@ impl Finder {
                 | Mode::GitStaged
                 | Mode::GitStagedWithStash
                 | Mode::GitDiffFrom(_) => Ok(None),
-                _ => Err(FinderError::AllPathsWereExcluded {
+                Mode::FromCli | Mode::All => Err(FinderError::AllPathsWereExcluded {
                     mode: self.mode.clone(),
                 }
                 .into()),

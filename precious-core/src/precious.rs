@@ -608,7 +608,11 @@ impl LintOrTidyRunner {
 
         let cli_paths = match self.mode {
             paths::mode::Mode::FromCli => self.paths.clone(),
-            _ => vec![],
+            paths::mode::Mode::All
+            | paths::mode::Mode::GitModified
+            | paths::mode::Mode::GitStaged
+            | paths::mode::Mode::GitStagedWithStash
+            | paths::mode::Mode::GitDiffFrom(_) => vec![],
         };
 
         let files = self
