@@ -1,3 +1,8 @@
+## 0.10.2
+
+- Fixed a bug where error output was printed with debug formatting, which caused escaped ANSI codes
+  and newlines to appear in the output. GH #90.
+
 ## 0.10.1 2025-10-27
 
 - Fixed a bug when calling `precious -c precious.toml`, without a directory in the path to the

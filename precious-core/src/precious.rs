@@ -521,7 +521,7 @@ impl LintOrTidyRunner {
             Ok(e) => {
                 debug!("{e:?}");
                 if let Some(e) = e.error {
-                    print!("{e:?}");
+                    print!("{e}");
                 }
                 if let Some(msg) = e.message {
                     println!("{} {}", self.chars.empty, msg);

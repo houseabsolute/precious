@@ -414,6 +414,42 @@ lint-failure-exit-codes = 1
 
 #[test]
 #[serial]
+fn output_on_failure() -> Result<()> {
+    let helper = set_up_for_tests()?;
+    helper.write_file("src/bad.rs", "this is not valid rust")?;
+
+    let precious = precious_path()?;
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&[1])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+
+    let stdout = out.stdout.unwrap_or_default();
+    let stderr = out.stderr.unwrap_or_default();
+    let output = format!("{}{}", stdout, stderr);
+
+    assert!(
+        !output.contains(r"\u{1b}"),
+        "Output should not contain escaped ANSI codes"
+    );
+    assert!(
+        !output.contains(r"\n"),
+        "Output should not contain escaped newlines"
+    );
+    assert!(
+        output.contains("linting files:"),
+        "Output should contain the error header"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn all_invocation_options() -> Result<()> {
     let helper = set_up_for_tests()?;
     write_perl_script(&helper)?;
