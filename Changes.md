@@ -1,7 +1,7 @@
-## 0.10.2
+## 0.10.2 2026-01-25
 
 - Fixed a bug where error output was printed with debug formatting, which caused escaped ANSI codes
-  and newlines to appear in the output. GH #90.
+  and newlines to appear in the output. Fixed by Greg Oschwald (@oschwald). GH #90.
 
 ## 0.10.1 2025-10-27
 
