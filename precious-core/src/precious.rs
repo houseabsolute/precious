@@ -359,29 +359,15 @@ fn has_config_file(dir: &Path) -> bool {
 const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 
 fn default_config_file(dir: &Path) -> PathBuf {
-    // It'd be nicer to use the version of this provided by itertools, but
-    // that requires itertools 0.10.1, and we want to keep the version at
-    // 0.9.0 for the benefit of Debian.
-    find_or_first(
-        CONFIG_FILE_NAMES.iter().map(|n| {
+    CONFIG_FILE_NAMES
+        .iter()
+        .map(|n| {
             let mut path = dir.to_path_buf();
             path.push(n);
             path
-        }),
-        Path::exists,
-    )
-}
-
-fn find_or_first<I, P>(mut iter: I, pred: P) -> PathBuf
-where
-    I: Iterator<Item = PathBuf>,
-    P: Fn(&Path) -> bool,
-{
-    let first = iter.next().unwrap();
-    if pred(&first) {
-        return first;
-    }
-    iter.find(|i| pred(i)).unwrap_or(first)
+        })
+        .find_or_first(|p| p.exists())
+        .expect("This cannot fail because we know CONFIG_FILE_NAMES is not empty")
 }
 
 fn is_checkout_root(dir: &Path) -> bool {
