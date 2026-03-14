@@ -280,17 +280,15 @@ impl CommandConfig {
         let path_args = path_args.unwrap_or(PathArgs::File);
 
         match (invoke, &working_dir, path_args) {
-            (Invoke::PerFile, _, path_args) => {
-                if path_args != PathArgs::File && path_args != PathArgs::AbsoluteFile {
-                    return Err(ConfigError::CannotInvokePerFileWithPathArgs { path_args }.into());
-                }
+            (Invoke::PerFile, _, path_args)
+                if path_args != PathArgs::File && path_args != PathArgs::AbsoluteFile =>
+            {
+                return Err(ConfigError::CannotInvokePerFileWithPathArgs { path_args }.into());
             }
-            (Invoke::PerDir, &WorkingDir::Root | &WorkingDir::ChdirTo(_), path_args) => {
-                if path_args == PathArgs::Dot || path_args == PathArgs::None {
-                    return Err(
-                        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args }.into(),
-                    );
-                }
+            (Invoke::PerDir, &WorkingDir::Root | &WorkingDir::ChdirTo(_), path_args)
+                if path_args == PathArgs::Dot || path_args == PathArgs::None =>
+            {
+                return Err(ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args }.into());
             }
             (Invoke::Once, &WorkingDir::Dir, _) => {
                 return Err(ConfigError::CannotInvokeOnceWithWorkingDirEqDir.into());
