@@ -79,7 +79,6 @@
 ## 0.7.0 - 2024-03-30
 
 - Added three new **experimental** `invoke` options:
-
   - `invoke.per-file-or-dir = n`
   - `invoke.per-file-or-once = n`
   - `invoke.per-dir-or-once = n`
