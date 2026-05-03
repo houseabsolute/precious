@@ -977,6 +977,30 @@ mod tests {
 
     #[test]
     #[parallel]
+    fn cli_mode_given_dir_all_excluded() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        let mut finder = new_finder_with_excludes(
+            Mode::FromCli,
+            helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        let res = finder.files(vec![PathBuf::from("vendor")]);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref(),
+                Some(FinderError::AllPathsWereExcluded { .. })
+            ),
+            "expected AllPathsWereExcluded, got {err}",
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut finder = new_finder(Mode::FromCli, helper.precious_root())?;

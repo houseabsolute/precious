@@ -3,7 +3,10 @@ use crate::{
     command::{self, ActualInvoke, TidyOutcome},
     config,
     config_init::{self, InitComponent},
-    paths::{self, finder::Finder},
+    paths::{
+        self,
+        finder::{Finder, FinderError},
+    },
     vcs,
 };
 use anyhow::{Context, Error, Result};
@@ -601,11 +604,27 @@ impl LintOrTidyRunner {
             | paths::mode::Mode::GitDiffFrom(_) => vec![],
         };
 
-        let files = self
+        let finder_result = self
             .finder()
             .context("Failed to create file finder")?
-            .files(cli_paths)
-            .with_context(|| format!("Failed to find files for {action}"))?;
+            .files(cli_paths);
+
+        let files = match finder_result {
+            Err(e)
+                if e.downcast_ref::<FinderError>()
+                    .is_some_and(|fe| matches!(fe, FinderError::AllPathsWereExcluded { .. })) =>
+            {
+                return Ok(Exit {
+                    status: 0,
+                    message: Some(String::from(
+                        "All paths given on the command line were excluded",
+                    )),
+                    error: None,
+                });
+            }
+            Err(e) => return Err(e.context(format!("Failed to find files for {action}"))),
+            Ok(f) => f,
+        };
 
         match files {
             None => Ok(Self::no_files_exit()),
