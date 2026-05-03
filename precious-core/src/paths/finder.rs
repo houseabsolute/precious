@@ -34,8 +34,18 @@ pub enum FinderError {
     #[error("You cannot pass an explicit list of files when looking for {mode:}")]
     GotPathsFromCliWithWrongMode { mode: Mode },
 
-    #[error("Found some paths when looking for {mode:} but they were all excluded")]
-    AllPathsWereExcluded { mode: Mode },
+    #[error("The path given on the command line ({path}) is excluded in the precious config")]
+    CLIPathsWereExcludedSingular { path: String },
+
+    #[error(
+        "The paths given on the command line ({paths}) are all excluded in the precious config"
+    )]
+    CLIPathsWereExcludedMultiple { paths: String },
+
+    #[error(
+        "Attempted to find all matching paths but everything was excluded in the precious config"
+    )]
+    AllPathsWereExcluded,
 
     #[error("Path passed on the command line does not exist: {}", path.display())]
     NonExistentPathOnCli { path: PathBuf },
@@ -73,6 +83,8 @@ impl Finder {
         })
     }
 
+    // Fixing this will cascade through the code base. I'll do it later (maybe).
+    #[allow(clippy::needless_pass_by_value)]
     pub fn files(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec1<PathBuf>>> {
         match self.mode {
             Mode::FromCli => (),
@@ -93,7 +105,7 @@ impl Finder {
         let mut files = match self.mode.clone() {
             Mode::All => self.all_files().context("Failed to get all files")?,
             Mode::FromCli => self
-                .files_from_cli(cli_paths)
+                .files_from_cli(cli_paths.clone())
                 .context("Failed to get files from command line")?,
             Mode::GitModified => self
                 .git_modified_files()
@@ -113,10 +125,19 @@ impl Finder {
                 | Mode::GitStaged
                 | Mode::GitStagedWithStash
                 | Mode::GitDiffFrom(_) => Ok(None),
-                Mode::FromCli | Mode::All => Err(FinderError::AllPathsWereExcluded {
-                    mode: self.mode.clone(),
+                Mode::FromCli => {
+                    let err = if cli_paths.len() == 1 {
+                        FinderError::CLIPathsWereExcludedSingular {
+                            path: cli_paths[0].display().to_string(),
+                        }
+                    } else {
+                        FinderError::CLIPathsWereExcludedMultiple {
+                            paths: Self::truncate_path_list(&cli_paths),
+                        }
+                    };
+                    return Err(err.into());
                 }
-                .into()),
+                Mode::All => Err(FinderError::AllPathsWereExcluded {}.into()),
             };
         }
 
@@ -374,6 +395,21 @@ impl Finder {
             })?
             .to_path_buf()
             .clean())
+    }
+
+    fn truncate_path_list(cli_paths: &[PathBuf]) -> String {
+        let is_truncated = cli_paths.len() > 3;
+        let truncated = cli_paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(", ");
+        if is_truncated {
+            format!("{truncated}, ... and {} more", cli_paths.len() - 3)
+        } else {
+            truncated
+        }
     }
 }
 
@@ -1042,6 +1078,54 @@ mod tests {
             .unwrap();
         let cli_paths = ["main.rs", "module.rs"].iter().map(PathBuf::from).collect();
         assert_eq!(finder.files(cli_paths)?, Some(expect));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn cli_mode_given_dir_all_excluded_singular() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        let mut finder = new_finder_with_excludes(
+            Mode::FromCli,
+            helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        let res = finder.files(vec![PathBuf::from("vendor")]);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref(),
+                Some(FinderError::CLIPathsWereExcludedSingular { .. })
+            ),
+            "expected CLIPathsWereExcludedSingular, got {err}",
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn cli_mode_given_dir_all_excluded_multiple() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        let mut finder = new_finder_with_excludes(
+            Mode::FromCli,
+            helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        let res = finder.files(vec![PathBuf::from("vendor"), PathBuf::from("vendor")]);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            matches!(
+                err.downcast_ref(),
+                Some(FinderError::CLIPathsWereExcludedMultiple { .. })
+            ),
+            "expected CLIPathsWereExcludedSingular, got {err}",
+        );
         Ok(())
     }
 

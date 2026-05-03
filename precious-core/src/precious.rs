@@ -601,14 +601,22 @@ impl LintOrTidyRunner {
             | paths::mode::Mode::GitDiffFrom(_) => vec![],
         };
 
-        let files = self
+        let finder_result = self
             .finder()
             .context("Failed to create file finder")?
-            .files(cli_paths)
-            .with_context(|| format!("Failed to find files for {action}"))?;
+            .files(cli_paths);
+
+        let files = match finder_result {
+            Err(e) => return Err(e.context(format!("Failed to find files for {action}"))),
+            Ok(f) => f,
+        };
 
         match files {
-            None => Ok(Self::no_files_exit()),
+            None => Ok(Exit {
+                status: 0,
+                message: Some(String::from("No files found")),
+                error: None,
+            }),
             Some(files) => {
                 let mut all_failures: Vec<ActionFailure> = vec![];
                 for c in commands {
@@ -640,11 +648,7 @@ impl LintOrTidyRunner {
         let (status, error) = if failures.is_empty() {
             (0, None)
         } else {
-            let (red, ansi_off) = if self.color {
-                (format!("\x1B[{}m", Color::Red.to_fg_str()), "\x1B[0m")
-            } else {
-                (String::new(), "")
-            };
+            let (red, ansi_off) = self.maybe_red();
             let plural = if failures.len() > 1 { 's' } else { '\0' };
 
             let error = format!(
@@ -671,6 +675,14 @@ impl LintOrTidyRunner {
             status,
             message: None,
             error,
+        }
+    }
+
+    fn maybe_red(&self) -> (String, &str) {
+        if self.color {
+            (format!("\x1B[{}m", Color::Red.to_fg_str()), "\x1B[0m")
+        } else {
+            (String::new(), "")
         }
     }
 
@@ -858,14 +870,6 @@ impl LintOrTidyRunner {
             Ok(None)
         } else {
             Ok(Some(failures))
-        }
-    }
-
-    fn no_files_exit() -> Exit {
-        Exit {
-            status: 0,
-            message: Some(String::from("No files found")),
-            error: None,
         }
     }
 }
