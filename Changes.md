@@ -2,8 +2,10 @@
 
 - Added `python`, `typescript`, and `ruby` components to `precious config init` and to the
   `examples` directory. GH #95.
-- When given a list of paths on the CLI, `precious` will return a more helpful error when all of
-  those paths are excluded by the `precious.toml` configuration.
+- When all paths passed on the command line are excluded, precious now exits with a clearer error
+  message. In addition, it has different errors for when all paths given on the CLI are ignored
+  versus when `--all` is specified but all the paths it can find are excluded. Both exit with an
+  error status.
 - Fixed a bug where bare directory names in `exclude` patterns (e.g., `target`) did not exclude
   files inside that directory. Now `exclude = ["target"]` works exactly like a `.gitignore` entry —
   it excludes the directory and all of its contents. Previously you had to write `target/**/*` to
