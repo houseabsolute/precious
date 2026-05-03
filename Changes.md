@@ -1,3 +1,8 @@
+## 0.10.3
+
+- When all paths passed on the command line are excluded, precious now exits cleanly with the
+  message "All paths given on the command line were excluded" instead of returning an error. GH #92.
+
 ## 0.10.2 2026-01-25
 
 - Fixed a bug where error output was printed with debug formatting, which caused escaped ANSI codes

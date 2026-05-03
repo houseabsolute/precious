@@ -292,6 +292,31 @@ fn cli_paths_in_subdir() -> Result<()> {
 
 #[test]
 #[serial]
+fn cli_paths_all_excluded() -> Result<()> {
+    let helper = set_up_for_tests()?;
+    helper.write_file("target/foo.rs", GOOD_RUST.trim_start())?;
+
+    let precious = precious_path()?;
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "target"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+
+    let stdout = out.stdout.unwrap_or_default();
+    assert!(
+        stdout.contains("All paths given on the command line were excluded"),
+        "expected excluded-paths message in stdout, got: {stdout:?}",
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn one_command() -> Result<()> {
     let helper = set_up_for_tests()?;
     let content = r#"
