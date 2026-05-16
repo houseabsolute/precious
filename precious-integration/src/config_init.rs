@@ -154,6 +154,45 @@ fn init_auto_detects_typescript() -> Result<()> {
 
 #[test]
 #[serial]
+fn init_ruby() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(&["ruby"], None)?;
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.stderr.is_none());
+
+    assert_file_exists("precious.toml")?;
+    assert_file_contains(
+        "precious.toml",
+        &["rubocop", "rubocop-performance", "rubocop-rspec"],
+    )?;
+
+    let stdout = output.stdout.unwrap();
+    assert!(stdout.contains("rubocop.org"));
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn init_auto_detects_ruby() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+
+    File::create("app.rb")?;
+
+    let output = init_with_auto()?;
+
+    assert_eq!(output.exit_code, 0);
+    assert_file_exists("precious.toml")?;
+    assert_file_contains("precious.toml", &["rubocop"])?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn init_does_not_overwrite_existing_file() -> Result<()> {
     compile_precious()?;
     let (_td, _pd) = chdir_to_tempdir()?;

@@ -396,8 +396,27 @@ pub(crate) fn typescript_init() -> Init {
     }
 }
 
+const RUBY_COMMANDS: [(&str, &str); 1] = [(
+    "rubocop",
+    r#"
+type = "both"
+include = "**/*.rb"
+# Common rubocop extensions — add to your Gemfile as needed:
+#   rubocop-performance, rubocop-rspec, rubocop-rails
+cmd = ["rubocop"]
+tidy-flags = "-A"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+)];
+
 pub(crate) fn ruby_init() -> Init {
-    todo!()
+    Init {
+        excludes: &[".bundle/**", "vendor/bundle/**"],
+        commands: &RUBY_COMMANDS,
+        extra_files: vec![],
+        tool_urls: &["https://rubocop.org/"],
+    }
 }
 
 const RUST_COMMANDS: [(&str, &str); 2] = [
