@@ -360,8 +360,40 @@ pub(crate) fn python_init() -> Init {
     }
 }
 
+const TYPESCRIPT_COMMANDS: [(&str, &str); 2] = [
+    (
+        "eslint",
+        r#"
+type = "both"
+include = ["**/*.{ts,tsx,js,jsx}"]
+cmd = ["./node_modules/.bin/eslint"]
+tidy-flags = "--fix"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+    ),
+    (
+        "prettier-typescript",
+        r#"
+type = "both"
+include = ["**/*.{ts,tsx,js,jsx}"]
+cmd = ["./node_modules/.bin/prettier"]
+lint-flags = "--check"
+tidy-flags = "--write"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = ["Code style issues"]
+"#,
+    ),
+];
+
 pub(crate) fn typescript_init() -> Init {
-    todo!()
+    Init {
+        excludes: &["node_modules/**", "dist/**", "build/**"],
+        commands: &TYPESCRIPT_COMMANDS,
+        extra_files: vec![],
+        tool_urls: &["https://eslint.org/", "https://prettier.io/"],
+    }
 }
 
 pub(crate) fn ruby_init() -> Init {
