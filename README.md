@@ -586,6 +586,30 @@ mise exec -- precious tidy -a
 If you want to use `mise` for other projects, see [its documentation](https://mise.jdx.dev/) for
 more details on how you can configure your shell to always activate `mise`.
 
+## Upgrade Notes
+
+### 0.11.0
+
+The behavior of `precious` when given a directory in an exclude list changed in 0.11.0.
+
+Before 0.11.0, bare directory names like `target` in an `exclude` list did not actually exclude
+files _inside_ that directory — only the exact path `target` itself. This was a bug. It is now
+fixed: `"target"` works exactly like a `.gitignore` entry and excludes the directory and all its
+contents.
+
+If you were using `"target/**/*"` as a workaround, you can simplify it to just `"target"`. Both
+forms are now equivalent.
+
+There is no supported way to restore the old (broken) behavior. If you need fine-grained control
+over which files inside a directory are excluded, use negation patterns:
+
+```toml
+exclude = [
+    "target",
+    "!target/some/important/file.rs",
+]
+```
+
 ## Build Status
 
 ### Build and Test

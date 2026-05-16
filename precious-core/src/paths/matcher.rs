@@ -42,7 +42,9 @@ pub struct Matcher {
 
 impl Matcher {
     pub fn path_matches(&self, path: &Path, is_dir: bool) -> bool {
-        self.gitignore.matched(path, is_dir).is_ignore()
+        self.gitignore
+            .matched_path_or_any_parents(path, is_dir)
+            .is_ignore()
     }
 }
 
@@ -92,6 +94,18 @@ mod tests {
                 globs: &["/foo/**/*", "!/foo/bar/baz.*"],
                 yes: &["/foo/file.go", "/foo/bar/quux/file.go"],
                 no: &["/bar/file.go", "/foo/bar/baz.txt"],
+            },
+            // Bare directory names should match files inside that directory,
+            // just like gitignore does.
+            TestSet {
+                globs: &["target"],
+                yes: &["target", "target/file.rs", "target/debug/build/foo/bar.rs"],
+                no: &["src/main.rs", "nottarget/file.rs"],
+            },
+            TestSet {
+                globs: &["target", "!target/important.rs"],
+                yes: &["target/file.rs", "target/debug/build/foo.rs"],
+                no: &["src/main.rs", "target/important.rs"],
             },
         ];
 
