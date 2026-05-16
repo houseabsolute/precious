@@ -1,10 +1,12 @@
 exclude = [".bundle/**", "vendor/bundle/**"]
 
+# rubocop handles both linting and formatting (via Layout cops). The -A flag
+# auto-corrects all offenses including "unsafe" ones — review changes before committing.
+# Common rubocop extensions — add to your Gemfile as needed:
+#   rubocop-performance, rubocop-rspec, rubocop-rails
 [commands.rubocop]
 type = "both"
 include = "**/*.rb"
-# Common rubocop extensions — add to your Gemfile as needed:
-#   rubocop-performance, rubocop-rspec, rubocop-rails
 cmd = ["rubocop"]
 tidy-flags = "-A"
 ok-exit-codes = 0
