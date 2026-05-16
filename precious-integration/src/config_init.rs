@@ -80,6 +80,43 @@ fn init_perl() -> Result<()> {
 
 #[test]
 #[serial]
+fn init_python() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(&["python"], None)?;
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.stderr.is_none());
+
+    assert_file_exists("precious.toml")?;
+    assert_file_contains("precious.toml", &["ruff-check", "ruff-format", "mypy"])?;
+
+    let stdout = output.stdout.unwrap();
+    assert!(stdout.contains("astral.sh/ruff"));
+    assert!(stdout.contains("mypy.readthedocs.io"));
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn init_auto_detects_python() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+
+    File::create("main.py")?;
+
+    let output = init_with_auto()?;
+
+    assert_eq!(output.exit_code, 0);
+    assert_file_exists("precious.toml")?;
+    assert_file_contains("precious.toml", &["ruff-check", "ruff-format", "mypy"])?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn init_does_not_overwrite_existing_file() -> Result<()> {
     compile_precious()?;
     let (_td, _pd) = chdir_to_tempdir()?;
