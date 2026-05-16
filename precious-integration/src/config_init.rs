@@ -117,6 +117,43 @@ fn init_auto_detects_python() -> Result<()> {
 
 #[test]
 #[serial]
+fn init_typescript() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(&["typescript"], None)?;
+
+    assert_eq!(output.exit_code, 0);
+    assert!(output.stderr.is_none());
+
+    assert_file_exists("precious.toml")?;
+    assert_file_contains("precious.toml", &["eslint", "prettier-typescript"])?;
+
+    let stdout = output.stdout.unwrap();
+    assert!(stdout.contains("eslint.org"));
+    assert!(stdout.contains("prettier.io"));
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn init_auto_detects_typescript() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+
+    File::create("index.ts")?;
+
+    let output = init_with_auto()?;
+
+    assert_eq!(output.exit_code, 0);
+    assert_file_exists("precious.toml")?;
+    assert_file_contains("precious.toml", &["eslint", "prettier-typescript"])?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn init_does_not_overwrite_existing_file() -> Result<()> {
     compile_precious()?;
     let (_td, _pd) = chdir_to_tempdir()?;
