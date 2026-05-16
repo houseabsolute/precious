@@ -1,3 +1,7 @@
+## 0.10.3 - TBD
+
+- Added `python`, `typescript`, and `ruby` components to `precious config init`. GH #95.
+
 ## 0.10.2 2026-01-25
 
 - Fixed a bug where error output was printed with debug formatting, which caused escaped ANSI codes
