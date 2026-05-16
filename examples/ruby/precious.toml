@@ -1,0 +1,11 @@
+exclude = [".bundle/**", "vendor/bundle/**"]
+
+[commands.rubocop]
+type = "both"
+include = "**/*.rb"
+# Common rubocop extensions — add to your Gemfile as needed:
+#   rubocop-performance, rubocop-rspec, rubocop-rails
+cmd = ["rubocop"]
+tidy-flags = "-A"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1

@@ -1,0 +1,19 @@
+exclude = ["build/**", "dist/**", "node_modules/**"]
+
+[commands.eslint]
+type = "both"
+include = ["**/*.{ts,tsx,js,jsx}"]
+cmd = ["./node_modules/.bin/eslint"]
+tidy-flags = "--fix"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+
+[commands.prettier-typescript]
+type = "both"
+include = ["**/*.{ts,tsx,js,jsx}"]
+cmd = ["./node_modules/.bin/prettier"]
+lint-flags = "--check"
+tidy-flags = "--write"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+ignore-stderr = ["Code style issues"]

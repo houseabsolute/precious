@@ -1,0 +1,26 @@
+exclude = ["**/__pycache__/**", ".venv/**", "build/**", "dist/**"]
+
+[commands.ruff-check]
+type = "both"
+include = "**/*.py"
+cmd = ["ruff", "check"]
+tidy-flags = "--fix"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+
+[commands.ruff-format]
+type = "both"
+include = "**/*.py"
+cmd = ["ruff", "format"]
+lint-flags = "--check"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+
+[commands.mypy]
+type = "lint"
+include = "**/*.py"
+invoke = "once"
+path-args = "none"
+cmd = ["mypy", "."]
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
