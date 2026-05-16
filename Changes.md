@@ -1,5 +1,8 @@
 ## 0.11.0 - TBD
 
+- Added support for a `[shared]` top-level config table that maps named keys to glob lists. Commands
+  can reference these keys via `shared-include` and `shared-exclude` fields to avoid duplicating
+  long lists across commands. GH #73.
 - Added `python`, `typescript`, and `ruby` components to `precious config init` and to the
   `examples` directory. GH #95.
 - When all paths passed on the command line are excluded, precious now exits with a clearer error
