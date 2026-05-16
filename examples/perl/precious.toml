@@ -19,10 +19,15 @@ exclude = [
     "xt/release/**",
 ]
 
+# Shared glob lists referenced by multiple commands below.
+[shared]
+perl-code = ["**/*.{pl,pm,t,psgi}"]
+perl-docs = ["**/*.{pl,pm,pod}"]
+
 # Add App::perlimports as a develop phase prereq
 [commands.perlimports]
 type = "both"
-include = ["**/*.{pl,pm,t,psgi}"]
+shared-include = "perl-code"
 cmd = ["perlimports"]
 lint-flags = ["--lint"]
 tidy-flags = ["-i"]
@@ -32,7 +37,7 @@ expect-stderr = true
 # Add Perl::Critic as a develop phase prereq
 [commands.perlcritic]
 type = "lint"
-include = ["**/*.{pl,pm,t,psgi}"]
+shared-include = "perl-code"
 cmd = ["perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
@@ -40,7 +45,7 @@ lint-failure-exit-codes = 2
 # Add Perl::Tidy as a develop phase prereq
 [commands.perltidy]
 type = "both"
-include = ["**/*.{pl,pm,t,psgi}"]
+shared-include = "perl-code"
 cmd = ["perltidy", "--profile=$PRECIOUS-ROOT/perltidyrc"]
 lint-flags = ["--assert-tidy", "--no-standard-output", "--outfile=/dev/null"]
 tidy-flags = ["--backup-and-modify-in-place", "--backup-file-extension=/"]
@@ -51,7 +56,7 @@ ignore-stderr = "Begin Error Output Stream"
 # Add Pod::Checker as a develop phase prereq
 [commands.podchecker]
 type = "lint"
-include = ["**/*.{pl,pm,pod}"]
+shared-include = "perl-docs"
 cmd = ["podchecker", "--warnings", "--warnings"]
 ok-exit-codes = [0, 2]
 lint-failure-exit-codes = 1
@@ -60,7 +65,7 @@ ignore-stderr = [".+ pod syntax OK", ".+ does not contain any pod commands"]
 # Add Pod::Tidy as a develop phase prereq
 [commands.podtidy]
 type = "tidy"
-include = ["**/*.{pl,pm,pod}"]
+shared-include = "perl-docs"
 cmd = ["podtidy", "--columns", "80", "--inplace", "--nobackup"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 1

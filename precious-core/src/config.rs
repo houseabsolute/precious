@@ -14,10 +14,22 @@ use thiserror::Error;
 pub struct CommandConfig {
     #[serde(rename = "type")]
     pub(crate) typ: CommandType,
-    #[serde(deserialize_with = "string_or_seq_string")]
+    #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) include: Vec<String>,
     #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) exclude: Vec<String>,
+    #[serde(
+        default,
+        alias = "shared-include",
+        deserialize_with = "string_or_seq_string"
+    )]
+    pub(crate) shared_include: Vec<String>,
+    #[serde(
+        default,
+        alias = "shared-exclude",
+        deserialize_with = "string_or_seq_string"
+    )]
+    pub(crate) shared_exclude: Vec<String>,
     #[serde(default)]
     pub(crate) invoke: Option<Invoke>,
     #[serde(default, alias = "working-dir", deserialize_with = "working_dir")]
@@ -66,6 +78,8 @@ pub struct CommandConfig {
 pub struct Config {
     #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) exclude: Vec<String>,
+    #[serde(default)]
+    shared: HashMap<String, Vec<String>>,
     commands: IndexMap<String, CommandConfig>,
 }
 
@@ -79,6 +93,10 @@ pub(crate) enum ConfigError {
     CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs },
     #[error(r#"Cannot set invoke = "once" and working-dir = "dir""#)]
     CannotInvokeOnceWithWorkingDirEqDir,
+    #[error("Command \"{command}\" references unknown shared key \"{key}\"")]
+    UnknownSharedKey { command: String, key: String },
+    #[error("Command \"{command}\" does not define an \"include\" or \"shared-include\"")]
+    NoInclude { command: String },
     #[error(transparent)]
     Toml(#[from] toml::de::Error),
 }
@@ -202,7 +220,20 @@ impl Config {
         typ: CommandType,
     ) -> Result<Vec<command::Command>> {
         let mut commands: Vec<command::Command> = vec![];
-        for (name, c) in self.commands {
+        for (name, mut c) in self.commands {
+            c.include.splice(
+                0..0,
+                Self::resolve_shared_keys(&c.shared_include, &self.shared, &name)?,
+            );
+            c.exclude.splice(
+                0..0,
+                Self::resolve_shared_keys(&c.shared_exclude, &self.shared, &name)?,
+            );
+
+            if c.include.is_empty() {
+                return Err(ConfigError::NoInclude { command: name }.into());
+            }
+
             if let Some(c) = command {
                 if name != c {
                     continue;
@@ -224,6 +255,28 @@ impl Config {
         Ok(commands)
     }
 
+    fn resolve_shared_keys(
+        keys: &[String],
+        shared: &HashMap<String, Vec<String>>,
+        command: &str,
+    ) -> Result<Vec<String>> {
+        let mut result = Vec::new();
+        for key in keys {
+            match shared.get(key) {
+                Some(globs) => result.extend_from_slice(globs),
+                None => {
+                    return Err(ConfigError::UnknownSharedKey {
+                        command: command.to_string(),
+                        key: key.clone(),
+                    }
+                    .into())
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    // Note: returns raw CommandConfig values; shared_include/shared_exclude are not resolved.
     pub(crate) fn command_info(self) -> Vec<(String, CommandConfig)> {
         self.commands.into_iter().collect()
     }
@@ -310,8 +363,10 @@ impl CommandConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mitsein::prelude::*;
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
+    use std::path::Path;
     use test_case::test_case;
 
     #[test]
@@ -520,6 +575,8 @@ mod tests {
             path_args: Some(path_args),
             include: vec![String::from("**/*.rs")],
             exclude: vec![],
+            shared_include: vec![],
+            shared_exclude: vec![],
             cmd: vec![String::from("some-linter")],
             env: Default::default(),
             lint_flags: vec![],
@@ -559,6 +616,8 @@ mod tests {
             path_args: None,
             include: vec![String::from("**/*.rs")],
             exclude: vec![],
+            shared_include: vec![],
+            shared_exclude: vec![],
             cmd: vec![String::from("some-linter")],
             env: Default::default(),
             lint_flags: vec![],
@@ -612,6 +671,341 @@ mod tests {
 
         let config: Config = toml::from_str(&toml_text)?;
         assert_eq!(config.commands[0].invoke, Some(expect));
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn shared_include_single_key() -> Result<()> {
+        let toml_text = r#"
+            [shared]
+            js = ["**/*.js", "**/*.jsx"]
+
+            [commands.prettier]
+            type = "lint"
+            shared-include = "js"
+            cmd = ["prettier", "--check"]
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        assert_eq!(commands.len(), 1);
+
+        let files: Vec1<PathBuf> = vec1![
+            PathBuf::from("src/foo.js"),
+            PathBuf::from("src/bar.jsx"),
+            PathBuf::from("src/baz.rs"),
+        ];
+        let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
+        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        included.sort();
+        assert_eq!(
+            included,
+            vec![Path::new("src/bar.jsx"), Path::new("src/foo.js")]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn shared_include_multiple_keys() -> Result<()> {
+        let toml_text = r#"
+            [shared]
+            js = ["**/*.js"]
+            styles = ["**/*.css", "**/*.scss"]
+
+            [commands.prettier]
+            type = "lint"
+            shared-include = ["js", "styles"]
+            cmd = ["prettier", "--check"]
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        assert_eq!(commands.len(), 1);
+
+        let files: Vec1<PathBuf> = vec1![
+            PathBuf::from("src/app.js"),
+            PathBuf::from("src/main.css"),
+            PathBuf::from("src/theme.scss"),
+            PathBuf::from("src/main.rs"),
+        ];
+        let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
+        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        included.sort();
+        assert_eq!(
+            included,
+            vec![
+                Path::new("src/app.js"),
+                Path::new("src/main.css"),
+                Path::new("src/theme.scss"),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn shared_exclude() -> Result<()> {
+        let toml_text = r#"
+            [shared]
+            generated = ["vendor/**/*", "generated/**/*"]
+
+            [commands.eslint]
+            type = "lint"
+            include = "**/*.js"
+            shared-exclude = "generated"
+            cmd = ["eslint"]
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        assert_eq!(commands.len(), 1);
+
+        let files: Vec1<PathBuf> = vec1![
+            PathBuf::from("src/app.js"),
+            PathBuf::from("vendor/lib.js"),
+            PathBuf::from("generated/out.js"),
+        ];
+        let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
+        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        included.sort();
+        assert_eq!(included, vec![Path::new("src/app.js")]);
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn shared_mixed_with_per_command() -> Result<()> {
+        let toml_text = r#"
+            [shared]
+            js = ["**/*.js"]
+            generated = ["vendor/**/*"]
+
+            [commands.eslint]
+            type = "lint"
+            shared-include = "js"
+            include = ["**/*.ts"]
+            shared-exclude = "generated"
+            exclude = ["**/*.test.ts"]
+            cmd = ["eslint"]
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        assert_eq!(commands.len(), 1);
+
+        let files: Vec1<PathBuf> = vec1![
+            PathBuf::from("src/app.js"),
+            PathBuf::from("src/app.ts"),
+            PathBuf::from("src/app.test.ts"),
+            PathBuf::from("vendor/lib.js"),
+        ];
+        let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
+        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        included.sort();
+        assert_eq!(
+            included,
+            vec![Path::new("src/app.js"), Path::new("src/app.ts")]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn shared_unknown_key() -> Result<()> {
+        let toml_text = r#"
+            [shared]
+            js = ["**/*.js"]
+
+            [commands.prettier]
+            type = "lint"
+            shared-include = "typescript"
+            cmd = ["prettier", "--check"]
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let err = config
+            .into_lint_commands(Path::new("."), None, None)
+            .unwrap_err()
+            .downcast::<ConfigError>()?;
+        assert_eq!(
+            err,
+            ConfigError::UnknownSharedKey {
+                command: "prettier".to_string(),
+                key: "typescript".to_string(),
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn no_include_or_shared_include() -> Result<()> {
+        let toml_text = r#"
+            [commands.prettier]
+            type = "lint"
+            cmd = ["prettier", "--check"]
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let err = config
+            .into_lint_commands(Path::new("."), None, None)
+            .unwrap_err()
+            .downcast::<ConfigError>()?;
+        assert_eq!(
+            err,
+            ConfigError::NoInclude {
+                command: "prettier".to_string(),
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn shared_include_only() -> Result<()> {
+        let toml_text = r#"
+            [shared]
+            rs = ["**/*.rs"]
+
+            [commands.rustfmt]
+            type = "lint"
+            shared-include = "rs"
+            cmd = ["rustfmt", "--check"]
+            ok-exit-codes = 0
+            lint-failure-exit-codes = 1
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        assert_eq!(commands.len(), 1);
+
+        let files: Vec1<PathBuf> = vec1![
+            PathBuf::from("src/lib.rs"),
+            PathBuf::from("src/main.rs"),
+            PathBuf::from("src/main.js"),
+        ];
+        let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
+        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        included.sort();
+        assert_eq!(
+            included,
+            vec![Path::new("src/lib.rs"), Path::new("src/main.rs")]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn no_include_on_non_matching_command_is_still_an_error() -> Result<()> {
+        // A command with no include should be caught even when --command
+        // selects a different command — validation runs before the name filter.
+        let toml_text = r#"
+            [commands.rustfmt]
+            type = "lint"
+            cmd = ["rustfmt", "--check"]
+            ok-exit-codes = 0
+
+            [commands.clippy]
+            type = "lint"
+            include = "**/*.rs"
+            cmd = ["clippy"]
+            ok-exit-codes = 0
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let err = config
+            .into_lint_commands(Path::new("."), Some("clippy"), None)
+            .unwrap_err()
+            .downcast::<ConfigError>()?;
+        assert_eq!(
+            err,
+            ConfigError::NoInclude {
+                command: "rustfmt".to_string(),
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn no_include_on_non_matching_label_is_still_an_error() -> Result<()> {
+        // A command with no include should be caught even when a label filter
+        // would exclude it — validation runs before the label filter.
+        let toml_text = r#"
+            [commands.rustfmt]
+            type = "lint"
+            cmd = ["rustfmt", "--check"]
+            ok-exit-codes = 0
+
+            [commands.clippy]
+            type = "lint"
+            include = "**/*.rs"
+            labels = ["ci"]
+            cmd = ["clippy"]
+            ok-exit-codes = 0
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let err = config
+            .into_lint_commands(Path::new("."), None, Some("ci"))
+            .unwrap_err()
+            .downcast::<ConfigError>()?;
+        assert_eq!(
+            err,
+            ConfigError::NoInclude {
+                command: "rustfmt".to_string(),
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn no_include_on_non_matching_type_is_still_an_error() -> Result<()> {
+        // A tidy-only command with no include should be caught even when
+        // calling into_lint_commands — validation runs before the type filter.
+        let toml_text = r#"
+            [commands.rustfmt]
+            type = "tidy"
+            cmd = ["rustfmt"]
+            ok-exit-codes = 0
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let err = config
+            .into_lint_commands(Path::new("."), None, None)
+            .unwrap_err()
+            .downcast::<ConfigError>()?;
+        assert_eq!(
+            err,
+            ConfigError::NoInclude {
+                command: "rustfmt".to_string(),
+            }
+        );
 
         Ok(())
     }

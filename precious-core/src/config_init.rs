@@ -17,6 +17,7 @@ use std::os::unix::fs::PermissionsExt;
 
 pub(crate) struct Init {
     pub(crate) excludes: &'static [&'static str],
+    pub(crate) shared: &'static [(&'static str, &'static [&'static str])],
     pub(crate) commands: &'static [(&'static str, &'static str)],
     pub(crate) extra_files: Vec<ConfigInitFile>,
     pub(crate) tool_urls: &'static [&'static str],
@@ -217,6 +218,7 @@ exit 0
 pub(crate) fn go_init() -> Init {
     Init {
         excludes: &["vendor/**/*"],
+        shared: &[],
         commands: &GO_COMMANDS,
         extra_files: vec![
             ConfigInitFile {
@@ -237,12 +239,17 @@ pub(crate) fn go_init() -> Init {
     }
 }
 
+const PERL_SHARED: [(&str, &[&str]); 2] = [
+    ("perl-code", &["**/*.{pl,pm,t,psgi}"]),
+    ("perl-docs", &["**/*.{pl,pm,pod}"]),
+];
+
 const PERL_COMMANDS: [(&str, &str); 5] = [
     (
         "perlimports",
         r#"
 type = "both"
-include = ["**/*.{pl,pm,t,psgi}"]
+shared-include = "perl-code"
 cmd = ["perlimports"]
 lint-flags = ["--lint"]
 tidy-flags = ["-i"]
@@ -254,7 +261,7 @@ expect-stderr = true
         "perlcritic",
         r#"
 type = "lint"
-include = ["**/*.{pl,pm,t,psgi}"]
+shared-include = "perl-code"
 cmd = ["perlcritic", "--profile=$PRECIOUS_ROOT/perlcriticrc"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 2
@@ -264,7 +271,7 @@ lint-failure-exit-codes = 2
         "perltidy",
         r#"
 type = "both"
-include = ["**/*.{pl,pm,t,psgi}"]
+shared-include = "perl-code"
 cmd = ["perltidy", "--profile=$PRECIOUS_ROOT/perltidyrc"]
 lint-flags = ["--assert-tidy", "--no-standard-output", "--outfile=/dev/null"]
 tidy-flags = ["--backup-and-modify-in-place", "--backup-file-extension=/"]
@@ -277,7 +284,7 @@ ignore-stderr = "Begin Error Output Stream"
         "podchecker",
         r#"
 type = "lint"
-include = ["**/*.{pl,pm,pod}"]
+shared-include = "perl-docs"
 cmd = ["podchecker", "--warnings", "--warnings"]
 ok-exit-codes = [0, 2]
 lint-failure-exit-codes = 1
@@ -288,7 +295,7 @@ ignore-stderr = [".+ pod syntax OK", ".+ does not contain any pod commands"]
         "podtidy",
         r#"
 type = "tidy"
-include = ["**/*.{pl,pm,pod}"]
+shared-include = "perl-docs"
 cmd = ["podtidy", "--columns", "100", "--inplace", "--nobackup"]
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
@@ -299,6 +306,7 @@ lint-failure-exit-codes = 1
 pub(crate) fn perl_init() -> Init {
     Init {
         excludes: &[".build/**", "blib/**"],
+        shared: &PERL_SHARED,
         commands: &PERL_COMMANDS,
         extra_files: vec![],
         tool_urls: &[
@@ -351,6 +359,7 @@ lint-failure-exit-codes = 1
 pub(crate) fn python_init() -> Init {
     Init {
         excludes: &[".venv/**", "**/__pycache__/**", "dist/**", "build/**"],
+        shared: &[],
         commands: &PYTHON_COMMANDS,
         extra_files: vec![],
         tool_urls: &[
@@ -360,12 +369,14 @@ pub(crate) fn python_init() -> Init {
     }
 }
 
+const TYPESCRIPT_SHARED: [(&str, &[&str]); 1] = [("ts-and-js", &["**/*.{ts,tsx,js,jsx}"])];
+
 const TYPESCRIPT_COMMANDS: [(&str, &str); 2] = [
     (
         "eslint",
         r#"
 type = "both"
-include = ["**/*.{ts,tsx,js,jsx}"]
+shared-include = "ts-and-js"
 cmd = ["./node_modules/.bin/eslint"]
 tidy-flags = "--fix"
 ok-exit-codes = 0
@@ -376,7 +387,7 @@ lint-failure-exit-codes = 1
         "prettier-typescript",
         r#"
 type = "both"
-include = ["**/*.{ts,tsx,js,jsx}"]
+shared-include = "ts-and-js"
 cmd = ["./node_modules/.bin/prettier"]
 lint-flags = "--check"
 tidy-flags = "--write"
@@ -390,6 +401,7 @@ ignore-stderr = ["Code style issues"]
 pub(crate) fn typescript_init() -> Init {
     Init {
         excludes: &["node_modules/**", "dist/**", "build/**"],
+        shared: &TYPESCRIPT_SHARED,
         commands: &TYPESCRIPT_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://eslint.org/", "https://prettier.io/"],
@@ -413,6 +425,7 @@ lint-failure-exit-codes = 1
 pub(crate) fn ruby_init() -> Init {
     Init {
         excludes: &[".bundle/**", "vendor/bundle/**"],
+        shared: &[],
         commands: &RUBY_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://rubocop.org/"],
@@ -459,6 +472,7 @@ ignore-stderr = ["Checking.+precious", "Finished.+dev", "could not compile"]
 pub(crate) fn rust_init() -> Init {
     Init {
         excludes: &["target"],
+        shared: &[],
         commands: &RUST_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://doc.rust-lang.org/clippy/"],
@@ -493,6 +507,7 @@ lint_failure_exit_codes = 1
 pub(crate) fn shell_init() -> Init {
     Init {
         excludes: &["target"],
+        shared: &[],
         commands: &SHELL_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://www.shellcheck.net/", "https://github.com/mvdan/sh"],
@@ -516,6 +531,7 @@ ignore-stderr = ["The .+ file is not sorted", "The .+ file is not unique"]
 pub(crate) fn gitignore_init() -> Init {
     Init {
         excludes: &[],
+        shared: &[],
         commands: &GITIGNORE_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://github.com/houseabsolute/omegasort"],
@@ -546,6 +562,7 @@ ignore-stderr = ["Code style issues"]
 pub(crate) fn markdown_init() -> Init {
     Init {
         excludes: &[],
+        shared: &[],
         commands: &MARKDOWN_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://prettier.io/"],
@@ -568,6 +585,7 @@ ignore_stderr = "INFO taplo.+"
 pub(crate) fn toml_init() -> Init {
     Init {
         excludes: &[],
+        shared: &[],
         commands: &TOML_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://taplo.tamasfe.dev/"],
@@ -591,6 +609,7 @@ ignore-stderr = ["Code style issues"]
 pub(crate) fn yaml_init() -> Init {
     Init {
         excludes: &[],
+        shared: &[],
         commands: &YAML_COMMANDS,
         extra_files: vec![],
         tool_urls: &["https://prettier.io/"],
@@ -599,6 +618,7 @@ pub(crate) fn yaml_init() -> Init {
 
 struct ConfigElements {
     excludes: HashSet<&'static str>,
+    shared: IndexMap<&'static str, &'static [&'static str]>,
     commands: IndexMap<&'static str, &'static str>,
     extra_files: HashMap<PathBuf, ConfigInitFile>,
     tool_urls: IndexSet<&'static str>,
@@ -624,6 +644,12 @@ pub(crate) fn write_config_files(
 
     if !toml.is_empty() {
         toml.push_str("\n\n");
+    }
+
+    let shared = shared_toml(&elements.shared);
+    if !shared.is_empty() {
+        toml.push_str(&shared);
+        toml.push('\n');
     }
 
     toml.push_str(&commands_toml(elements.commands));
@@ -652,6 +678,7 @@ pub(crate) fn write_config_files(
 
 fn config_elements(auto: bool, components: &[InitComponent]) -> Result<ConfigElements> {
     let mut excludes: HashSet<&'static str> = HashSet::new();
+    let mut shared: IndexMap<&'static str, &'static [&'static str]> = IndexMap::new();
     let mut commands = IndexMap::new();
     let mut extra_files = HashMap::new();
     let mut tool_urls: IndexSet<&'static str> = IndexSet::new();
@@ -671,6 +698,9 @@ fn config_elements(auto: bool, components: &[InitComponent]) -> Result<ConfigEle
             InitComponent::Yaml => yaml_init(),
         };
         excludes.extend(init.excludes);
+        for (key, globs) in init.shared {
+            shared.insert(key, globs);
+        }
         for (name, c) in init.commands {
             commands.insert(*name, *c);
         }
@@ -682,6 +712,7 @@ fn config_elements(auto: bool, components: &[InitComponent]) -> Result<ConfigEle
 
     Ok(ConfigElements {
         excludes,
+        shared,
         commands,
         extra_files,
         tool_urls,
@@ -763,6 +794,24 @@ fn excludes_toml(excludes: &HashSet<&str>) -> String {
                 .join("\n")
         )
     }
+}
+
+fn shared_toml(shared: &IndexMap<&str, &[&str]>) -> String {
+    use std::fmt::Write;
+
+    if shared.is_empty() {
+        return String::new();
+    }
+    let mut lines = String::from("[shared]\n");
+    for (key, globs) in shared {
+        let globs_str = globs
+            .iter()
+            .map(|g| format!(r#""{g}""#))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(lines, "{key} = [{globs_str}]").expect("this should never return an error");
+    }
+    lines
 }
 
 fn commands_toml(commands: IndexMap<&str, &str>) -> String {
