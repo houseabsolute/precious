@@ -30,13 +30,16 @@ pub(crate) struct ConfigInitFile {
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, ValueEnum)]
 pub(crate) enum InitComponent {
-    Go,
-    Perl,
-    Rust,
     Gitignore,
+    Go,
     Markdown,
+    Perl,
+    Python,
+    Ruby,
+    Rust,
     Shell,
     Toml,
+    Typescript,
     Yaml,
 }
 
@@ -308,6 +311,63 @@ pub(crate) fn perl_init() -> Init {
     }
 }
 
+const PYTHON_COMMANDS: [(&str, &str); 3] = [
+    (
+        "ruff-check",
+        r#"
+type = "both"
+include = "**/*.py"
+cmd = ["ruff", "check"]
+tidy-flags = "--fix"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+    ),
+    (
+        "ruff-format",
+        r#"
+type = "both"
+include = "**/*.py"
+cmd = ["ruff", "format"]
+lint-flags = "--check"
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+    ),
+    (
+        "mypy",
+        r#"
+type = "lint"
+include = "**/*.py"
+invoke = "once"
+path-args = "none"
+cmd = ["mypy", "."]
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+    ),
+];
+
+pub(crate) fn python_init() -> Init {
+    Init {
+        excludes: &[".venv/**", "**/__pycache__/**", "dist/**", "build/**"],
+        commands: &PYTHON_COMMANDS,
+        extra_files: vec![],
+        tool_urls: &[
+            "https://docs.astral.sh/ruff/",
+            "https://mypy.readthedocs.io/",
+        ],
+    }
+}
+
+pub(crate) fn typescript_init() -> Init {
+    todo!()
+}
+
+pub(crate) fn ruby_init() -> Init {
+    todo!()
+}
+
 const RUST_COMMANDS: [(&str, &str); 2] = [
     (
         "rustfmt",
@@ -547,13 +607,16 @@ fn config_elements(auto: bool, components: &[InitComponent]) -> Result<ConfigEle
 
     for l in auto_or_component(auto, components)? {
         let init = match l {
+            InitComponent::Gitignore => gitignore_init(),
             InitComponent::Go => go_init(),
+            InitComponent::Markdown => markdown_init(),
             InitComponent::Perl => perl_init(),
+            InitComponent::Python => python_init(),
+            InitComponent::Ruby => ruby_init(),
             InitComponent::Rust => rust_init(),
             InitComponent::Shell => shell_init(),
-            InitComponent::Gitignore => gitignore_init(),
-            InitComponent::Markdown => markdown_init(),
             InitComponent::Toml => toml_init(),
+            InitComponent::Typescript => typescript_init(),
             InitComponent::Yaml => yaml_init(),
         };
         excludes.extend(init.excludes);
@@ -611,9 +674,12 @@ fn auto_or_component(auto: bool, components: &[InitComponent]) -> Result<Vec<Ini
             "go" => InitComponent::Go,
             "md" => InitComponent::Markdown,
             "pl" | "pm" => InitComponent::Perl,
+            "py" => InitComponent::Python,
+            "rb" => InitComponent::Ruby,
             "rs" => InitComponent::Rust,
             "sh" => InitComponent::Shell,
             "toml" => InitComponent::Toml,
+            "ts" | "tsx" | "js" | "jsx" => InitComponent::Typescript,
             "yml" | "yaml" => InitComponent::Yaml,
             _ => continue,
         };
