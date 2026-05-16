@@ -551,6 +551,26 @@ ok-exit-codes = [0]
 lint-failure-exit-codes = [1]
 ```
 
+### You were previously using `dir/**/*` to exclude a directory's contents
+
+In older versions of `precious`, bare directory names like `target` in an `exclude` list did not
+actually exclude files _inside_ that directory — only the exact path `target` itself. This was a
+bug. It is now fixed: `"target"` works exactly like a `.gitignore` entry and excludes the directory
+and all its contents.
+
+If you were using `"target/**/*"` as a workaround, you can simplify it to just `"target"`. Both
+forms are now equivalent.
+
+There is no supported way to restore the old (broken) behavior. If you need fine-grained control
+over which files inside a directory are excluded, use negation patterns:
+
+```toml
+exclude = [
+    "target",
+    "!target/some/important/file.rs",
+]
+```
+
 ### You want to run Precious as a commit hook
 
 Simply run `precious lint -s` in your hook. It will exit with a non-zero status if any of the lint

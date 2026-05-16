@@ -1,6 +1,10 @@
 ## 0.10.3 - TBD
 
 - Added `python`, `typescript`, and `ruby` components to `precious config init`. GH #95.
+- Fixed a bug where bare directory names in `exclude` patterns (e.g., `target`) did not exclude
+  files inside that directory. Now `exclude = ["target"]` works exactly like a `.gitignore` entry —
+  it excludes the directory and all of its contents. Previously you had to write `target/**/*` to
+  get this behavior; that form still works and is equivalent.
 
 ## 0.10.2 2026-01-25
 

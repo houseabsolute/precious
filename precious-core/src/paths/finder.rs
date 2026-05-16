@@ -501,6 +501,21 @@ mod tests {
 
     #[test]
     #[parallel]
+    fn all_mode_with_excluded_files_bare_dir() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        let mut finder = new_finder_with_excludes(
+            Mode::All,
+            helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor".to_string()],
+        )?;
+        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
     fn git_modified_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
@@ -564,6 +579,26 @@ mod tests {
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(finder.files(vec![])?, Some(modified));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn git_modified_mode_with_excluded_files_bare_dir() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
+        helper.commit_all()?;
+
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        let mut finder = new_finder_with_excludes(
+            Mode::GitModified,
+            helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor".to_string()],
         )?;
         assert_eq!(finder.files(vec![])?, Some(modified));
         Ok(())
@@ -702,6 +737,23 @@ mod tests {
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(finder.files(vec![])?, Some(modified));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn git_staged_mode_with_excluded_files_bare_dir() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.stage_all()?;
+        let mut finder = new_finder_with_excludes(
+            Mode::GitStaged,
+            helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor".to_string()],
         )?;
         assert_eq!(finder.files(vec![])?, Some(modified));
         Ok(())
@@ -897,6 +949,24 @@ mod tests {
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(
+            finder.files(vec![PathBuf::from(".")])?,
+            Some(helper.all_files1()),
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn cli_mode_given_dir_with_excluded_files_bare_dir() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        let mut finder = new_finder_with_excludes(
+            Mode::FromCli,
+            helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor".to_string()],
         )?;
         assert_eq!(
             finder.files(vec![PathBuf::from(".")])?,
