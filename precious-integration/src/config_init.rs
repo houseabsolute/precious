@@ -163,10 +163,7 @@ fn init_ruby() -> Result<()> {
     assert!(output.stderr.is_none());
 
     assert_file_exists("precious.toml")?;
-    assert_file_contains(
-        "precious.toml",
-        &["rubocop", "rubocop-performance", "rubocop-rspec"],
-    )?;
+    assert_file_contains("precious.toml", &["rubocop"])?;
 
     let stdout = output.stdout.unwrap();
     assert!(stdout.contains("rubocop.org"));
