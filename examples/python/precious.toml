@@ -1,5 +1,7 @@
 exclude = ["**/__pycache__/**", ".venv/**", "build/**", "dist/**"]
 
+# ruff replaces flake8, isort, pyupgrade, and many other linters in one fast tool.
+# See https://docs.astral.sh/ruff/ for configuration options.
 [commands.ruff-check]
 type = "both"
 include = "**/*.py"
@@ -8,6 +10,7 @@ tidy-flags = "--fix"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
 
+# ruff format replaces black as the standard Python autoformatter.
 [commands.ruff-format]
 type = "both"
 include = "**/*.py"
@@ -16,6 +19,8 @@ lint-flags = "--check"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
 
+# mypy needs to see the whole project for accurate cross-module type checking,
+# so precious runs it once against the project root rather than per-file.
 [commands.mypy]
 type = "lint"
 include = "**/*.py"

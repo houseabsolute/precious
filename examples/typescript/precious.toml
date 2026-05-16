@@ -1,5 +1,8 @@
 exclude = ["build/**", "dist/**", "node_modules/**"]
 
+# eslint and prettier are installed as devDependencies; the ./node_modules/.bin/
+# prefix uses the local install rather than a globally installed version.
+# The include pattern covers both TypeScript and JavaScript files.
 [commands.eslint]
 type = "both"
 include = ["**/*.{ts,tsx,js,jsx}"]
@@ -8,6 +11,8 @@ tidy-flags = "--fix"
 ok-exit-codes = 0
 lint-failure-exit-codes = 1
 
+# prettier handles formatting; eslint handles logic and style linting — they
+# complement each other and are typically used together.
 [commands.prettier-typescript]
 type = "both"
 include = ["**/*.{ts,tsx,js,jsx}"]
