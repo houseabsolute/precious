@@ -1,6 +1,9 @@
 ## 0.10.3 - TBD
 
-- Added `python`, `typescript`, and `ruby` components to `precious config init`. GH #95.
+- Added `python`, `typescript`, and `ruby` components to `precious config init` and to the
+  `examples` directory. GH #95.
+- When given a list of paths on the CLI, `precious` will return a more helpful error when all of
+  those paths are excluded by the `precious.toml` configuration.
 
 ## 0.10.2 2026-01-25
 
