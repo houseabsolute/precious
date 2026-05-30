@@ -13,6 +13,12 @@
   files inside that directory. Now `exclude = ["target"]` works exactly like a `.gitignore` entry —
   it excludes the directory and all of its contents. Previously you had to write `target/**/*` to
   get this behavior; that form still works and is equivalent.
+- Precious now fails fast with a clear error when it encounters a file path that is not valid UTF-8,
+  instead of silently doing a lossy conversion. Previously non-UTF-8 paths were corrupted at the
+  `git ls-files` decode step and at subprocess-argument construction. The error message includes
+  both a human-readable lossy approximation and the exact raw bytes of the path. Switching the
+  internal `git ls-files`/`git diff` invocations to `-z` also fixes handling of valid non-ASCII
+  names like `café.txt` that git would otherwise C-quote.
 
 ## 0.10.2 2026-01-25
 

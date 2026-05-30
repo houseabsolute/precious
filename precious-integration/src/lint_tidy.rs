@@ -138,7 +138,7 @@ fn cli_paths() -> Result<()> {
     let precious = precious_path()?;
 
     let mut args = vec!["lint"];
-    args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
+    args.append(&mut files.iter().map(|p| p.as_str()).collect());
     Exec::builder()
         .exe(&precious)
         .args(args)
@@ -148,7 +148,7 @@ fn cli_paths() -> Result<()> {
         .run()?;
 
     let mut args = vec!["tidy"];
-    args.append(&mut files.iter().map(|p| p.to_str().unwrap()).collect());
+    args.append(&mut files.iter().map(|p| p.as_str()).collect());
     Exec::builder()
         .exe(&precious)
         .args(args)
@@ -645,7 +645,7 @@ ok-exit-codes = 0
         ),
         (
             String::from("PRECIOUS_INTEGRATION_TEST_ROOT"),
-            helper.precious_root().to_string_lossy().to_string(),
+            helper.precious_root().into_string(),
         ),
     ]);
 

@@ -10,6 +10,7 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+camino.workspace = true
 env_logger.workspace = true
 log.workspace = true
 mitsein.workspace = true

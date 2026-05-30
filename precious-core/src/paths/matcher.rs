@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
+use camino::Utf8Path;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use std::path::Path;
 
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
@@ -10,9 +10,9 @@ pub struct MatcherBuilder {
 
 #[allow(clippy::new_without_default)]
 impl MatcherBuilder {
-    pub fn new<P: AsRef<Path>>(root: P) -> Self {
+    pub fn new<P: AsRef<Utf8Path>>(root: P) -> Self {
         Self {
-            builder: GitignoreBuilder::new(root),
+            builder: GitignoreBuilder::new(root.as_ref()),
         }
     }
 
@@ -41,7 +41,7 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn path_matches(&self, path: &Path, is_dir: bool) -> bool {
+    pub fn path_matches(&self, path: &Utf8Path, is_dir: bool) -> bool {
         self.gitignore
             .matched_path_or_any_parents(path, is_dir)
             .is_ignore()
@@ -51,6 +51,7 @@ impl Matcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8Path;
     use serial_test::parallel;
 
     #[test]
@@ -113,11 +114,14 @@ mod tests {
             let globs = t.globs.join(" ");
             let m = MatcherBuilder::new("/").with(t.globs)?.build()?;
             for y in t.yes {
-                assert!(m.path_matches(Path::new(y), false), "{y} matches [{globs}]");
+                assert!(
+                    m.path_matches(Utf8Path::new(y), false),
+                    "{y} matches [{globs}]"
+                );
             }
             for n in t.no {
                 assert!(
-                    !m.path_matches(Path::new(n), false),
+                    !m.path_matches(Utf8Path::new(n), false),
                     "{n} does not match [{globs}]",
                 );
             }

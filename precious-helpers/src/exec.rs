@@ -2,6 +2,7 @@
 use crate::error::Error;
 use anyhow::{Context, Result};
 use bon::bon;
+use camino::{Utf8Path, Utf8PathBuf};
 use itertools::Itertools;
 use log::{
     Level::{Debug, Info},
@@ -10,8 +11,7 @@ use log::{
 use regex::Regex;
 use std::{
     collections::HashMap,
-    env, fs,
-    path::Path,
+    env,
     process::{self, Command},
     sync::mpsc::{self, RecvTimeoutError},
     thread::{self, JoinHandle},
@@ -34,7 +34,7 @@ pub struct Exec<'a> {
     env: HashMap<String, String>,
     ok_exit_codes: &'a [i32],
     ignore_stderr: Vec<Regex>,
-    in_dir: Option<&'a Path>,
+    in_dir: Option<&'a Utf8Path>,
     pub loggable_command: String,
 }
 
@@ -43,6 +43,7 @@ pub struct Output {
     pub exit_code: i32,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
+    pub stdout_bytes: Option<Vec<u8>>,
 }
 
 #[bon]
@@ -55,7 +56,7 @@ impl<'a> Exec<'a> {
         #[builder(default)] env: HashMap<String, String>,
         ok_exit_codes: &'a [i32],
         #[builder(default)] ignore_stderr: Vec<Regex>,
-        in_dir: Option<&'a Path>,
+        in_dir: Option<&'a Utf8Path>,
     ) -> Self {
         let mut s = Self {
             exe,
@@ -145,15 +146,17 @@ impl<'a> Exec<'a> {
             .with_context(|| format!(r"Failed to execute command `{}`", self.full_command()))?;
 
         if log_enabled!(Debug) && !output.stdout.is_empty() {
-            let stdout = String::from_utf8(output.stdout.clone())
-                .context("Failed to decode stdout as UTF-8")?;
+            // Lossy decode is intentional: a process whose stdout is byte-faithful
+            // (e.g. `git ls-files -z`) may produce bytes that are not valid UTF-8.
+            // Surfacing those bytes is the caller's job via `stdout_bytes`; here we
+            // only want a readable log line.
+            let stdout = String::from_utf8_lossy(&output.stdout);
             debug!("Stdout was:\n{stdout}");
         }
 
         let code = output.status.code().unwrap_or(-1);
         if !output.stderr.is_empty() {
-            let stderr = String::from_utf8(output.stderr.clone())
-                .context("Failed to decode stderr as UTF-8")?;
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
             if log_enabled!(Debug) {
                 debug!("Stderr was:\n{stderr}");
             }
@@ -162,18 +165,22 @@ impl<'a> Exec<'a> {
                 return Err(Error::UnexpectedStderr {
                     cmd: self.full_command(),
                     code,
-                    stdout: String::from_utf8(output.stdout)
-                        .unwrap_or("<could not turn stdout into a UTF-8 string>".to_string()),
+                    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
                     stderr,
                 }
                 .into());
             }
         }
 
+        let stdout_string = bytes_to_option_string(&output.stdout);
+        let stderr_string = bytes_to_option_string(&output.stderr);
+        let stdout_bytes = (!output.stdout.is_empty()).then_some(output.stdout);
+
         Ok(Output {
             exit_code: code,
-            stdout: bytes_to_option_string(&output.stdout),
-            stderr: bytes_to_option_string(&output.stderr),
+            stdout: stdout_string,
+            stderr: stderr_string,
+            stdout_bytes,
         })
     }
 
@@ -207,10 +214,8 @@ impl<'a> Exec<'a> {
             return if self.ok_exit_codes.contains(&code) {
                 Ok(output)
             } else {
-                let stdout = String::from_utf8(output.stdout)
-                    .context("Failed to decode command stdout as UTF-8")?;
-                let stderr = String::from_utf8(output.stderr)
-                    .context("Failed to decode command stderr as UTF-8")?;
+                let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+                let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
                 Err(Error::UnexpectedExitCode {
                     cmd: self.full_command(),
                     code,
@@ -238,10 +243,8 @@ impl<'a> Exec<'a> {
             self.full_command(),
             signal
         );
-        let stdout = String::from_utf8(output.stdout)
-            .context("Failed to decode command stdout as UTF-8 for signal error")?;
-        let stderr = String::from_utf8(output.stderr)
-            .context("Failed to decode command stderr as UTF-8 for signal error")?;
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         Err(Error::ProcessKilledBySignal {
             cmd: self.full_command(),
             signal,
@@ -282,13 +285,11 @@ impl<'a> Exec<'a> {
         cmd.args(&self.args);
 
         let in_dir = if let Some(d) = &self.in_dir {
-            d.to_path_buf()
+            d.canonicalize_utf8()?
         } else {
-            env::current_dir()?
+            Utf8PathBuf::try_from(env::current_dir()?)?
         };
-
-        let in_dir = fs::canonicalize(in_dir)?;
-        debug!("Setting current dir to {}", in_dir.display());
+        debug!("Setting current dir to {in_dir}");
 
         // We are canonicalizing this primarily for the benefit of our debugging output, because
         // otherwise we might see the current dir as just `.`, which is not helpful.
@@ -333,11 +334,7 @@ mod tests {
     use regex::Regex;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::{parallel, serial};
-    use std::{
-        collections::HashMap,
-        env, fs,
-        path::{Path, PathBuf},
-    };
+    use std::{collections::HashMap, env, path::Path};
     use tempfile::tempdir;
     use test_case::test_case;
     use which::which;
@@ -748,7 +745,7 @@ STDERR
         }
 
         let td = tempdir()?;
-        let td_path = maybe_canonicalize(td.path())?;
+        let td_path = maybe_canonicalize_tempdir(td.path())?;
 
         let res = Exec::builder()
             .exe("pwd")
@@ -763,11 +760,22 @@ STDERR
         let stdout_trimmed = stdout.trim_end();
         assert_eq!(
             stdout_trimmed,
-            td_path.to_string_lossy(),
+            td_path.as_str(),
             "process runs in another dir",
         );
 
         Ok(())
+    }
+
+    // The temp directory on macOS in GitHub Actions appears to be a symlink, but canonicalizing on
+    // Windows breaks tests for some reason.
+    fn maybe_canonicalize_tempdir(path: &Path) -> Result<camino::Utf8PathBuf> {
+        let utf8 = camino::Utf8PathBuf::try_from(path.to_owned())?;
+        if cfg!(windows) {
+            Ok(utf8)
+        } else {
+            Ok(utf8.canonicalize_utf8()?)
+        }
     }
 
     #[test]
@@ -906,12 +914,24 @@ STDERR
         assert_eq!(exec.loggable_command, expect);
     }
 
-    // The temp directory on macOS in GitHub Actions appears to be a symlink, but
-    // canonicalizing on Windows breaks tests for some reason.
-    fn maybe_canonicalize(path: &Path) -> Result<PathBuf> {
-        if cfg!(windows) {
-            return Ok(path.to_owned());
+    #[test]
+    #[parallel]
+    fn raw_stdout_preserves_non_utf8_bytes() -> Result<()> {
+        if which("sh").is_err() {
+            println!("Skipping test since sh is not in path");
+            return Ok(());
         }
-        Ok(fs::canonicalize(path)?)
+
+        // Use sh -c with printf %b to emit a NUL-separated stream containing an invalid UTF-8 byte.
+        // %b interprets backslash escapes like \0 and \377 (octal for 0xFF).
+        let out = Exec::builder()
+            .exe("sh")
+            .args(vec!["-c", "printf '%b' 'a\\0b\\377\\0'"])
+            .ok_exit_codes(&[0])
+            .build()
+            .run()?;
+        let bytes = out.stdout_bytes.as_deref().expect("expected raw stdout");
+        assert_eq!(bytes, b"a\x00b\xff\x00");
+        Ok(())
     }
 }

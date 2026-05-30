@@ -7,6 +7,7 @@ use crate::{
     vcs,
 };
 use anyhow::{Context, Error, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, Parser};
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 use fern::{
@@ -20,10 +21,8 @@ use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use std::{
     env,
     fmt::Write,
-    fs,
     io::stdout,
     num::NonZeroUsize,
-    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 use thiserror::Error;
@@ -33,8 +32,8 @@ enum PreciousError {
     #[error("No mode or paths were provided in the command line args")]
     NoModeOrPathsInCliArgs,
 
-    #[error("The path given in --config, {}, has no parent directory", file.display())]
-    ConfigFileHasNoParent { file: PathBuf },
+    #[error("The path given in --config, {file}, has no parent directory")]
+    ConfigFileHasNoParent { file: Utf8PathBuf },
 
     #[error("Could not find a VCS checkout root starting from {cwd:}")]
     CannotFindRoot { cwd: String },
@@ -70,7 +69,7 @@ impl From<Error> for Exit {
 struct ActionFailure {
     error: String,
     config_key: String,
-    paths: Vec<PathBuf>,
+    paths: Vec<Utf8PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -84,7 +83,7 @@ struct ActionFailure {
 pub struct App {
     /// Path to the precious config file
     #[clap(long, short)]
-    config: Option<PathBuf>,
+    config: Option<Utf8PathBuf>,
     /// Number of parallel jobs (threads) to run (defaults to one per core)
     #[clap(long, short)]
     jobs: Option<usize>,
@@ -160,7 +159,7 @@ pub struct CommonArgs {
     label: Option<String>,
     /// A list of paths on which to operate
     #[clap(value_parser)]
-    paths: Vec<PathBuf>,
+    paths: Vec<Utf8PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -187,7 +186,7 @@ pub struct ConfigInitArgs {
     #[clap(long, short)]
     auto: bool,
     #[clap(long, short, default_value = "precious.toml")]
-    path: PathBuf,
+    path: Utf8PathBuf,
 }
 
 #[must_use]
@@ -253,19 +252,22 @@ impl App {
     }
 
     fn run_with_output(self, output: impl std::io::Write) -> Result<i8> {
+        let cwd = current_dir_utf8()?;
+
         if let Subcommand::Config(config_args) = &self.subcommand {
             if let ConfigSubcommand::Init(init_args) = &config_args.subcommand {
                 config_init::write_config_files(
                     init_args.auto,
                     &init_args.component,
                     &init_args.path,
+                    &cwd,
                 )
                 .context("Failed to initialize config files")?;
                 return Ok(0);
             }
         }
 
-        let (cwd, project_root, config_file, config) = self.load_config()?;
+        let (cwd, project_root, config_file, config) = self.load_config(cwd)?;
 
         match self.subcommand {
             Subcommand::Lint(_) | Subcommand::Tidy(_) => {
@@ -290,54 +292,65 @@ impl App {
     // This exists to make writing tests of the runner easier.
     #[cfg(test)]
     fn new_lint_or_tidy_runner(self) -> Result<LintOrTidyRunner> {
-        let (cwd, project_root, _, config) = self.load_config()?;
+        let cwd = current_dir_utf8()?;
+        let (cwd, project_root, _, config) = self.load_config(cwd)?;
         LintOrTidyRunner::new(self, cwd, project_root, config)
     }
 
-    fn load_config(&self) -> Result<(PathBuf, PathBuf, PathBuf, config::Config)> {
-        let cwd = env::current_dir().context("Failed to get current working directory")?;
+    fn load_config(
+        &self,
+        cwd: Utf8PathBuf,
+    ) -> Result<(Utf8PathBuf, Utf8PathBuf, Utf8PathBuf, config::Config)> {
         let project_root = project_root(self.config.as_deref(), &cwd)
             .context("Failed to determine project root")?;
         let config_file = self.config_file(&project_root);
         let config = config::Config::new(&config_file)
-            .with_context(|| format!("Failed to load config from {}", config_file.display()))?;
+            .with_context(|| format!("Failed to load config from {config_file}"))?;
 
         Ok((cwd, project_root, config_file, config))
     }
 
-    fn config_file(&self, dir: &Path) -> PathBuf {
+    fn config_file(&self, dir: &Utf8Path) -> Utf8PathBuf {
         if let Some(cf) = self.config.as_ref() {
-            debug!("Loading config from {} (set via flag)", cf.display());
+            debug!("Loading config from {cf} (set via flag)");
             return cf.clone();
         }
 
         let default = default_config_file(dir);
-        debug!(
-            "Loading config from {} (default location)",
-            default.display()
-        );
+        debug!("Loading config from {default} (default location)");
         default
     }
 }
 
-fn project_root(config_file: Option<&Path>, cwd: &Path) -> Result<PathBuf> {
+fn current_dir_utf8() -> Result<Utf8PathBuf> {
+    let cwd_std = env::current_dir().context("Failed to get current working directory")?;
+    Utf8PathBuf::try_from(cwd_std).map_err(|e| {
+        crate::paths::utf8::NonUtf8PathError {
+            raw: e.into_path_buf(),
+            source: crate::paths::utf8::NonUtf8Source::Cwd,
+        }
+        .into()
+    })
+}
+
+fn project_root(config_file: Option<&Utf8Path>, cwd: &Utf8Path) -> Result<Utf8PathBuf> {
     if let Some(file) = config_file {
         if let Some(p) = file.parent() {
-            if p.to_string_lossy().is_empty() {
-                return Ok(cwd.to_path_buf());
+            if p.as_str().is_empty() {
+                return Ok(cwd.to_owned());
             }
-            return fs::canonicalize(p).with_context(|| {
-                format!("Canonicalizing config file parent path {}", p.display())
-            });
+            return p
+                .canonicalize_utf8()
+                .with_context(|| format!("Failed to canonicalize config file parent path {p}"));
         }
         return Err(PreciousError::ConfigFileHasNoParent {
-            file: file.to_path_buf(),
+            file: file.to_owned(),
         }
         .into());
     }
 
     if has_config_file(cwd) {
-        return Ok(cwd.into());
+        return Ok(cwd.to_owned());
     }
 
     for ancestor in cwd.ancestors() {
@@ -347,22 +360,22 @@ fn project_root(config_file: Option<&Path>, cwd: &Path) -> Result<PathBuf> {
     }
 
     Err(PreciousError::CannotFindRoot {
-        cwd: cwd.to_string_lossy().to_string(),
+        cwd: cwd.to_string(),
     }
     .into())
 }
 
-fn has_config_file(dir: &Path) -> bool {
+fn has_config_file(dir: &Utf8Path) -> bool {
     default_config_file(dir).exists()
 }
 
 const CONFIG_FILE_NAMES: &[&str] = &["precious.toml", ".precious.toml"];
 
-fn default_config_file(dir: &Path) -> PathBuf {
+fn default_config_file(dir: &Utf8Path) -> Utf8PathBuf {
     CONFIG_FILE_NAMES
         .iter()
         .map(|n| {
-            let mut path = dir.to_path_buf();
+            let mut path = dir.to_owned();
             path.push(n);
             path
         })
@@ -370,9 +383,9 @@ fn default_config_file(dir: &Path) -> PathBuf {
         .expect("This cannot fail because we know CONFIG_FILE_NAMES is not empty")
 }
 
-fn is_checkout_root(dir: &Path) -> bool {
+fn is_checkout_root(dir: &Utf8Path) -> bool {
     for subdir in vcs::DIRS {
-        let mut poss = PathBuf::from(dir);
+        let mut poss = dir.to_owned();
         poss.push(subdir);
         if poss.exists() {
             return true;
@@ -383,10 +396,10 @@ fn is_checkout_root(dir: &Path) -> bool {
 
 fn print_config(
     mut output: impl std::io::Write,
-    config_file: &Path,
+    config_file: &Utf8Path,
     config: config::Config,
 ) -> Result<()> {
-    writeln!(output, "Found config file at: {}", config_file.display())?;
+    writeln!(output, "Found config file at: {config_file}")?;
     writeln!(output)?;
 
     let mut table = Table::new();
@@ -414,8 +427,8 @@ fn print_config(
 #[derive(Debug)]
 pub struct LintOrTidyRunner {
     mode: paths::mode::Mode,
-    project_root: PathBuf,
-    cwd: PathBuf,
+    project_root: Utf8PathBuf,
+    cwd: Utf8PathBuf,
     config: config::Config,
     command: Option<String>,
     chars: chars::Chars,
@@ -423,7 +436,7 @@ pub struct LintOrTidyRunner {
     color: bool,
     thread_pool: ThreadPool,
     should_lint: bool,
-    paths: Vec<PathBuf>,
+    paths: Vec<Utf8PathBuf>,
     label: Option<String>,
 }
 
@@ -438,8 +451,8 @@ macro_rules! maybe_println {
 impl LintOrTidyRunner {
     fn new(
         app: App,
-        cwd: PathBuf,
-        project_root: PathBuf,
+        cwd: Utf8PathBuf,
+        project_root: Utf8PathBuf,
         config: config::Config,
     ) -> Result<LintOrTidyRunner> {
         if log::log_enabled!(log::Level::Debug) {
@@ -569,7 +582,11 @@ impl LintOrTidyRunner {
         run_command: R,
     ) -> Result<Exit>
     where
-        R: Fn(&mut Self, &Slice1<PathBuf>, &command::Command) -> Result<Option<Vec<ActionFailure>>>,
+        R: Fn(
+            &mut Self,
+            &Slice1<Utf8PathBuf>,
+            &command::Command,
+        ) -> Result<Option<Vec<ActionFailure>>>,
     {
         if commands.is_empty() {
             if let Some(c) = &self.command {
@@ -604,7 +621,7 @@ impl LintOrTidyRunner {
         let finder_result = self
             .finder()
             .context("Failed to create file finder")?
-            .files(cli_paths);
+            .files(&cli_paths);
 
         let files = match finder_result {
             Err(e) => return Err(e.context(format!("Failed to find files for {action}"))),
@@ -663,7 +680,7 @@ impl LintOrTidyRunner {
                         "  {} [{}] failed for [{}]\n    {}\n",
                         self.chars.bullet,
                         af.config_key,
-                        af.paths.iter().map(|p| p.to_string_lossy()).join(" "),
+                        af.paths.iter().map(|p| p.as_str()).join(" "),
                         af.error,
                     );
                     out
@@ -688,12 +705,12 @@ impl LintOrTidyRunner {
 
     fn run_one_tidier(
         &mut self,
-        files: &Slice1<PathBuf>,
+        files: &Slice1<Utf8PathBuf>,
         t: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self,
                       actual_invoke: ActualInvoke,
-                      files: &Slice1<&Path>|
+                      files: &Slice1<&Utf8Path>|
          -> Option<Result<(), ActionFailure>> {
             match t.tidy(actual_invoke, files) {
                 Ok(Some(TidyOutcome::Changed)) => {
@@ -737,7 +754,7 @@ impl LintOrTidyRunner {
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
                         config_key: t.config_key(),
-                        paths: files.iter().map(|f| f.to_path_buf()).collect(),
+                        paths: files.iter().map(|f| (*f).to_owned()).collect(),
                     }))
                 }
             }
@@ -748,12 +765,12 @@ impl LintOrTidyRunner {
 
     fn run_one_linter(
         &mut self,
-        files: &Slice1<PathBuf>,
+        files: &Slice1<Utf8PathBuf>,
         l: &command::Command,
     ) -> Result<Option<Vec<ActionFailure>>> {
         let runner = |s: &Self,
                       actual_invoke: ActualInvoke,
-                      files: &Slice1<&Path>|
+                      files: &Slice1<&Utf8Path>|
          -> Option<Result<(), ActionFailure>> {
             match l.lint(actual_invoke, files) {
                 Ok(Some(lo)) => {
@@ -784,8 +801,7 @@ impl LintOrTidyRunner {
                                 if files.len() == NonZeroUsize::new(1).unwrap() {
                                     println!(
                                         "::error file={}::Linting with {} failed",
-                                        files[0].display(),
-                                        l.name
+                                        files[0], l.name
                                     );
                                 } else {
                                     println!("::error::Linting with {} failed", l.name);
@@ -796,7 +812,7 @@ impl LintOrTidyRunner {
                         Some(Err(ActionFailure {
                             error: "linting failed".into(),
                             config_key: l.config_key(),
-                            paths: files.iter().map(|f| f.to_path_buf()).collect(),
+                            paths: files.iter().map(|f| (*f).to_owned()).collect(),
                         }))
                     }
                 }
@@ -811,7 +827,7 @@ impl LintOrTidyRunner {
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
                         config_key: l.config_key(),
-                        paths: files.iter().map(|f| f.to_path_buf()).collect(),
+                        paths: files.iter().map(|f| (*f).to_owned()).collect(),
                     }))
                 }
             }
@@ -823,12 +839,12 @@ impl LintOrTidyRunner {
     fn run_parallel<R>(
         &mut self,
         what: &str,
-        files: &Slice1<PathBuf>,
+        files: &Slice1<Utf8PathBuf>,
         c: &command::Command,
         runner: R,
     ) -> Result<Option<Vec<ActionFailure>>>
     where
-        R: Fn(&Self, ActualInvoke, &Slice1<&Path>) -> Option<Result<(), ActionFailure>> + Sync,
+        R: Fn(&Self, ActualInvoke, &Slice1<&Utf8Path>) -> Option<Result<(), ActionFailure>> + Sync,
     {
         let (sets, actual_invoke) = c.files_to_args_sets(files).with_context(|| {
             format!(
@@ -912,15 +928,14 @@ fn format_duration(d: &Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8PathBuf;
     use itertools::Itertools;
     use precious_testhelper::TestHelper;
     use pretty_assertions::assert_eq;
     use pushd::Pushd;
     // Anything that does pushd must be run serially or else chaos ensues.
     use serial_test::serial;
-    #[cfg(not(target_os = "windows"))]
-    use std::str::FromStr;
-    use std::{collections::HashMap, path::PathBuf};
+    use std::collections::HashMap;
     use test_case::test_case;
     #[cfg(not(target_os = "windows"))]
     use which::which;
@@ -946,7 +961,7 @@ lint-failure-exit-codes = [1]
 
             let app = App::try_parse_from(["precious", "tidy", "--all"])?;
 
-            let (_, project_root, config_file, _) = app.load_config()?;
+            let (_, project_root, config_file, _) = app.load_config(current_dir_utf8()?)?;
             let mut expect_config_file = project_root;
             expect_config_file.push(name);
             assert_eq!(config_file, expect_config_file);
@@ -980,15 +995,12 @@ lint-failure-exit-codes = [1]
         let app = App::try_parse_from([
             "precious",
             "--config",
-            helper
-                .config_file(DEFAULT_CONFIG_FILE_NAME)
-                .to_str()
-                .unwrap(),
+            helper.config_file(DEFAULT_CONFIG_FILE_NAME).as_str(),
             "tidy",
             "--all",
         ])?;
 
-        let (_, project_root, config_file, _) = app.load_config()?;
+        let (_, project_root, config_file, _) = app.load_config(current_dir_utf8()?)?;
         let mut expect_config_file = project_root;
         expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
         assert_eq!(config_file, expect_config_file);
@@ -1030,9 +1042,10 @@ lint-failure-exit-codes = [1]
             helper.pushd_to_subdir()?
         };
 
-        let cwd = env::current_dir()?;
+        let cwd_std = env::current_dir()?;
+        let cwd = Utf8PathBuf::try_from(cwd_std).unwrap();
 
-        let root = super::project_root(config_file.map(Path::new), &cwd)?;
+        let root = super::project_root(config_file.map(Utf8Path::new), &cwd)?;
         assert_eq!(root, helper.precious_root());
 
         Ok(())
@@ -1128,9 +1141,13 @@ lint-failure-exit-codes = [1]
         let mut lt = app.new_lint_or_tidy_runner()?;
 
         assert_eq!(
-            lt.finder()?
-                .files(paths.iter().map(PathBuf::from).collect())?,
-            Some(expect.iter1().map(PathBuf::from).collect1()),
+            lt.finder()?.files(
+                &paths
+                    .iter()
+                    .map(|p| Utf8PathBuf::from(*p))
+                    .collect::<Vec<_>>()
+            )?,
+            Some(expect.iter1().map(|p| Utf8PathBuf::from(*p)).collect1()),
             "finder_uses_project_root: {} [{}]",
             if flag.is_empty() { "<none>" } else { flag },
             paths.join(" ")
@@ -1295,7 +1312,7 @@ lint-failure-exit-codes = [1]
             lint-failure-exit-codes = [1]
         "#;
         let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
-        let test_replace = PathBuf::from_str("test.replace")?;
+        let test_replace = Utf8PathBuf::from("test.replace");
         helper.write_file(&test_replace, "The letter A")?;
         let _pushd = helper.pushd_to_git_root()?;
 
@@ -1305,7 +1322,7 @@ lint-failure-exit-codes = [1]
 
         assert_eq!(status, 0);
 
-        let content = helper.read_file(test_replace.as_ref())?;
+        let content = helper.read_file(&test_replace)?;
         assert_eq!(content, "The letter b".to_string());
 
         Ok(())
@@ -1357,7 +1374,7 @@ lint-failure-exit-codes = [1]
 │ baz  ┆ both ┆ baz --fast-mode --no-verify          │
 └──────┴──────┴──────────────────────────────────────┘
 "#,
-            helper.config_file(DEFAULT_CONFIG_FILE_NAME).display(),
+            helper.config_file(DEFAULT_CONFIG_FILE_NAME),
         );
         assert_eq!(output, expect);
 

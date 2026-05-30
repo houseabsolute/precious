@@ -10,8 +10,8 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+camino.workspace = true
 clap.workspace = true
-clean-path.workspace = true
 comfy-table.workspace = true
 fern.workspace = true
 ignore.workspace = true

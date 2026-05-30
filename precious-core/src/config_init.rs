@@ -1,14 +1,13 @@
 use anyhow::{Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::ValueEnum;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use log::debug;
 use std::{
     collections::{HashMap, HashSet},
-    env,
     fs::{create_dir_all, File},
     io::Write,
-    path::{Path, PathBuf},
 };
 use thiserror::Error;
 
@@ -24,7 +23,7 @@ pub(crate) struct Init {
 }
 
 pub(crate) struct ConfigInitFile {
-    pub(crate) path: PathBuf,
+    pub(crate) path: Utf8PathBuf,
     pub(crate) content: &'static str,
     pub(crate) is_executable: bool,
 }
@@ -47,7 +46,7 @@ pub(crate) enum InitComponent {
 #[derive(Debug, Error)]
 enum ConfigInitError {
     #[error("A file already exists at the given path: {path}")]
-    FileExists { path: PathBuf },
+    FileExists { path: Utf8PathBuf },
 }
 
 const GO_COMMANDS: [(&str, &str); 3] = [
@@ -222,12 +221,12 @@ pub(crate) fn go_init() -> Init {
         commands: &GO_COMMANDS,
         extra_files: vec![
             ConfigInitFile {
-                path: PathBuf::from("dev/bin/check-go-mod.sh"),
+                path: Utf8PathBuf::from("dev/bin/check-go-mod.sh"),
                 content: CHECK_GO_MOD,
                 is_executable: true,
             },
             ConfigInitFile {
-                path: PathBuf::from(".golangci.yml"),
+                path: Utf8PathBuf::from(".golangci.yml"),
                 content: GOLANGCI_YML,
                 is_executable: false,
             },
@@ -620,16 +619,16 @@ struct ConfigElements {
     excludes: HashSet<&'static str>,
     shared: IndexMap<&'static str, &'static [&'static str]>,
     commands: IndexMap<&'static str, &'static str>,
-    extra_files: HashMap<PathBuf, ConfigInitFile>,
+    extra_files: HashMap<Utf8PathBuf, ConfigInitFile>,
     tool_urls: IndexSet<&'static str>,
 }
 
 pub(crate) fn write_config_files(
     auto: bool,
     components: &[InitComponent],
-    path: &Path,
+    path: &Utf8Path,
+    cwd: &Utf8Path,
 ) -> Result<()> {
-    let cwd = env::current_dir().with_context(|| "Failed to get current working directory")?;
     if cwd.join(path).exists() {
         return Err(ConfigInitError::FileExists {
             path: path.to_owned(),
@@ -637,8 +636,8 @@ pub(crate) fn write_config_files(
         .into());
     }
 
-    let elements =
-        config_elements(auto, components).with_context(|| "Failed to generate config elements")?;
+    let elements = config_elements(auto, components, cwd)
+        .with_context(|| "Failed to generate config elements")?;
 
     let mut toml = excludes_toml(&elements.excludes);
 
@@ -655,13 +654,13 @@ pub(crate) fn write_config_files(
     toml.push_str(&commands_toml(elements.commands));
 
     println!();
-    println!("Writing {}", path.display());
+    println!("Writing {path}");
 
-    let mut precious_toml = File::create(path)
-        .with_context(|| format!("Failed to create config file at {}", path.display()))?;
+    let mut precious_toml =
+        File::create(path).with_context(|| format!("Failed to create config file at {path}"))?;
     precious_toml
         .write_all(toml.as_bytes())
-        .with_context(|| format!("Failed to write config data to {}", path.display()))?;
+        .with_context(|| format!("Failed to write config data to {path}"))?;
 
     write_extra_files(&elements.extra_files)
         .with_context(|| format!("Failed to write extra files for {components:?} components"))?;
@@ -676,14 +675,18 @@ pub(crate) fn write_config_files(
     Ok(())
 }
 
-fn config_elements(auto: bool, components: &[InitComponent]) -> Result<ConfigElements> {
+fn config_elements(
+    auto: bool,
+    components: &[InitComponent],
+    cwd: &Utf8Path,
+) -> Result<ConfigElements> {
     let mut excludes: HashSet<&'static str> = HashSet::new();
     let mut shared: IndexMap<&'static str, &'static [&'static str]> = IndexMap::new();
     let mut commands = IndexMap::new();
-    let mut extra_files = HashMap::new();
+    let mut extra_files: HashMap<Utf8PathBuf, ConfigInitFile> = HashMap::new();
     let mut tool_urls: IndexSet<&'static str> = IndexSet::new();
 
-    for l in auto_or_component(auto, components)? {
+    for l in auto_or_component(auto, components, cwd)? {
         let init = match l {
             InitComponent::Gitignore => gitignore_init(),
             InitComponent::Go => go_init(),
@@ -719,40 +722,39 @@ fn config_elements(auto: bool, components: &[InitComponent]) -> Result<ConfigEle
     })
 }
 
-fn auto_or_component(auto: bool, components: &[InitComponent]) -> Result<Vec<InitComponent>> {
+fn auto_or_component(
+    auto: bool,
+    components: &[InitComponent],
+    cwd: &Utf8Path,
+) -> Result<Vec<InitComponent>> {
     if !auto {
         return Ok(components.to_vec());
     }
 
     let mut components: HashSet<InitComponent> = HashSet::new();
-    let cwd =
-        env::current_dir().context("Failed to get current working directory for auto detection")?;
-    debug!(
-        "Looking at all files under {} to determine which components to include.",
-        cwd.display(),
-    );
+    debug!("Looking at all files under {cwd} to determine which components to include.");
 
-    for result in ignore::WalkBuilder::new(&cwd).hidden(false).build() {
-        let entry =
-            result.with_context(|| format!("Failed to walk directory {}", cwd.display()))?;
+    for result in ignore::WalkBuilder::new(cwd).hidden(false).build() {
+        let entry = result.with_context(|| format!("Failed to walk directory {cwd}"))?;
         // The only time this is `None` is when the entry is for stdin, which
         // will never happen here.
         if !entry.file_type().unwrap().is_file() {
             continue;
         }
 
-        if entry.file_name() == ".gitignore" {
+        let path = Utf8PathBuf::from_path_buf(entry.into_path()).map_err(|raw| {
+            crate::paths::utf8::NonUtf8PathError {
+                raw,
+                source: crate::paths::utf8::NonUtf8Source::FilesystemWalk,
+            }
+        })?;
+
+        if path.file_name() == Some(".gitignore") {
             components.insert(InitComponent::Gitignore);
             continue;
         }
 
-        let component = match entry
-            .path()
-            .extension()
-            .unwrap_or_default()
-            .to_str()
-            .unwrap_or_default()
-        {
+        let component = match path.extension().unwrap_or_default() {
             "go" => InitComponent::Go,
             "md" => InitComponent::Markdown,
             "pl" | "pm" => InitComponent::Perl,
@@ -765,11 +767,7 @@ fn auto_or_component(auto: bool, components: &[InitComponent]) -> Result<Vec<Ini
             "yml" | "yaml" => InitComponent::Yaml,
             _ => continue,
         };
-        debug!(
-            "File {} matches component {:?}",
-            entry.path().display(),
-            component,
-        );
+        debug!("File {path} matches component {component:?}");
         components.insert(component);
     }
 
@@ -829,7 +827,7 @@ fn commands_toml(commands: IndexMap<&str, &str>) -> String {
     command_strs.join("\n")
 }
 
-fn write_extra_files(extra_files: &HashMap<PathBuf, ConfigInitFile>) -> Result<()> {
+fn write_extra_files(extra_files: &HashMap<Utf8PathBuf, ConfigInitFile>) -> Result<()> {
     if extra_files.is_empty() {
         return Ok(());
     }
@@ -841,7 +839,7 @@ fn write_extra_files(extra_files: &HashMap<PathBuf, ConfigInitFile>) -> Result<(
     let paths = extra_files.keys().sorted().collect::<Vec<_>>();
 
     for p in paths {
-        print!("{} ...", p.display());
+        print!("{p} ...");
         if p.exists() {
             println!("  already exists, skipping - delete this file if you want to regenerate it");
             continue;
@@ -850,24 +848,22 @@ fn write_extra_files(extra_files: &HashMap<PathBuf, ConfigInitFile>) -> Result<(
 
         if let Some(parent) = p.parent() {
             create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+                .with_context(|| format!("Failed to create directory {parent}"))?;
         }
-        let mut file =
-            File::create(p).with_context(|| format!("Failed to create file {}", p.display()))?;
+        let mut file = File::create(p).with_context(|| format!("Failed to create file {p}"))?;
         let f = extra_files.get(p).unwrap();
         file.write_all(f.content.trim_start().as_bytes())
-            .with_context(|| format!("Failed to write content to file {}", p.display()))?;
+            .with_context(|| format!("Failed to write content to file {p}"))?;
 
         #[cfg(unix)]
         if f.is_executable {
             let mut perms = file
                 .metadata()
-                .with_context(|| format!("Failed to get metadata for {}", p.display()))?
+                .with_context(|| format!("Failed to get metadata for {p}"))?
                 .permissions();
             perms.set_mode(0o755);
-            file.set_permissions(perms).with_context(|| {
-                format!("Failed to set executable permissions on {}", p.display())
-            })?;
+            file.set_permissions(perms)
+                .with_context(|| format!("Failed to set executable permissions on {p}"))?;
         }
     }
 
