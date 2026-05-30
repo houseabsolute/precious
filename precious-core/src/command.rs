@@ -1,5 +1,9 @@
-use crate::paths::matcher::{Matcher, MatcherBuilder};
+use crate::paths::{
+    matcher::{Matcher, MatcherBuilder},
+    utf8::{NonUtf8PathError, NonUtf8Source},
+};
 use anyhow::{Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use itertools::Itertools;
 use log::{debug, info};
 use mitsein::prelude::*;
@@ -11,7 +15,6 @@ use std::{
     fmt, fs,
     io::ErrorKind,
     num::NonZeroUsize,
-    path::{Path, PathBuf},
     time::SystemTime,
 };
 use thiserror::Error;
@@ -109,7 +112,7 @@ impl ActualInvoke {
 pub enum WorkingDir {
     Root,
     Dir,
-    ChdirTo(PathBuf),
+    ChdirTo(Utf8PathBuf),
 }
 
 impl TryFrom<&str> for WorkingDir {
@@ -131,7 +134,7 @@ impl fmt::Display for WorkingDir {
             WorkingDir::Dir => f.write_str(r#""dir""#),
             WorkingDir::ChdirTo(cd) => {
                 f.write_str(r#"chdir-to = ""#)?;
-                f.write_str(&format!("{}", cd.display()))?;
+                f.write_str(cd.as_str())?;
                 f.write_str(r#"""#)
             }
         }
@@ -191,7 +194,7 @@ enum CommandError {
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub struct Command {
-    project_root: PathBuf,
+    project_root: Utf8PathBuf,
     pub name: String,
     typ: CommandType,
     filter: Filter,
@@ -227,7 +230,7 @@ struct Execution {
 
 #[derive(Debug)]
 pub struct CommandParams {
-    pub project_root: PathBuf,
+    pub project_root: Utf8PathBuf,
     pub name: String,
     pub typ: CommandType,
     pub include: Vec<String>,
@@ -262,8 +265,8 @@ pub struct LintOutcome {
 
 #[derive(Clone, Debug)]
 struct PathMetadata {
-    dir: Option<PathBuf>,
-    path_map: HashMap<PathBuf, PathInfo>,
+    dir: Option<Utf8PathBuf>,
+    path_map: HashMap<Utf8PathBuf, PathInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -390,8 +393,8 @@ impl Command {
     // determined based on the command's `path-args` field.
     pub fn files_to_args_sets<'a>(
         &self,
-        files: &'a Slice1<PathBuf>,
-    ) -> Result<(Vec<Vec1<&'a Path>>, ActualInvoke)> {
+        files: &'a Slice1<Utf8PathBuf>,
+    ) -> Result<(Vec<Vec1<&'a Utf8Path>>, ActualInvoke)> {
         let files = self.filter_and_sort_files(files);
         if files.is_empty() {
             return Ok((vec![], self.invocation.invoke.into()));
@@ -408,16 +411,16 @@ impl Command {
         }
     }
 
-    fn filter_and_sort_files<'a>(&self, files: &'a Slice1<PathBuf>) -> Vec<&'a Path> {
+    fn filter_and_sort_files<'a>(&self, files: &'a Slice1<Utf8PathBuf>) -> Vec<&'a Utf8Path> {
         files
             .into_iter()
             .filter(|f| self.file_matches_rules(f))
             .sorted()
-            .map(PathBuf::as_path)
+            .map(Utf8PathBuf::as_path)
             .collect::<Vec<_>>()
     }
 
-    fn handle_per_file(files: Vec1<&Path>) -> (Vec<Vec1<&Path>>, ActualInvoke) {
+    fn handle_per_file(files: Vec1<&Utf8Path>) -> (Vec<Vec1<&Utf8Path>>, ActualInvoke) {
         // Every file becomes its own one-element `Vec1`.
         (
             files.into_iter().map(|f| vec1![f]).collect(),
@@ -427,9 +430,9 @@ impl Command {
 
     fn handle_per_file_or_dir<'a>(
         &self,
-        files: Vec1<&'a Path>,
+        files: Vec1<&'a Utf8Path>,
         n: usize,
-    ) -> Result<(Vec<Vec1<&'a Path>>, ActualInvoke)> {
+    ) -> Result<(Vec<Vec1<&'a Utf8Path>>, ActualInvoke)> {
         let count = files.len();
         let threshold = NonZeroUsize::new(n).expect("this cannot be 0");
 
@@ -453,9 +456,9 @@ impl Command {
 
     fn handle_per_file_or_once<'a>(
         &self,
-        files: Vec1<&'a Path>,
+        files: Vec1<&'a Utf8Path>,
         n: usize,
-    ) -> (Vec<Vec1<&'a Path>>, ActualInvoke) {
+    ) -> (Vec<Vec1<&'a Utf8Path>>, ActualInvoke) {
         let count = files.len();
         let threshold = NonZeroUsize::new(n).expect("this cannot be 0");
 
@@ -480,16 +483,18 @@ impl Command {
         }
     }
 
-    fn handle_per_dir<'a>(files: &Slice1<&'a Path>) -> Result<(Vec<Vec1<&'a Path>>, ActualInvoke)> {
+    fn handle_per_dir<'a>(
+        files: &Slice1<&'a Utf8Path>,
+    ) -> Result<(Vec<Vec1<&'a Utf8Path>>, ActualInvoke)> {
         // Every directory becomes a Vec of its files.
         Ok((Self::files_by_dir(files)?, ActualInvoke::PerDir))
     }
 
     fn handle_per_dir_or_once<'a>(
         &self,
-        files: Vec1<&'a Path>,
+        files: Vec1<&'a Utf8Path>,
         n: usize,
-    ) -> Result<(Vec<Vec1<&'a Path>>, ActualInvoke)> {
+    ) -> Result<(Vec<Vec1<&'a Utf8Path>>, ActualInvoke)> {
         let files_by_dir = Self::files_by_dir(&files)?;
         let count = files_by_dir.len();
         if count < n {
@@ -507,7 +512,7 @@ impl Command {
         }
     }
 
-    fn handle_once(files: Vec1<&Path>) -> (Vec<Vec1<&Path>>, ActualInvoke) {
+    fn handle_once(files: Vec1<&Utf8Path>) -> (Vec<Vec1<&Utf8Path>>, ActualInvoke) {
         // All files in one Vec.
         (
             vec![Vec1::try_from(files).expect("we already know this is a non-zero vec")],
@@ -517,7 +522,7 @@ impl Command {
 
     // This returns a `Vec` of `Vec`s, where the inner `Vec` contains all the files in a given
     // directory, and the outer `Vec` contains one element per directory.
-    fn files_by_dir<'a>(files: &Slice1<&'a Path>) -> Result<Vec<Vec1<&'a Path>>> {
+    fn files_by_dir<'a>(files: &Slice1<&'a Utf8Path>) -> Result<Vec<Vec1<&'a Utf8Path>>> {
         let by_dir = Self::files_by_dir_hashmap(files)?;
         Ok(by_dir
             .into_iter()
@@ -527,12 +532,12 @@ impl Command {
     }
 
     fn files_by_dir_hashmap<'a>(
-        files: &Slice1<&'a Path>,
-    ) -> Result<HashMap<&'a Path, Vec1<&'a Path>>> {
-        let mut by_dir: HashMap<&Path, Vec1<&Path>> = HashMap::new();
+        files: &Slice1<&'a Utf8Path>,
+    ) -> Result<HashMap<&'a Utf8Path, Vec1<&'a Utf8Path>>> {
+        let mut by_dir: HashMap<&Utf8Path, Vec1<&Utf8Path>> = HashMap::new();
         for f in files {
             let d = f.parent().ok_or_else(|| CommandError::PathHasNoParent {
-                path: f.to_string_lossy().to_string(),
+                path: f.as_str().to_string(),
             })?;
             if let Some(v) = by_dir.get_mut(d) {
                 v.push(*f);
@@ -546,7 +551,7 @@ impl Command {
     pub fn tidy(
         &self,
         actual_invoke: ActualInvoke,
-        files: &Slice1<&Path>,
+        files: &Slice1<&Utf8Path>,
     ) -> Result<Option<TidyOutcome>> {
         self.require_is_not_command_type("tidy", CommandType::Lint)?;
 
@@ -592,7 +597,7 @@ impl Command {
             "Tidying [{}] with {} in [{}] using command [{}]",
             file_summary_for_log(files),
             self.name,
-            in_dir.display(),
+            in_dir,
             exec.loggable_command,
         );
         exec.run()
@@ -615,7 +620,7 @@ impl Command {
     pub fn lint(
         &self,
         actual_invoke: ActualInvoke,
-        files: &Slice1<&Path>,
+        files: &Slice1<&Utf8Path>,
     ) -> Result<Option<LintOutcome>> {
         self.require_is_not_command_type("lint", CommandType::Tidy)?;
 
@@ -653,7 +658,7 @@ impl Command {
             "Linting [{}] with {} in [{}] using command [{}]",
             file_summary_for_log(files),
             self.name,
-            in_dir.display(),
+            in_dir,
             exec.loggable_command,
         );
 
@@ -690,7 +695,7 @@ impl Command {
     fn should_act_on_files(
         &self,
         actual_invoke: ActualInvoke,
-        files: &Slice1<&Path>,
+        files: &Slice1<&Utf8Path>,
     ) -> Result<bool> {
         match actual_invoke {
             ActualInvoke::PerFile => {
@@ -698,19 +703,11 @@ impl Command {
                 // This check isn't strictly necessary since we default to not
                 // matching, but the debug output is helpful.
                 if self.filter.excluder.path_matches(f, false) {
-                    debug!(
-                        "File {} is excluded for the {} command",
-                        f.display(),
-                        self.name,
-                    );
+                    debug!("File {} is excluded for the {} command", f, self.name);
                     return Ok(false);
                 }
                 if self.filter.includer.path_matches(f, false) {
-                    debug!(
-                        "File {} is included for the {} command",
-                        f.display(),
-                        self.name,
-                    );
+                    debug!("File {} is included for the {} command", f, self.name);
                     return Ok(true);
                 }
             }
@@ -718,49 +715,37 @@ impl Command {
                 let dir = files[0]
                     .parent()
                     .ok_or_else(|| CommandError::PathHasNoParent {
-                        path: files[0].to_string_lossy().to_string(),
+                        path: files[0].as_str().to_string(),
                     })?;
                 for f in files {
                     if self.filter.excluder.path_matches(f, false) {
-                        debug!(
-                            "File {} is excluded for the {} command",
-                            f.display(),
-                            self.name,
-                        );
+                        debug!("File {} is excluded for the {} command", f, self.name);
                         continue;
                     }
                     if self.filter.includer.path_matches(f, false) {
                         debug!(
                             "Directory {} is included for the {} command because it contains {} which is included",
-                            dir.display(),
+                            dir,
                             self.name,
-                            f.display(),
+                            f,
                         );
                         return Ok(true);
                     }
                 }
                 debug!(
                     "Directory {} is not included in the {} command because none of its files are included",
-                    dir.display(),
+                    dir,
                     self.name
                 );
             }
             ActualInvoke::Once => {
                 for f in files {
                     if self.filter.excluder.path_matches(f, false) {
-                        debug!(
-                            "File {} is excluded for the {} command",
-                            f.display(),
-                            self.name,
-                        );
+                        debug!("File {} is excluded for the {} command", f, self.name);
                         continue;
                     }
                     if self.filter.includer.path_matches(f, false) {
-                        debug!(
-                            "File {} is included for the {} command",
-                            f.display(),
-                            self.name,
-                        );
+                        debug!("File {} is included for the {} command", f, self.name);
                         return Ok(true);
                     }
                 }
@@ -783,23 +768,27 @@ impl Command {
     // them as is (but sorted), or we may turn them paths relative to the
     // given directory. The given directory is the directory in which the
     // command will be run, and may not be the project root.
-    fn operating_on(&self, files: &Slice1<&Path>, in_dir: &Path) -> Result<Vec<PathBuf>> {
+    fn operating_on(
+        &self,
+        files: &Slice1<&Utf8Path>,
+        in_dir: &Utf8Path,
+    ) -> Result<Vec<Utf8PathBuf>> {
         match self.invocation.path_args {
-            PathArgs::File => Ok(files
+            PathArgs::File => files
                 .iter()
                 .sorted()
                 .map(|r| self.path_relative_to(r, in_dir))
-                .collect::<Vec<_>>()),
+                .collect::<Result<Vec<_>>>(),
             PathArgs::Dir => Self::files_by_dir_hashmap(files)
                 .context(r#"Failed to group files by directory for path-args = "dir""#)
-                .map(|fm| {
+                .and_then(|fm| {
                     fm.into_keys()
                         .sorted()
                         .map(|r| self.path_relative_to(r, in_dir))
-                        .collect::<Vec<_>>()
+                        .collect::<Result<Vec<_>>>()
                 }),
             PathArgs::None => Ok(vec![]),
-            PathArgs::Dot => Ok(vec![PathBuf::from(".")]),
+            PathArgs::Dot => Ok(vec![Utf8PathBuf::from(".")]),
             PathArgs::AbsoluteFile => Ok(files
                 .iter()
                 .sorted()
@@ -826,18 +815,28 @@ impl Command {
         }
     }
 
-    fn path_relative_to(&self, path: &Path, in_dir: &Path) -> PathBuf {
+    fn path_relative_to(&self, path: &Utf8Path, in_dir: &Utf8Path) -> Result<Utf8PathBuf> {
         let mut abs = self.project_root.clone();
         abs.push(path);
 
-        if let Some(mut diff) = pathdiff::diff_paths(&abs, in_dir) {
-            if diff == Path::new("") {
-                diff = PathBuf::from(".");
+        if let Some(diff) = pathdiff::diff_paths(&abs, in_dir) {
+            if diff == std::path::Path::new("") {
+                return Ok(Utf8PathBuf::from("."));
             }
-            return diff;
+            // Both inputs are already validated `Utf8Path`, so pathdiff's result is UTF-8 by
+            // construction. The `try_from` is necessary because the OS-provided absolute-path
+            // prefix that `pathdiff` may produce when bridging through `std::path::Path` is the
+            // one component not yet UTF-8-validated.
+            return Utf8PathBuf::try_from(diff).map_err(|e| {
+                NonUtf8PathError {
+                    raw: e.into_path_buf(),
+                    source: NonUtf8Source::DerivedPath,
+                }
+                .into()
+            });
         }
 
-        path.to_path_buf()
+        Ok(path.to_path_buf())
     }
 
     // This takes the list of files relevant to the command. That list comes
@@ -849,7 +848,7 @@ impl Command {
     fn maybe_path_metadata_for(
         &self,
         actual_invoke: ActualInvoke,
-        files: &Slice1<&Path>,
+        files: &Slice1<&Utf8Path>,
     ) -> Result<Option<PathMetadata>> {
         match actual_invoke {
             // If it's invoked per file we know that we only have one file in
@@ -861,7 +860,7 @@ impl Command {
                 let dir = files[0]
                     .parent()
                     .ok_or_else(|| CommandError::PathHasNoParent {
-                        path: files[0].to_string_lossy().to_string(),
+                        path: files[0].as_str().to_string(),
                     })?;
                 Ok(Some(self.path_metadata_for(dir)?))
             }
@@ -874,44 +873,38 @@ impl Command {
 
     // Given a directory, this gets the metadata for all files in the
     // directory that match the command's include/exclude rules.
-    fn path_metadata_for(&self, path: &Path) -> Result<PathMetadata> {
+    fn path_metadata_for(&self, path: &Utf8Path) -> Result<PathMetadata> {
         let mut path_map = HashMap::new();
         let mut dir = None;
         let mut full_path = self.project_root.clone();
         full_path.push(path);
 
         if full_path.is_file() {
-            let meta = Self::metadata_for_file(&full_path).with_context(|| {
-                format!("Failed to get metadata for file {}", full_path.display())
-            })?;
+            let meta = Self::metadata_for_file(&full_path)
+                .with_context(|| format!("Failed to get metadata for file {full_path}"))?;
             path_map.insert(full_path, meta);
         } else if full_path.is_dir() {
             dir = Some(path.to_path_buf());
-            let entries = fs::read_dir(&full_path)
-                .with_context(|| format!("Failed to read directory {}", full_path.display()))?;
+            let entries = full_path
+                .read_dir_utf8()
+                .with_context(|| format!("Failed to read directory {full_path}"))?;
             for entry in entries {
-                let entry = entry.with_context(|| {
-                    format!(
-                        "Failed to read directory entry from {}",
-                        full_path.display()
-                    )
-                })?;
+                let entry = entry
+                    .with_context(|| format!("Failed to read directory entry from {full_path}"))?;
                 let path = entry.path();
-                if path.is_file() && self.file_matches_rules(&path) {
-                    let meta = entry.metadata().with_context(|| {
-                        format!("Failed to get metadata for file {}", path.display())
-                    })?;
-                    let hash = md5::compute(fs::read(&path).with_context(|| {
-                        format!("Failed to read file {} for MD5 hashing", path.display())
-                    })?);
+                if path.is_file() && self.file_matches_rules(path) {
+                    let meta = entry
+                        .metadata()
+                        .with_context(|| format!("Failed to get metadata for file {path}"))?;
+                    let hash =
+                        md5::compute(fs::read(path).with_context(|| {
+                            format!("Failed to read file {path} for MD5 hashing")
+                        })?);
                     let mtime = meta.modified().with_context(|| {
-                        format!(
-                            "Failed to get modification time for file {}",
-                            path.display()
-                        )
+                        format!("Failed to get modification time for file {path}")
                     })?;
                     path_map.insert(
-                        path,
+                        path.to_path_buf(),
                         PathInfo {
                             mtime,
                             size: meta.len(),
@@ -922,7 +915,7 @@ impl Command {
             }
         } else if !path.exists() {
             return Err(CommandError::PathDoesNotExist {
-                path: path.to_string_lossy().to_string(),
+                path: path.as_str().to_string(),
             }
             .into());
         } else {
@@ -934,7 +927,7 @@ impl Command {
         Ok(PathMetadata { dir, path_map })
     }
 
-    fn file_matches_rules(&self, file: &Path) -> bool {
+    fn file_matches_rules(&self, file: &Utf8Path) -> bool {
         if self.filter.excluder.path_matches(file, false) {
             return false;
         }
@@ -944,19 +937,17 @@ impl Command {
         false
     }
 
-    fn metadata_for_file(file: &Path) -> Result<PathInfo> {
-        let meta = fs::metadata(file)
-            .with_context(|| format!("Failed to get metadata for file {}", file.display()))?;
-        let mtime = meta.modified().with_context(|| {
-            format!(
-                "Failed to get modification time for file {}",
-                file.display()
-            )
-        })?;
-        let hash =
-            md5::compute(fs::read(file).with_context(|| {
-                format!("Failed to read file {} for MD5 hashing", file.display())
-            })?);
+    fn metadata_for_file(file: &Utf8Path) -> Result<PathInfo> {
+        let meta = file
+            .metadata()
+            .with_context(|| format!("Failed to get metadata for file {file}"))?;
+        let mtime = meta
+            .modified()
+            .with_context(|| format!("Failed to get modification time for file {file}"))?;
+        let hash = md5::compute(
+            fs::read(file)
+                .with_context(|| format!("Failed to read file {file} for MD5 hashing"))?,
+        );
         Ok(PathInfo {
             mtime,
             size: meta.len(),
@@ -967,7 +958,7 @@ impl Command {
     fn cmd_and_args_for_exec(
         &self,
         flags: Option<&[String]>,
-        paths: &[PathBuf],
+        paths: &[Utf8PathBuf],
     ) -> (String, Vec<String>) {
         let mut args = self.execution.cmd.clone();
         let cmd = args.remove(0);
@@ -982,7 +973,7 @@ impl Command {
             if let Some(pf) = &self.execution.path_flag {
                 args.push(pf.clone());
             }
-            args.push(p.to_string_lossy().to_string());
+            args.push(p.as_str().to_string());
         }
 
         (cmd, args)
@@ -991,12 +982,12 @@ impl Command {
     pub(crate) fn paths_summary(
         &self,
         actual_invoke: ActualInvoke,
-        paths: &Slice1<&Path>,
+        paths: &Slice1<&Utf8Path>,
     ) -> String {
         let all = paths
             .iter1()
             .sorted()
-            .map(|p| p.to_string_lossy().to_string())
+            .map(|p| p.as_str().to_string())
             .into_iter()
             .join(" ");
         if paths.len() <= NonZeroUsize::new(3).unwrap() {
@@ -1005,12 +996,7 @@ impl Command {
 
         match actual_invoke {
             ActualInvoke::Once | ActualInvoke::PerDir => {
-                let initial = paths
-                    .iter()
-                    .sorted()
-                    .take(2)
-                    .map(|p| p.to_string_lossy())
-                    .join(" ");
+                let initial = paths.iter().sorted().take(2).map(|p| p.as_str()).join(" ");
                 format!(
                     "{} files matching {}, starting with {}",
                     paths.len(),
@@ -1024,16 +1010,15 @@ impl Command {
 
     fn paths_were_changed(&self, prev: PathMetadata) -> Result<bool> {
         for (prev_file, prev_meta) in &prev.path_map {
-            debug!("Checking {} for changes", prev_file.display());
-            let current_meta = match fs::metadata(prev_file) {
+            debug!("Checking {prev_file} for changes");
+            let current_meta = match prev_file.metadata() {
                 Ok(m) => m,
                 // If the file no longer exists the command must've deleted
                 // it.
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
                 Err(e) => {
-                    return Err(e).with_context(|| {
-                        format!("Failed to get metadata for file {}", prev_file.display())
-                    })
+                    return Err(e)
+                        .with_context(|| format!("Failed to get metadata for file {prev_file}"))
                 }
             };
             // If the mtime is unchanged we don't need to compare anything
@@ -1041,12 +1026,9 @@ impl Command {
             // the mtime even if it doesn't change the file's contents, so we
             // cannot assume anything was changed just because the mtime
             // changed. For example, Perl::Tidy does this :(
-            let current_mtime = current_meta.modified().with_context(|| {
-                format!(
-                    "Failed to get modification time for file {}",
-                    prev_file.display()
-                )
-            })?;
+            let current_mtime = current_meta
+                .modified()
+                .with_context(|| format!("Failed to get modification time for file {prev_file}"))?;
             if prev_meta.mtime == current_mtime {
                 continue;
             }
@@ -1057,34 +1039,28 @@ impl Command {
             }
 
             // Otherwise we need to compare the content hash.
-            let current_hash = md5::compute(fs::read(prev_file).with_context(|| {
-                format!(
-                    "Failed to read file {} for MD5 hashing",
-                    prev_file.display()
-                )
-            })?);
+            let current_hash = md5::compute(
+                fs::read(prev_file)
+                    .with_context(|| format!("Failed to read file {prev_file} for MD5 hashing"))?,
+            );
             if prev_meta.hash != current_hash {
                 return Ok(true);
             }
         }
 
         if let Some(dir) = prev.dir {
-            let entries = match fs::read_dir(&dir) {
+            let entries = match dir.read_dir_utf8() {
                 Ok(rd) => rd,
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
-                Err(e) => {
-                    return Err(e)
-                        .with_context(|| format!("Failed to read directory {}", dir.display()))
-                }
+                Err(e) => return Err(e).with_context(|| format!("Failed to read directory {dir}")),
             };
             for entry in entries {
-                let entry = entry.with_context(|| {
-                    format!("Failed to read directory entry from {}", dir.display())
-                })?;
+                let entry =
+                    entry.with_context(|| format!("Failed to read directory entry from {dir}"))?;
                 let path = entry.path();
                 if path.is_file()
-                    && self.file_matches_rules(&path)
-                    && !prev.path_map.contains_key(&path)
+                    && self.file_matches_rules(path)
+                    && !prev.path_map.contains_key(path)
                 {
                     return Ok(true);
                 }
@@ -1105,14 +1081,14 @@ impl Command {
         name.to_string()
     }
 
-    fn in_dir(&self, file: &Path) -> Result<PathBuf> {
+    fn in_dir(&self, file: &Utf8Path) -> Result<Utf8PathBuf> {
         match &self.invocation.working_dir {
             WorkingDir::Root => Ok(self.project_root.clone()),
             WorkingDir::Dir => {
                 let mut abs = self.project_root.clone();
                 abs.push(file);
                 let parent = abs.parent().ok_or_else(|| CommandError::PathHasNoParent {
-                    path: file.to_string_lossy().to_string(),
+                    path: file.as_str().to_string(),
                 })?;
                 Ok(parent.to_path_buf())
             }
@@ -1132,22 +1108,17 @@ impl Command {
     }
 }
 
-fn file_summary_for_log(files: &Slice1<&Path>) -> String {
+fn file_summary_for_log(files: &Slice1<&Utf8Path>) -> String {
     if files.len() <= NonZeroUsize::new(3).unwrap() {
-        return files.iter().map(|p| p.to_string_lossy()).join(" ");
+        return files.iter().map(|p| p.as_str()).join(" ");
     }
-    let first3 = files.iter().take(3).map(|p| p.to_string_lossy()).join(" ");
+    let first3 = files.iter().take(3).map(|p| p.as_str()).join(" ");
     format!("{} ... and {} more", first3, files.len().get() - 3)
 }
 
-fn replace_root(cmd: &[String], root: &Path) -> Vec<String> {
+fn replace_root(cmd: &[String], root: &Utf8Path) -> Vec<String> {
     cmd.iter()
-        .map(|c| {
-            c.replace(
-                "$PRECIOUS_ROOT",
-                root.to_string_lossy().into_owned().as_str(),
-            )
-        })
+        .map(|c| c.replace("$PRECIOUS_ROOT", root.as_str()))
         .collect()
 }
 
@@ -1155,6 +1126,7 @@ fn replace_root(cmd: &[String], root: &Path) -> Vec<String> {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use camino::{Utf8Path, Utf8PathBuf};
     use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
@@ -1169,7 +1141,7 @@ mod tests {
     fn default_command() -> Command {
         Command {
             // These params will be ignored
-            project_root: PathBuf::new(),
+            project_root: Utf8PathBuf::new(),
             name: String::new(),
             typ: CommandType::Lint,
             filter: Filter {
@@ -1195,6 +1167,10 @@ mod tests {
         }
     }
 
+    fn cwd_utf8() -> Utf8PathBuf {
+        Utf8PathBuf::try_from(env::current_dir().unwrap()).expect("cwd is valid UTF-8")
+    }
+
     #[test]
     #[parallel]
     fn files_to_args_sets_per_file() -> Result<()> {
@@ -1202,14 +1178,14 @@ mod tests {
         command.invocation.invoke = Invoke::PerFile;
         command.filter.includer = matcher(&["**/*.go"])?;
 
-        let files: Vec1<PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+        let files: Vec1<Utf8PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .into_iter1()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .collect1();
-        let bar = PathBuf::from("bar.go");
-        let foo = PathBuf::from("foo.go");
-        let baz = PathBuf::from("subdir/baz.go");
-        let test_foo = PathBuf::from("test/foo.go");
+        let bar = Utf8PathBuf::from("bar.go");
+        let foo = Utf8PathBuf::from("foo.go");
+        let baz = Utf8PathBuf::from("subdir/baz.go");
+        let test_foo = Utf8PathBuf::from("test/foo.go");
         assert_eq!(
             command.files_to_args_sets(&files)?,
             (
@@ -1233,14 +1209,14 @@ mod tests {
         command.invocation.invoke = Invoke::PerFileOrDir(3);
         command.filter.includer = matcher(&["**/*.go"])?;
 
-        let files: Vec1<PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+        let files: Vec1<Utf8PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .into_iter1()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .collect1();
-        let bar = PathBuf::from("bar.go");
-        let foo = PathBuf::from("foo.go");
-        let baz = PathBuf::from("subdir/baz.go");
-        let test_foo = PathBuf::from("test/foo.go");
+        let bar = Utf8PathBuf::from("bar.go");
+        let foo = Utf8PathBuf::from("foo.go");
+        let baz = Utf8PathBuf::from("subdir/baz.go");
+        let test_foo = Utf8PathBuf::from("test/foo.go");
         let two_files = Slice1::try_from_slice(&(*files)[0..2]).unwrap();
         assert_eq!(
             command.files_to_args_sets(two_files)?,
@@ -1273,15 +1249,16 @@ mod tests {
         command.invocation.invoke = Invoke::PerFileOrOnce(3);
         command.filter.includer = matcher(&["**/*.go"])?;
 
-        let files: Vec1<PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+        let files: Vec1<Utf8PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .into_iter1()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .collect1();
-        let bar = PathBuf::from("bar.go");
-        let foo = PathBuf::from("foo.go");
-        let baz = PathBuf::from("subdir/baz.go");
-        let test_foo = PathBuf::from("test/foo.go");
-        let two_files: &Slice1<PathBuf> = unsafe { Slice1::from_slice_unchecked(&(*files)[0..2]) };
+        let bar = Utf8PathBuf::from("bar.go");
+        let foo = Utf8PathBuf::from("foo.go");
+        let baz = Utf8PathBuf::from("subdir/baz.go");
+        let test_foo = Utf8PathBuf::from("test/foo.go");
+        let two_files: &Slice1<Utf8PathBuf> =
+            unsafe { Slice1::from_slice_unchecked(&(*files)[0..2]) };
         assert_eq!(
             command.files_to_args_sets(two_files)?,
             (
@@ -1314,14 +1291,14 @@ mod tests {
         command.invocation.invoke = Invoke::PerDir;
         command.filter.includer = matcher(&["**/*.go"])?;
 
-        let files: Vec1<PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+        let files: Vec1<Utf8PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .into_iter1()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .collect1();
-        let bar = PathBuf::from("bar.go");
-        let foo = PathBuf::from("foo.go");
-        let baz = PathBuf::from("subdir/baz.go");
-        let test_foo = PathBuf::from("test/foo.go");
+        let bar = Utf8PathBuf::from("bar.go");
+        let foo = Utf8PathBuf::from("foo.go");
+        let baz = Utf8PathBuf::from("subdir/baz.go");
+        let test_foo = Utf8PathBuf::from("test/foo.go");
         assert_eq!(
             command.files_to_args_sets(&files)?,
             (
@@ -1344,15 +1321,16 @@ mod tests {
         command.invocation.invoke = Invoke::PerDirOrOnce(3);
         command.filter.includer = matcher(&["**/*.go"])?;
 
-        let files: Vec1<PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+        let files: Vec1<Utf8PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .into_iter1()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .collect1();
-        let bar = PathBuf::from("bar.go");
-        let foo = PathBuf::from("foo.go");
-        let baz = PathBuf::from("subdir/baz.go");
-        let test_foo = PathBuf::from("test/foo.go");
-        let two_files: &Slice1<PathBuf> = unsafe { Slice1::from_slice_unchecked(&(*files)[0..2]) };
+        let bar = Utf8PathBuf::from("bar.go");
+        let foo = Utf8PathBuf::from("foo.go");
+        let baz = Utf8PathBuf::from("subdir/baz.go");
+        let test_foo = Utf8PathBuf::from("test/foo.go");
+        let two_files: &Slice1<Utf8PathBuf> =
+            unsafe { Slice1::from_slice_unchecked(&(*files)[0..2]) };
         assert_eq!(
             command.files_to_args_sets(two_files)?,
             (
@@ -1385,14 +1363,14 @@ mod tests {
         command.invocation.invoke = Invoke::Once;
         command.filter.includer = matcher(&["**/*.go"])?;
 
-        let files: Vec1<PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
+        let files: Vec1<Utf8PathBuf> = vec1!["foo.go", "test/foo.go", "bar.go", "subdir/baz.go"]
             .into_iter1()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .collect1();
-        let bar = PathBuf::from("bar.go");
-        let foo = PathBuf::from("foo.go");
-        let baz = PathBuf::from("subdir/baz.go");
-        let test_foo = PathBuf::from("test/foo.go");
+        let bar = Utf8PathBuf::from("bar.go");
+        let foo = Utf8PathBuf::from("foo.go");
+        let baz = Utf8PathBuf::from("subdir/baz.go");
+        let test_foo = Utf8PathBuf::from("test/foo.go");
         assert_eq!(
             command.files_to_args_sets(&files)?,
             (
@@ -1479,7 +1457,7 @@ mod tests {
     #[parallel]
     fn should_act_on_files_invoke_per_file() -> Result<()> {
         let mut command = default_command();
-        command.project_root = PathBuf::from("/foo/bar");
+        command.project_root = Utf8PathBuf::from("/foo/bar");
         command.name = String::from("Test");
         command.typ = CommandType::Lint;
         command.filter.includer = matcher(&["**/*.go", "!this/file.go"])?;
@@ -1492,12 +1470,12 @@ mod tests {
             "bar/foo/x.go",
             "foo/some/file.go",
         ];
-        for i in include.iter().map(PathBuf::from) {
+        for i in include.iter().map(Utf8PathBuf::from) {
             let name = i.clone();
             assert!(
-                command.should_act_on_files(ActualInvoke::PerFile, &vec1![i.as_ref()])?,
+                command.should_act_on_files(ActualInvoke::PerFile, &vec1![i.as_path()])?,
                 "{}",
-                name.display(),
+                name,
             );
         }
 
@@ -1508,12 +1486,12 @@ mod tests {
             "foo/bar.go",
             "baz/bar/anything/here/quux/file.go",
         ];
-        for e in exclude.iter().map(PathBuf::from) {
+        for e in exclude.iter().map(Utf8PathBuf::from) {
             let name = e.clone();
             assert!(
-                !command.should_act_on_files(ActualInvoke::PerFile, &vec1![e.as_ref()])?,
+                !command.should_act_on_files(ActualInvoke::PerFile, &vec1![e.as_path()])?,
                 "{}",
-                name.display(),
+                name,
             );
         }
 
@@ -1524,7 +1502,7 @@ mod tests {
     #[parallel]
     fn should_act_on_files_invoke_per_dir() -> Result<()> {
         let mut command = default_command();
-        command.project_root = PathBuf::from("/foo/bar");
+        command.project_root = Utf8PathBuf::from("/foo/bar");
         command.name = String::from("Test");
         command.typ = CommandType::Lint;
         command.filter.includer = matcher(&["**/*.go", "!this/file.go"])?;
@@ -1539,7 +1517,7 @@ mod tests {
             vec1!["foo/some/file.go", "foo/excluded.go"],
         ];
         for i in include.iter() {
-            let files: Vec1<&Path> = i.iter1().map(Path::new).collect1();
+            let files: Vec1<&Utf8Path> = i.iter1().map(Utf8Path::new).collect1();
             assert!(
                 command.should_act_on_files(ActualInvoke::PerDir, &files)?,
                 "{}",
@@ -1554,7 +1532,7 @@ mod tests {
             vec1!["this/file.go", "foo/excluded.go"],
         ];
         for e in exclude.iter() {
-            let files: Vec1<&Path> = e.iter1().map(Path::new).collect1();
+            let files: Vec1<&Utf8Path> = e.iter1().map(Utf8Path::new).collect1();
             assert!(
                 !command.should_act_on_files(ActualInvoke::PerDir, &files)?,
                 "{}",
@@ -1569,7 +1547,7 @@ mod tests {
     #[parallel]
     fn should_act_on_files_invoke_once() -> Result<()> {
         let mut command = default_command();
-        command.project_root = PathBuf::from("/foo/bar");
+        command.project_root = Utf8PathBuf::from("/foo/bar");
         command.name = String::from("Test");
         command.typ = CommandType::Lint;
         command.filter.includer = matcher(&["**/*.go", "!this/file.go"])?;
@@ -1582,13 +1560,13 @@ mod tests {
             [".", "foo/bar.go", "foo/some/file.go"],
         ];
         for i in include.iter() {
-            let dir = PathBuf::from(i[0]);
-            let files: Vec1<&Path> = i[1..].iter().map(Path::new).try_collect1().unwrap();
+            let dir = Utf8PathBuf::from(i[0]);
+            let files: Vec1<&Utf8Path> = i[1..].iter().map(Utf8Path::new).try_collect1().unwrap();
             let name = dir.clone();
             assert!(
                 command.should_act_on_files(ActualInvoke::Once, &files)?,
                 "{}",
-                name.display()
+                name
             );
         }
 
@@ -1603,13 +1581,13 @@ mod tests {
             [".", "this/file.go", "foo/also/excluded.go"],
         ];
         for e in exclude.iter() {
-            let dir = PathBuf::from(e[0]);
-            let files: Vec1<&Path> = e[1..].iter().map(Path::new).try_collect1().unwrap();
+            let dir = Utf8PathBuf::from(e[0]);
+            let files: Vec1<&Utf8Path> = e[1..].iter().map(Utf8Path::new).try_collect1().unwrap();
             let name = dir.clone();
             assert!(
                 !command.should_act_on_files(ActualInvoke::Once, &files)?,
                 "{}",
-                name.display()
+                name
             );
         }
 
@@ -1622,13 +1600,13 @@ mod tests {
         let mut command = default_command();
         command.invocation.path_args = PathArgs::File;
 
-        let file1 = Path::new("file1");
+        let file1 = Utf8Path::new("file1");
         assert_eq!(
             command.operating_on(&vec1![file1], &command.project_root)?,
             vec![file1],
         );
 
-        let file2 = Path::new("subdir/file2");
+        let file2 = Utf8Path::new("subdir/file2");
         assert_eq!(
             command.operating_on(&vec1![file2], &command.project_root)?,
             vec![file2],
@@ -1645,10 +1623,10 @@ mod tests {
 
         let mut in_dir = command.project_root.clone();
         in_dir.push("subdir");
-        let file = Path::new("subdir/file");
+        let file = Utf8Path::new("subdir/file");
         assert_eq!(
             command.operating_on(&vec1![file], &in_dir)?,
-            vec![PathBuf::from("file")],
+            vec![Utf8PathBuf::from("file")],
         );
 
         Ok(())
@@ -1660,10 +1638,10 @@ mod tests {
         let mut command = default_command();
         command.invocation.path_args = PathArgs::Dir;
 
-        let files = vec1![Path::new("file1"), Path::new("subdir/file2")];
+        let files = vec1![Utf8Path::new("file1"), Utf8Path::new("subdir/file2")];
         assert_eq!(
             command.operating_on(&files, &command.project_root)?,
-            vec![PathBuf::from("."), PathBuf::from("subdir")],
+            vec![Utf8PathBuf::from("."), Utf8PathBuf::from("subdir")],
         );
 
         Ok(())
@@ -1675,12 +1653,15 @@ mod tests {
         let mut command = default_command();
         command.invocation.path_args = PathArgs::Dir;
 
-        let files = vec1![Path::new("subdir/file1"), Path::new("subdir/more/file2")];
+        let files = vec1![
+            Utf8Path::new("subdir/file1"),
+            Utf8Path::new("subdir/more/file2")
+        ];
         let mut in_dir = command.project_root.clone();
         in_dir.push("subdir");
         assert_eq!(
             command.operating_on(&files, &in_dir)?,
-            vec![PathBuf::from("."), PathBuf::from("more")],
+            vec![Utf8PathBuf::from("."), Utf8PathBuf::from("more")],
         );
 
         Ok(())
@@ -1689,7 +1670,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_absolute_file() -> Result<()> {
-        let cwd = env::current_dir()?;
+        let cwd = cwd_utf8();
         let mut command = default_command();
         command.project_root = cwd.clone();
         command.invocation.path_args = PathArgs::AbsoluteFile;
@@ -1697,14 +1678,14 @@ mod tests {
         let mut file1 = cwd.clone();
         file1.push("file1");
         assert_eq!(
-            command.operating_on(&vec1![Path::new("file1")], &command.project_root)?,
+            command.operating_on(&vec1![Utf8Path::new("file1")], &command.project_root)?,
             vec![file1],
         );
 
         let mut file1 = cwd;
         file1.push("subdir/file2");
         assert_eq!(
-            command.operating_on(&vec1![Path::new("subdir/file2")], &command.project_root)?,
+            command.operating_on(&vec1![Utf8Path::new("subdir/file2")], &command.project_root)?,
             vec![file1],
         );
 
@@ -1714,7 +1695,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_absolute_file_in_dir() -> Result<()> {
-        let cwd = env::current_dir()?;
+        let cwd = cwd_utf8();
         let mut command = default_command();
         command.project_root = cwd.clone();
         command.invocation.path_args = PathArgs::AbsoluteFile;
@@ -1725,14 +1706,14 @@ mod tests {
         let mut file1 = cwd.clone();
         file1.push("file1");
         assert_eq!(
-            command.operating_on(&vec1![Path::new("file1")], &in_dir)?,
+            command.operating_on(&vec1![Utf8Path::new("file1")], &in_dir)?,
             vec![file1],
         );
 
         let mut file1 = cwd;
         file1.push("subdir/file2");
         assert_eq!(
-            command.operating_on(&vec1![Path::new("subdir/file2")], &in_dir)?,
+            command.operating_on(&vec1![Utf8Path::new("subdir/file2")], &in_dir)?,
             vec![file1],
         );
 
@@ -1742,20 +1723,20 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_absolute_dir_in_project_root() -> Result<()> {
-        let cwd = env::current_dir()?;
+        let cwd = cwd_utf8();
         let mut command = default_command();
         command.project_root = cwd.clone();
         command.invocation.path_args = PathArgs::AbsoluteDir;
 
         assert_eq!(
-            command.operating_on(&vec1![Path::new("file1")], &command.project_root)?,
+            command.operating_on(&vec1![Utf8Path::new("file1")], &command.project_root)?,
             vec![cwd.clone()],
         );
 
         let mut subdir = cwd;
         subdir.push("subdir");
         assert_eq!(
-            command.operating_on(&vec1![Path::new("subdir/file2")], &command.project_root)?,
+            command.operating_on(&vec1![Utf8Path::new("subdir/file2")], &command.project_root)?,
             vec![subdir],
         );
 
@@ -1765,7 +1746,7 @@ mod tests {
     #[test]
     #[parallel]
     fn operating_on_with_path_args_absolute_dir_in_dir() -> Result<()> {
-        let cwd = env::current_dir()?;
+        let cwd = cwd_utf8();
         let mut command = default_command();
         command.project_root = cwd.clone();
         command.invocation.path_args = PathArgs::AbsoluteDir;
@@ -1774,14 +1755,14 @@ mod tests {
         in_dir.push("subdir");
 
         assert_eq!(
-            command.operating_on(&vec1![Path::new("file1")], &in_dir)?,
+            command.operating_on(&vec1![Utf8Path::new("file1")], &in_dir)?,
             vec![cwd.clone()],
         );
 
         let mut subdir = cwd;
         subdir.push("subdir");
         assert_eq!(
-            command.operating_on(&vec1![Path::new("subdir/file2")], &in_dir)?,
+            command.operating_on(&vec1![Utf8Path::new("subdir/file2")], &in_dir)?,
             vec![subdir],
         );
 
@@ -1794,10 +1775,10 @@ mod tests {
         let mut command = default_command();
         command.invocation.path_args = PathArgs::Dot;
 
-        let files = vec1![Path::new("file1"), Path::new("subdir/file2")];
+        let files = vec1![Utf8Path::new("file1"), Utf8Path::new("subdir/file2")];
         assert_eq!(
             command.operating_on(&files, &command.project_root)?,
-            vec![PathBuf::from(".")],
+            vec![Utf8PathBuf::from(".")],
         );
 
         Ok(())
@@ -1812,10 +1793,10 @@ mod tests {
         let mut in_dir = command.project_root.clone();
         in_dir.push("subdir");
 
-        let files = vec1![Path::new("file1"), Path::new("subdir/file2")];
+        let files = vec1![Utf8Path::new("file1"), Utf8Path::new("subdir/file2")];
         assert_eq!(
             command.operating_on(&files, &in_dir)?,
-            vec![PathBuf::from(".")],
+            vec![Utf8PathBuf::from(".")],
         );
 
         Ok(())
@@ -1827,8 +1808,8 @@ mod tests {
         let mut command = default_command();
         command.invocation.path_args = PathArgs::None;
 
-        let files = vec1![Path::new("file1"), Path::new("subdir/file2")];
-        let expect: Vec<PathBuf> = vec![];
+        let files = vec1![Utf8Path::new("file1"), Utf8Path::new("subdir/file2")];
+        let expect: Vec<Utf8PathBuf> = vec![];
         assert_eq!(command.operating_on(&files, &command.project_root)?, expect);
 
         Ok(())
@@ -1843,8 +1824,8 @@ mod tests {
         let mut in_dir = command.project_root.clone();
         in_dir.push("subdir");
 
-        let files = vec1![Path::new("file1"), Path::new("subdir/file2")];
-        let expect: Vec<PathBuf> = vec![];
+        let files = vec1![Utf8Path::new("file1"), Utf8Path::new("subdir/file2")];
+        let expect: Vec<Utf8PathBuf> = vec![];
         assert_eq!(command.operating_on(&files, &in_dir)?, expect);
 
         Ok(())
@@ -1860,7 +1841,7 @@ mod tests {
         let helper = TestHelper::new()?.with_git_repo()?;
         let mut file = helper.git_root();
         file.push("src/bar.rs");
-        let files = vec1![file.as_ref()];
+        let files = vec1![file.as_path()];
         let metadata = command
             .maybe_path_metadata_for(ActualInvoke::PerFile, &files)?
             .unwrap_or_else(|| unreachable!("Should always have metadata with Invoke::PerFile"));
@@ -1882,7 +1863,7 @@ mod tests {
         let helper = TestHelper::new()?.with_git_repo()?;
         let mut dir = helper.git_root();
         dir.push("src");
-        let files = vec1![dir.as_ref()];
+        let files = vec1![dir.as_path()];
         let metadata = command
             .maybe_path_metadata_for(ActualInvoke::PerFile, &files)?
             .unwrap_or_else(|| unreachable!("Should always have metadata with Invoke::PerFile"));
@@ -1890,11 +1871,7 @@ mod tests {
         for name in expect_files {
             let mut file = dir.clone();
             file.push(name);
-            assert!(
-                metadata.path_map.contains_key(&file),
-                "contains {}",
-                file.display(),
-            );
+            assert!(metadata.path_map.contains_key(&file), "contains {}", file,);
         }
         assert_eq!(metadata.path_map.len(), expect_files.len());
         assert_eq!(metadata.dir, Some(dir));
@@ -1908,8 +1885,8 @@ mod tests {
         let mut command = default_command();
         command.invocation.invoke = Invoke::Once;
 
-        let cwd = env::current_dir()?;
-        let files = vec1![cwd.as_ref()];
+        let cwd = cwd_utf8();
+        let files = vec1![cwd.as_path()];
         assert!(command
             .maybe_path_metadata_for(ActualInvoke::Once, &files)?
             .is_none());
@@ -1930,7 +1907,7 @@ mod tests {
         let helper = TestHelper::new()?.with_git_repo()?;
         let mut file = helper.git_root();
         file.push("src/main.rs");
-        let files = vec1![file.as_ref()];
+        let files = vec1![file.as_path()];
 
         let prev = command.maybe_path_metadata_for(ActualInvoke::PerFile, &files)?;
         assert!(prev.is_some());
@@ -1955,7 +1932,7 @@ mod tests {
         let helper = TestHelper::new()?.with_git_repo()?;
         let mut file = helper.git_root();
         file.push("src/main.rs");
-        let files = vec1![file.as_ref()];
+        let files = vec1![file.as_path()];
 
         let prev = command.maybe_path_metadata_for(ActualInvoke::PerFile, &files)?;
         assert!(prev.is_some());
@@ -1980,7 +1957,7 @@ mod tests {
         let helper = TestHelper::new()?.with_git_repo()?;
         let mut file = helper.git_root();
         file.push("src/main.rs");
-        let files = vec1![file.as_ref()];
+        let files = vec1![file.as_path()];
 
         let prev = command.maybe_path_metadata_for(ActualInvoke::PerFile, &files)?;
         assert!(prev.is_some());
@@ -2006,19 +1983,21 @@ mod tests {
             .build()?;
 
         let helper = TestHelper::new()?.with_git_repo()?;
+        let git_root = helper.git_root();
+        let all_files = helper.all_files();
         let mut files = vec![];
-        for path in helper.all_files() {
+        for path in &all_files {
             if path.starts_with("src/")
-                && path.to_str().unwrap().ends_with(".rs")
+                && path.as_str().ends_with(".rs")
                 && path.ancestors().count() == 3
             {
-                let mut file = helper.git_root();
+                let mut file = git_root.clone();
                 file.push(path);
                 files.push(file);
             }
         }
 
-        let files = Vec1::try_from(files.iter().map(|f| f.as_ref()).collect::<Vec<_>>()).unwrap();
+        let files = Vec1::try_from(files.iter().map(|f| f.as_path()).collect::<Vec<_>>()).unwrap();
         let prev = command.maybe_path_metadata_for(ActualInvoke::PerDir, &files)?;
         assert!(prev.is_some());
         let prev = prev.unwrap();
@@ -2029,7 +2008,7 @@ mod tests {
         );
         assert!(!command.paths_were_changed(prev.clone())?);
 
-        let mut file = helper.git_root();
+        let mut file = git_root;
         file.push("src/new.rs");
         fs::write(&file, "a new file")?;
         assert!(command.paths_were_changed(prev)?);
@@ -2048,19 +2027,21 @@ mod tests {
             .build()?;
 
         let helper = TestHelper::new()?.with_git_repo()?;
+        let git_root = helper.git_root();
+        let all_files = helper.all_files();
         let mut files = vec![];
-        for path in helper.all_files() {
+        for path in &all_files {
             if path.starts_with("src/")
-                && path.to_str().unwrap().ends_with(".rs")
+                && path.as_str().ends_with(".rs")
                 && path.ancestors().count() == 3
             {
-                let mut file = helper.git_root();
+                let mut file = git_root.clone();
                 file.push(path);
                 files.push(file);
             }
         }
 
-        let files = Vec1::try_from(files.iter().map(|f| f.as_ref()).collect::<Vec<_>>()).unwrap();
+        let files = Vec1::try_from(files.iter().map(|f| f.as_path()).collect::<Vec<_>>()).unwrap();
         let prev = command.maybe_path_metadata_for(ActualInvoke::PerDir, &files)?;
         assert!(prev.is_some());
         let prev = prev.unwrap();
@@ -2165,7 +2146,7 @@ mod tests {
         command.name = String::from("Test");
         command.invocation.invoke = actual_invoke.as_invoke();
         command.filter.include = include.iter().map(|i| i.to_string()).collect();
-        let paths: Vec1<&Path> = paths.iter1().map(Path::new).collect1();
+        let paths: Vec1<&Utf8Path> = paths.iter1().map(Utf8Path::new).collect1();
         assert_eq!(&command.paths_summary(actual_invoke, &paths), expect);
 
         Ok(())

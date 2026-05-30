@@ -40,13 +40,13 @@ version = "0.10.2"
 [workspace.dependencies]
 anyhow = { version = "1.0.100", default-features = false }
 bon = { version = "3.8.1", default-features = false }
+camino = { version = "1.1", features = ["serde1"] }
 clap = { version = "4.5.50", default-features = false, features = [
     "cargo",
     "derive",
     "std",
     "wrap_help",
 ] }
-clean-path = { version = "0.2.1", default-features = false }
 comfy-table = { version = "7.2.1", default-features = false }
 env_logger = { version = "0.11.8", default-features = false }
 fern = { version = ">= 0.5.0, < 0.7.0", default-features = false, features = ["colored"] }

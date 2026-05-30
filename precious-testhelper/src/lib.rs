@@ -1,15 +1,14 @@
 use anyhow::{Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use log::debug;
 use mitsein::prelude::*;
 use precious_helpers::exec::Exec;
 use pushd::Pushd;
 use regex::Regex;
 use std::{
-    env,
-    ffi::OsString,
-    fs,
+    env, fs,
     io::prelude::*,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{LazyLock, OnceLock},
 };
 use tempfile::TempDir;
@@ -18,11 +17,11 @@ pub struct TestHelper {
     // While we never access this field we need to hold onto the tempdir or
     // else the directory it references will be deleted.
     _tempdir: TempDir,
-    git_root: PathBuf,
-    precious_root: PathBuf,
-    paths: Vec<PathBuf>,
-    root_gitignore_file: PathBuf,
-    tests_data_gitignore_file: PathBuf,
+    git_root: Utf8PathBuf,
+    precious_root: Utf8PathBuf,
+    paths: Vec<Utf8PathBuf>,
+    root_gitignore_file: Utf8PathBuf,
+    tests_data_gitignore_file: Utf8PathBuf,
 }
 
 static RERERE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new("Recorded preimage").unwrap());
@@ -58,21 +57,32 @@ impl TestHelper {
             }
         }
 
-        let root = maybe_canonicalize(td.path())?;
+        let root = Self::maybe_canonicalize_tempdir(td.path())?;
 
         let helper = TestHelper {
             _tempdir: td,
             git_root: root.clone(),
             precious_root: root,
-            paths: Self::PATHS.iter().map(PathBuf::from).collect(),
-            root_gitignore_file: PathBuf::from(".gitignore"),
-            tests_data_gitignore_file: PathBuf::from("tests/data/.gitignore"),
+            paths: Self::PATHS.iter().map(Utf8PathBuf::from).collect(),
+            root_gitignore_file: Utf8PathBuf::from(".gitignore"),
+            tests_data_gitignore_file: Utf8PathBuf::from("tests/data/.gitignore"),
         };
         Ok(helper)
     }
 
-    pub fn with_precious_root_in_subdir<P: AsRef<Path>>(mut self, subdir: P) -> Self {
-        self.precious_root.push(subdir);
+    // The temp directory on macOS in GitHub Actions appears to be a symlink, but canonicalizing on
+    // Windows breaks tests for some reason.
+    pub fn maybe_canonicalize_tempdir(path: &Path) -> Result<Utf8PathBuf> {
+        let utf8 = Utf8PathBuf::try_from(path.to_owned())?;
+        if cfg!(windows) {
+            Ok(utf8)
+        } else {
+            Ok(utf8.canonicalize_utf8()?)
+        }
+    }
+
+    pub fn with_precious_root_in_subdir<P: AsRef<Utf8Path>>(mut self, subdir: P) -> Self {
+        self.precious_root.push(subdir.as_ref());
         self
     }
 
@@ -82,7 +92,7 @@ impl TestHelper {
     }
 
     fn create_git_repo(&self) -> Result<()> {
-        debug!("Creating git repo in {}", self.git_root.display());
+        debug!("Creating git repo in {}", self.git_root);
         for p in self.paths.iter() {
             let content = if is_rust_file(p) {
                 "fn foo() {}\n"
@@ -128,27 +138,27 @@ impl TestHelper {
         Ok(Pushd::new(subdir)?)
     }
 
-    pub fn git_root(&self) -> PathBuf {
+    pub fn git_root(&self) -> Utf8PathBuf {
         self.git_root.clone()
     }
 
-    pub fn precious_root(&self) -> PathBuf {
+    pub fn precious_root(&self) -> Utf8PathBuf {
         self.precious_root.clone()
     }
 
-    pub fn config_file(&self, file_name: &str) -> PathBuf {
+    pub fn config_file(&self, file_name: &str) -> Utf8PathBuf {
         let mut path = self.precious_root.clone();
         path.push(file_name);
         path
     }
 
-    pub fn all_files(&self) -> Vec<PathBuf> {
+    pub fn all_files(&self) -> Vec<Utf8PathBuf> {
         let mut files = self.paths.clone();
         files.sort();
         files
     }
 
-    pub fn all_files1(&self) -> Vec1<PathBuf> {
+    pub fn all_files1(&self) -> Vec1<Utf8PathBuf> {
         let mut files = self.paths.clone();
         files.sort();
         files.try_into().unwrap()
@@ -177,14 +187,14 @@ can_ignore.*
 generated.*
 ";
 
-    pub fn non_ignored_files() -> Vec<PathBuf> {
+    pub fn non_ignored_files() -> Vec<Utf8PathBuf> {
         Self::PATHS
             .iter()
             .filter_map(|&p| {
                 if p.contains("can_ignore") || p.contains("bar.") || p.contains("generated.txt") {
                     None
                 } else {
-                    Some(PathBuf::from(p))
+                    Some(Utf8PathBuf::from(p))
                 }
             })
             .collect()
@@ -224,7 +234,7 @@ generated.*
         Ok(())
     }
 
-    pub fn add_gitignore_files(&self) -> Result<Vec<PathBuf>> {
+    pub fn add_gitignore_files(&self) -> Result<Vec<Utf8PathBuf>> {
         self.write_file(&self.root_gitignore_file, Self::ROOT_GITIGNORE)?;
         self.write_file(&self.tests_data_gitignore_file, Self::TESTS_DATA_GITIGNORE)?;
 
@@ -247,9 +257,9 @@ generated.*
 
     const TO_MODIFY: &'static [&'static str] = &["src/module.rs", "tests/data/foo.txt"];
 
-    pub fn modify_files(&self) -> Result<Vec<PathBuf>> {
-        let mut paths: Vec<PathBuf> = vec![];
-        for p in Self::TO_MODIFY.iter().map(PathBuf::from) {
+    pub fn modify_files(&self) -> Result<Vec<Utf8PathBuf>> {
+        let mut paths: Vec<Utf8PathBuf> = vec![];
+        for p in Self::TO_MODIFY.iter().map(Utf8PathBuf::from) {
             let content = if is_rust_file(&p) {
                 "fn bar() {}\n"
             } else {
@@ -262,26 +272,24 @@ generated.*
         Ok(paths)
     }
 
-    pub fn write_file<P: AsRef<Path>>(&self, rel: P, content: &str) -> Result<()> {
+    pub fn write_file<P: AsRef<Utf8Path>>(&self, rel: P, content: &str) -> Result<()> {
         let mut full = self.precious_root.clone();
         full.push(rel.as_ref());
         let parent = full.parent().unwrap();
-        debug!("creating dir at {}", parent.display());
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Creating dir at {}", parent.display()))?;
-        debug!("writing file at {}", full.display());
-        let mut file = fs::File::create(full.clone())
-            .context(format!("Creating file at {}", full.display()))?;
+        debug!("creating dir at {parent}");
+        fs::create_dir_all(parent).with_context(|| format!("Creating dir at {parent}"))?;
+        debug!("writing file at {full}");
+        let mut file = fs::File::create(&full).context(format!("Creating file at {full}"))?;
         file.write_all(content.as_bytes())
-            .context(format!("Writing to file at {}", full.display()))?;
+            .context(format!("Writing to file at {full}"))?;
 
         Ok(())
     }
 
-    pub fn delete_file<P: AsRef<Path>>(&self, rel: P) -> Result<()> {
+    pub fn delete_file<P: AsRef<Utf8Path>>(&self, rel: P) -> Result<()> {
         let mut full = self.precious_root.clone();
         full.push(rel.as_ref());
-        debug!("deleting path at {}", full.display());
+        debug!("deleting path at {full}");
         if full.is_file() {
             return Ok(fs::remove_file(full)?);
         }
@@ -290,29 +298,15 @@ generated.*
     }
 
     #[cfg(not(target_os = "windows"))]
-    pub fn read_file(&self, rel: &Path) -> Result<String> {
+    pub fn read_file(&self, rel: &Utf8Path) -> Result<String> {
         let mut full = self.precious_root.clone();
         full.push(rel);
-        let content = fs::read_to_string(full.clone())
-            .context(format!("Reading file at {}", full.display()))?;
+        let content = fs::read_to_string(&full).context(format!("Reading file at {full}"))?;
 
         Ok(content)
     }
 }
 
-fn is_rust_file(p: &Path) -> bool {
-    if let Some(e) = p.extension() {
-        let rs = OsString::from("rs");
-        return *e == rs;
-    }
-    false
-}
-
-// The temp directory on macOS in GitHub Actions appears to be a symlink, but
-// canonicalizing on Windows breaks tests for some reason.
-pub fn maybe_canonicalize(path: &Path) -> Result<PathBuf> {
-    if cfg!(windows) {
-        return Ok(path.to_owned());
-    }
-    Ok(fs::canonicalize(path)?)
+fn is_rust_file(p: &Utf8Path) -> bool {
+    p.extension() == Some("rs")
 }

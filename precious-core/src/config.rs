@@ -1,12 +1,9 @@
 use crate::command::{self, CommandType, Invoke, PathArgs, WorkingDir};
 use anyhow::{Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use indexmap::IndexMap;
 use serde::{de, de::Deserializer, Deserialize};
-use std::{
-    collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, fs};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -85,8 +82,8 @@ pub struct Config {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub(crate) enum ConfigError {
-    #[error("File at {} cannot be read: {error:}", file.display())]
-    FileCannotBeRead { file: PathBuf, error: String },
+    #[error("File at {file} cannot be read: {error:}")]
+    FileCannotBeRead { file: Utf8PathBuf, error: String },
     #[error(r#"Cannot set invoke = "per-file" and path-args = "{path_args:}""#)]
     CannotInvokePerFileWithPathArgs { path_args: PathArgs },
     #[error(r#"Cannot set invoke = "per-dir" and path-args = "{path_args:}""#)]
@@ -173,7 +170,7 @@ where
                 ));
             }
 
-            Ok(Some(WorkingDir::ChdirTo(PathBuf::from(value))))
+            Ok(Some(WorkingDir::ChdirTo(Utf8PathBuf::from(value))))
         }
     }
 }
@@ -181,22 +178,22 @@ where
 const DEFAULT_LABEL: &str = "default";
 
 impl Config {
-    pub(crate) fn new(file: &Path) -> Result<Config> {
+    pub(crate) fn new(file: &Utf8Path) -> Result<Config> {
         let bytes = fs::read(file).map_err(|e| ConfigError::FileCannotBeRead {
-            file: file.to_path_buf(),
+            file: file.to_owned(),
             error: e.to_string(),
         })?;
 
         let content = String::from_utf8(bytes)
-            .with_context(|| format!("Config file at {} contains invalid UTF-8", file.display()))?;
+            .with_context(|| format!("Config file at {file} contains invalid UTF-8"))?;
 
         toml::from_str::<Config>(&content)
-            .with_context(|| format!("Failed to parse config file at {} as TOML", file.display()))
+            .with_context(|| format!("Failed to parse config file at {file} as TOML"))
     }
 
     pub(crate) fn into_tidy_commands(
         self,
-        project_root: &Path,
+        project_root: &Utf8Path,
         command: Option<&str>,
         label: Option<&str>,
     ) -> Result<Vec<command::Command>> {
@@ -205,7 +202,7 @@ impl Config {
 
     pub(crate) fn into_lint_commands(
         self,
-        project_root: &Path,
+        project_root: &Utf8Path,
         command: Option<&str>,
         label: Option<&str>,
     ) -> Result<Vec<command::Command>> {
@@ -214,7 +211,7 @@ impl Config {
 
     fn into_commands(
         self,
-        project_root: &Path,
+        project_root: &Utf8Path,
         command: Option<&str>,
         label: Option<&str>,
         typ: CommandType,
@@ -283,7 +280,7 @@ impl Config {
 }
 
 impl CommandConfig {
-    fn try_into_command(self, project_root: &Path, name: &str) -> Result<command::Command> {
+    fn try_into_command(self, project_root: &Utf8Path, name: &str) -> Result<command::Command> {
         let params = self
             .into_command_params(project_root, name)
             .with_context(|| format!(r#"Failed to build parameters for command "{name}""#))?;
@@ -294,7 +291,7 @@ impl CommandConfig {
 
     fn into_command_params(
         self,
-        project_root: &Path,
+        project_root: &Utf8Path,
         name: &str,
     ) -> Result<command::CommandParams> {
         let (invoke, working_dir, path_args) =
@@ -363,10 +360,10 @@ impl CommandConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::{Utf8Path, Utf8PathBuf};
     use mitsein::prelude::*;
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
-    use std::path::Path;
     use test_case::test_case;
 
     #[test]
@@ -542,14 +539,14 @@ mod tests {
     )]
     #[test_case(
         Invoke::PerDir,
-        WorkingDir::ChdirTo(PathBuf::from("foo")),
+        WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
         PathArgs::None,
         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
         r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerDir,
-        WorkingDir::ChdirTo(PathBuf::from("foo")),
+        WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
         PathArgs::Dot,
         ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
         r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "dot""#
@@ -588,7 +585,7 @@ mod tests {
             ignore_stderr: vec![],
             labels: vec![],
         };
-        let res = config.try_into_command(Path::new("."), "some-linter");
+        let res = config.try_into_command(Utf8Path::new("."), "some-linter");
         let err = res.unwrap_err().downcast::<ConfigError>().unwrap();
         assert_eq!(err, expect_err);
 
@@ -691,20 +688,20 @@ mod tests {
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
-        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        let commands = config.into_lint_commands(Utf8Path::new("."), None, None)?;
         assert_eq!(commands.len(), 1);
 
-        let files: Vec1<PathBuf> = vec1![
-            PathBuf::from("src/foo.js"),
-            PathBuf::from("src/bar.jsx"),
-            PathBuf::from("src/baz.rs"),
+        let files: Vec1<Utf8PathBuf> = vec1![
+            Utf8PathBuf::from("src/foo.js"),
+            Utf8PathBuf::from("src/bar.jsx"),
+            Utf8PathBuf::from("src/baz.rs"),
         ];
         let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
-        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        let mut included: Vec<&Utf8Path> = arg_sets.into_iter().flatten().collect();
         included.sort();
         assert_eq!(
             included,
-            vec![Path::new("src/bar.jsx"), Path::new("src/foo.js")]
+            vec![Utf8Path::new("src/bar.jsx"), Utf8Path::new("src/foo.js")]
         );
 
         Ok(())
@@ -727,24 +724,24 @@ mod tests {
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
-        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        let commands = config.into_lint_commands(Utf8Path::new("."), None, None)?;
         assert_eq!(commands.len(), 1);
 
-        let files: Vec1<PathBuf> = vec1![
-            PathBuf::from("src/app.js"),
-            PathBuf::from("src/main.css"),
-            PathBuf::from("src/theme.scss"),
-            PathBuf::from("src/main.rs"),
+        let files: Vec1<Utf8PathBuf> = vec1![
+            Utf8PathBuf::from("src/app.js"),
+            Utf8PathBuf::from("src/main.css"),
+            Utf8PathBuf::from("src/theme.scss"),
+            Utf8PathBuf::from("src/main.rs"),
         ];
         let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
-        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        let mut included: Vec<&Utf8Path> = arg_sets.into_iter().flatten().collect();
         included.sort();
         assert_eq!(
             included,
             vec![
-                Path::new("src/app.js"),
-                Path::new("src/main.css"),
-                Path::new("src/theme.scss"),
+                Utf8Path::new("src/app.js"),
+                Utf8Path::new("src/main.css"),
+                Utf8Path::new("src/theme.scss"),
             ]
         );
 
@@ -768,18 +765,18 @@ mod tests {
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
-        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        let commands = config.into_lint_commands(Utf8Path::new("."), None, None)?;
         assert_eq!(commands.len(), 1);
 
-        let files: Vec1<PathBuf> = vec1![
-            PathBuf::from("src/app.js"),
-            PathBuf::from("vendor/lib.js"),
-            PathBuf::from("generated/out.js"),
+        let files: Vec1<Utf8PathBuf> = vec1![
+            Utf8PathBuf::from("src/app.js"),
+            Utf8PathBuf::from("vendor/lib.js"),
+            Utf8PathBuf::from("generated/out.js"),
         ];
         let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
-        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        let mut included: Vec<&Utf8Path> = arg_sets.into_iter().flatten().collect();
         included.sort();
-        assert_eq!(included, vec![Path::new("src/app.js")]);
+        assert_eq!(included, vec![Utf8Path::new("src/app.js")]);
 
         Ok(())
     }
@@ -804,21 +801,21 @@ mod tests {
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
-        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        let commands = config.into_lint_commands(Utf8Path::new("."), None, None)?;
         assert_eq!(commands.len(), 1);
 
-        let files: Vec1<PathBuf> = vec1![
-            PathBuf::from("src/app.js"),
-            PathBuf::from("src/app.ts"),
-            PathBuf::from("src/app.test.ts"),
-            PathBuf::from("vendor/lib.js"),
+        let files: Vec1<Utf8PathBuf> = vec1![
+            Utf8PathBuf::from("src/app.js"),
+            Utf8PathBuf::from("src/app.ts"),
+            Utf8PathBuf::from("src/app.test.ts"),
+            Utf8PathBuf::from("vendor/lib.js"),
         ];
         let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
-        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        let mut included: Vec<&Utf8Path> = arg_sets.into_iter().flatten().collect();
         included.sort();
         assert_eq!(
             included,
-            vec![Path::new("src/app.js"), Path::new("src/app.ts")]
+            vec![Utf8Path::new("src/app.js"), Utf8Path::new("src/app.ts")]
         );
 
         Ok(())
@@ -841,7 +838,7 @@ mod tests {
 
         let config: Config = toml::from_str(toml_text)?;
         let err = config
-            .into_lint_commands(Path::new("."), None, None)
+            .into_lint_commands(Utf8Path::new("."), None, None)
             .unwrap_err()
             .downcast::<ConfigError>()?;
         assert_eq!(
@@ -868,7 +865,7 @@ mod tests {
 
         let config: Config = toml::from_str(toml_text)?;
         let err = config
-            .into_lint_commands(Path::new("."), None, None)
+            .into_lint_commands(Utf8Path::new("."), None, None)
             .unwrap_err()
             .downcast::<ConfigError>()?;
         assert_eq!(
@@ -897,20 +894,20 @@ mod tests {
         "#;
 
         let config: Config = toml::from_str(toml_text)?;
-        let commands = config.into_lint_commands(Path::new("."), None, None)?;
+        let commands = config.into_lint_commands(Utf8Path::new("."), None, None)?;
         assert_eq!(commands.len(), 1);
 
-        let files: Vec1<PathBuf> = vec1![
-            PathBuf::from("src/lib.rs"),
-            PathBuf::from("src/main.rs"),
-            PathBuf::from("src/main.js"),
+        let files: Vec1<Utf8PathBuf> = vec1![
+            Utf8PathBuf::from("src/lib.rs"),
+            Utf8PathBuf::from("src/main.rs"),
+            Utf8PathBuf::from("src/main.js"),
         ];
         let (arg_sets, _) = commands[0].files_to_args_sets(&files)?;
-        let mut included: Vec<&Path> = arg_sets.into_iter().flatten().collect();
+        let mut included: Vec<&Utf8Path> = arg_sets.into_iter().flatten().collect();
         included.sort();
         assert_eq!(
             included,
-            vec![Path::new("src/lib.rs"), Path::new("src/main.rs")]
+            vec![Utf8Path::new("src/lib.rs"), Utf8Path::new("src/main.rs")]
         );
 
         Ok(())
@@ -936,7 +933,7 @@ mod tests {
 
         let config: Config = toml::from_str(toml_text)?;
         let err = config
-            .into_lint_commands(Path::new("."), Some("clippy"), None)
+            .into_lint_commands(Utf8Path::new("."), Some("clippy"), None)
             .unwrap_err()
             .downcast::<ConfigError>()?;
         assert_eq!(
@@ -970,7 +967,7 @@ mod tests {
 
         let config: Config = toml::from_str(toml_text)?;
         let err = config
-            .into_lint_commands(Path::new("."), None, Some("ci"))
+            .into_lint_commands(Utf8Path::new("."), None, Some("ci"))
             .unwrap_err()
             .downcast::<ConfigError>()?;
         assert_eq!(
@@ -997,7 +994,7 @@ mod tests {
 
         let config: Config = toml::from_str(toml_text)?;
         let err = config
-            .into_lint_commands(Path::new("."), None, None)
+            .into_lint_commands(Utf8Path::new("."), None, None)
             .unwrap_err()
             .downcast::<ConfigError>()?;
         assert_eq!(

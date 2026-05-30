@@ -6,3 +6,5 @@ importas = "importas"
 excluder = "excluder"
 includer = "includer"
 typ = "typ"
+# Used in the plan doc for UTF-8 handling as an example of broken UTF-8 for "cafe".
+caf = "caf"

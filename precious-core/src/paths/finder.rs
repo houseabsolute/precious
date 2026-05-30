@@ -2,28 +2,25 @@ use crate::{
     paths::{
         matcher::{Matcher, MatcherBuilder},
         mode::Mode,
+        utf8::{NonUtf8PathError, NonUtf8Source},
     },
     vcs,
 };
 use anyhow::{Context, Result};
-use clean_path::Clean;
+use camino::{Utf8Path, Utf8PathBuf};
 use log::{debug, error};
 use mitsein::prelude::*;
 use precious_helpers::exec::Exec;
 use regex::Regex;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::LazyLock,
-};
+use std::sync::LazyLock;
 use thiserror::Error;
 
 #[derive(Debug)]
 pub struct Finder {
     mode: Mode,
-    project_root: PathBuf,
-    git_root: Option<PathBuf>,
-    cwd: PathBuf,
+    project_root: Utf8PathBuf,
+    git_root: Option<Utf8PathBuf>,
+    cwd: Utf8PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
 }
@@ -47,14 +44,17 @@ pub enum FinderError {
     )]
     AllPathsWereExcluded,
 
-    #[error("Path passed on the command line does not exist: {}", path.display())]
-    NonExistentPathOnCli { path: PathBuf },
+    #[error("Path passed on the command line does not exist: {path}")]
+    NonExistentPathOnCli { path: Utf8PathBuf },
 
     #[error(r#"Could not determine the repo root by running "git rev-parse --show-toplevel""#)]
     CouldNotDetermineRepoRoot,
 
-    #[error(r#"The path "{}" does not contain "{}" as a prefix"#, path.display(), prefix.display())]
-    PrefixNotFound { path: PathBuf, prefix: PathBuf },
+    #[error(r#"The path "{path}" does not contain "{prefix}" as a prefix"#)]
+    PrefixNotFound {
+        path: Utf8PathBuf,
+        prefix: Utf8PathBuf,
+    },
 }
 
 static KEEP_INDEX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap());
@@ -62,16 +62,13 @@ static KEEP_INDEX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap
 impl Finder {
     pub fn new(
         mode: Mode,
-        project_root: &Path,
-        cwd: PathBuf,
+        project_root: &Utf8Path,
+        cwd: Utf8PathBuf,
         exclude_globs: Vec<String>,
     ) -> Result<Finder> {
-        let canonical_root = fs::canonicalize(project_root).with_context(|| {
-            format!(
-                "Failed to canonicalize project root path {}",
-                project_root.display()
-            )
-        })?;
+        let canonical_root = project_root
+            .canonicalize_utf8()
+            .with_context(|| format!("Failed to canonicalize project root path {project_root}"))?;
 
         Ok(Finder {
             mode,
@@ -83,9 +80,7 @@ impl Finder {
         })
     }
 
-    // Fixing this will cascade through the code base. I'll do it later (maybe).
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn files(&mut self, cli_paths: Vec<PathBuf>) -> Result<Option<Vec1<PathBuf>>> {
+    pub fn files(&mut self, cli_paths: &[Utf8PathBuf]) -> Result<Option<Vec1<Utf8PathBuf>>> {
         match self.mode {
             Mode::FromCli => (),
             Mode::All
@@ -105,7 +100,7 @@ impl Finder {
         let mut files = match self.mode.clone() {
             Mode::All => self.all_files().context("Failed to get all files")?,
             Mode::FromCli => self
-                .files_from_cli(cli_paths.clone())
+                .files_from_cli(cli_paths)
                 .context("Failed to get files from command line")?,
             Mode::GitModified => self
                 .git_modified_files()
@@ -128,14 +123,14 @@ impl Finder {
                 Mode::FromCli => {
                     let err = if cli_paths.len() == 1 {
                         FinderError::CLIPathsWereExcludedSingular {
-                            path: cli_paths[0].display().to_string(),
+                            path: cli_paths[0].as_str().to_string(),
                         }
                     } else {
                         FinderError::CLIPathsWereExcludedMultiple {
-                            paths: Self::truncate_path_list(&cli_paths),
+                            paths: Self::truncate_path_list(cli_paths),
                         }
                     };
-                    return Err(err.into());
+                    Err(err.into())
                 }
                 Mode::All => Err(FinderError::AllPathsWereExcluded {}.into()),
             };
@@ -148,7 +143,7 @@ impl Finder {
         ))
     }
 
-    fn git_root(&mut self) -> Result<PathBuf> {
+    fn git_root(&mut self) -> Result<Utf8PathBuf> {
         if let Some(r) = &self.git_root {
             return Ok(r.clone());
         }
@@ -162,29 +157,48 @@ impl Finder {
             .run()
             .context("Failed to run git rev-parse to determine repository root")?;
 
-        let stdout = res
-            .stdout
+        let bytes = res
+            .stdout_bytes
+            .as_deref()
             .ok_or(FinderError::CouldNotDetermineRepoRoot)
             .context("git rev-parse did not produce output")?;
-        self.git_root = Some(PathBuf::from(stdout.trim()));
+        // git rev-parse appends exactly one line terminator: \n on unix, \r\n
+        // on Windows. Strip that one terminator — never trim spaces, tabs, or
+        // repeated newlines, all of which are valid trailing characters in a
+        // path.
+        let trimmed = bytes
+            .strip_suffix(b"\r\n")
+            .or_else(|| bytes.strip_suffix(b"\n"))
+            .unwrap_or(bytes);
+        let s = std::str::from_utf8(trimmed).map_err(|_| NonUtf8PathError {
+            raw: crate::paths::utf8::bytes_to_pathbuf(trimmed),
+            source: NonUtf8Source::GitRoot,
+        })?;
+        self.git_root = Some(Utf8PathBuf::from(s));
 
-        Ok(self.git_root.clone().unwrap())
+        Ok(self
+            .git_root
+            .clone()
+            .expect("we know this is Some - look up a couple lines"))
     }
 
-    fn all_files(&self) -> Result<Vec<PathBuf>> {
-        debug!("Getting all files under {}", self.project_root.display());
-        self.walkdir_files(self.project_root.as_path())
+    fn all_files(&self) -> Result<Vec<Utf8PathBuf>> {
+        debug!("Getting all files under {}", self.project_root);
+        self.walkdir_files(&self.project_root)
     }
 
-    fn files_from_cli(&self, cli_paths: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+    fn files_from_cli(&self, cli_paths: &[Utf8PathBuf]) -> Result<Vec<Utf8PathBuf>> {
         debug!("Using the list of files passed from the command line");
         let exclude_matcher = self.exclude_matcher()?;
 
-        let mut files: Vec<PathBuf> = vec![];
+        let mut files: Vec<Utf8PathBuf> = vec![];
         for rel_to_cwd in cli_paths {
-            let full = self.cwd.clone().join(rel_to_cwd.clone());
+            let full = self.cwd.join(rel_to_cwd);
             if !full.exists() {
-                return Err(FinderError::NonExistentPathOnCli { path: rel_to_cwd }.into());
+                return Err(FinderError::NonExistentPathOnCli {
+                    path: rel_to_cwd.clone(),
+                }
+                .into());
             }
 
             let rel_to_root = self.path_relative_to_project_root(&full)?;
@@ -203,15 +217,27 @@ impl Finder {
         Ok(files)
     }
 
-    fn git_modified_files(&mut self) -> Result<Vec<PathBuf>> {
+    fn git_modified_files(&mut self) -> Result<Vec<Utf8PathBuf>> {
         debug!("Getting modified files according to git");
-        self.files_from_git(vec!["diff", "--name-only", "--diff-filter=ACM", "HEAD"])
+        self.files_from_git(vec![
+            "diff",
+            "--name-only",
+            "-z",
+            "--diff-filter=ACM",
+            "HEAD",
+        ])
     }
 
-    fn git_staged_files(&mut self) -> Result<Vec<PathBuf>> {
+    fn git_staged_files(&mut self) -> Result<Vec<Utf8PathBuf>> {
         debug!("Getting staged files according to git");
         self.maybe_git_stash()?;
-        self.files_from_git(vec!["diff", "--cached", "--name-only", "--diff-filter=ACM"])
+        self.files_from_git(vec![
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--diff-filter=ACM",
+        ])
     }
 
     fn maybe_git_stash(&mut self) -> Result<()> {
@@ -239,12 +265,18 @@ impl Finder {
         Ok(())
     }
 
-    fn git_modified_since(&mut self, since: &str) -> Result<Vec<PathBuf>> {
+    fn git_modified_since(&mut self, since: &str) -> Result<Vec<Utf8PathBuf>> {
         let since_dot = format!("{since:}...");
-        self.files_from_git(vec!["diff", "--name-only", "--diff-filter=ACM", &since_dot])
+        self.files_from_git(vec![
+            "diff",
+            "--name-only",
+            "-z",
+            "--diff-filter=ACM",
+            &since_dot,
+        ])
     }
 
-    fn walkdir_files(&self, root: &Path) -> Result<Vec<PathBuf>> {
+    fn walkdir_files(&self, root: &Utf8Path) -> Result<Vec<Utf8PathBuf>> {
         let mut exclude_globs = ignore::overrides::OverrideBuilder::new(root);
         for d in vcs::DIRS {
             exclude_globs
@@ -256,7 +288,7 @@ impl Finder {
             .build()
             .context("Failed to build directory override patterns")?;
 
-        let mut files: Vec<PathBuf> = vec![];
+        let mut files: Vec<Utf8PathBuf> = vec![];
         for result in ignore::WalkBuilder::new(root)
             .hidden(false)
             .overrides(overrides)
@@ -264,14 +296,18 @@ impl Finder {
         {
             match result {
                 Ok(ent) => {
-                    if ent.path().is_dir() {
+                    let p = ent.into_path();
+                    let utf8 = Utf8PathBuf::from_path_buf(p).map_err(|raw| NonUtf8PathError {
+                        raw,
+                        source: NonUtf8Source::FilesystemWalk,
+                    })?;
+                    if utf8.is_dir() {
                         continue;
                     }
-                    files.push(ent.into_path());
+                    files.push(utf8);
                 }
                 Err(e) => {
-                    return Err(e)
-                        .with_context(|| format!("Failed to walk directory {}", root.display()))?
+                    return Err(e).with_context(|| format!("Failed to walk directory {root}"))?
                 }
             }
         }
@@ -287,7 +323,7 @@ impl Finder {
             .collect::<Vec<_>>())
     }
 
-    fn files_from_git(&mut self, args: Vec<&str>) -> Result<Vec<PathBuf>> {
+    fn files_from_git(&mut self, args: Vec<&str>) -> Result<Vec<Utf8PathBuf>> {
         let git_root = self
             .git_root()
             .context("Failed to determine git root while getting file list")?;
@@ -303,35 +339,37 @@ impl Finder {
             .exclude_matcher()
             .context("Failed to build exclude matcher for git files")?;
 
-        match output.stdout {
-            Some(s) => Ok(
-                // In the common case where the git repo root and project root
-                // are the same, this isn't necessary, because git will give
-                // us paths relative to the project root. But if the precious
-                // root _isn't_ the git root, we need to get the path relative
-                // to the project root, not the repo root.
-                self.paths_relative_to_project_root(
-                    &git_root,
-                    s.lines()
-                        .filter_map(|rel| {
-                            let pb = PathBuf::from(rel);
-                            if exclude_matcher.path_matches(&pb, false) {
-                                return None;
-                            }
-
-                            let mut f = git_root.clone();
-                            f.push(&pb);
-                            if !f.exists() {
-                                debug!(
-                                    "The staged file at {rel:} (abs path {}) was deleted so it will be ignored.",f.display(),
-                                );
-                                return None;
-                            }
-                            Some(f)
-                        })
-                        .collect(),
-                )?,
-            ),
+        match output.stdout_bytes.as_deref() {
+            Some(bytes) => {
+                // In the common case where the git repo root and project root are the same, this
+                // isn't necessary, because git will give us paths relative to the project root. But
+                // if the precious root _isn't_ the git root, we need to get the path relative to
+                // the project root, not the repo root.
+                let mut paths: Vec<Utf8PathBuf> = Vec::new();
+                for raw in bytes.split(|b| *b == 0).filter(|s| !s.is_empty()) {
+                    let Ok(s) = std::str::from_utf8(raw) else {
+                        return Err(NonUtf8PathError {
+                            raw: crate::paths::utf8::bytes_to_pathbuf(raw),
+                            source: NonUtf8Source::GitDiff,
+                        }
+                        .into());
+                    };
+                    let rel = Utf8PathBuf::from(s);
+                    if exclude_matcher.path_matches(&rel, false) {
+                        continue;
+                    }
+                    let mut f = git_root.clone();
+                    f.push(&rel);
+                    if !f.exists() {
+                        debug!(
+                            "The staged file at {rel} (abs path {f}) was deleted so it will be ignored.",
+                        );
+                        continue;
+                    }
+                    paths.push(f);
+                }
+                Ok(self.paths_relative_to_project_root(&git_root, paths)?)
+            }
             None => Ok(vec![]),
         }
     }
@@ -355,10 +393,10 @@ impl Finder {
         // This is the root to which the given paths are relative. This might
         // be the project root or it might be the git root, which are not
         // guaranteed to be the same thing.
-        path_root: &Path,
-        paths: Vec<PathBuf>,
-    ) -> Result<Vec<PathBuf>> {
-        let mut relative: Vec<PathBuf> = vec![];
+        path_root: &Utf8Path,
+        paths: Vec<Utf8PathBuf>,
+    ) -> Result<Vec<Utf8PathBuf>> {
+        let mut relative: Vec<Utf8PathBuf> = vec![];
         for mut f in paths {
             if !f.is_absolute() {
                 f = path_root.join(f);
@@ -370,38 +408,32 @@ impl Finder {
         Ok(relative)
     }
 
-    fn path_relative_to_project_root(&self, path: &Path) -> Result<PathBuf> {
-        // If the directory given is just "." then the first clean() removes
-        // that and we then strip the prefix, leaving an empty string. The
-        // second clean turns that back into ".".
-        let canonical = fs::canonicalize(path)
-            .with_context(|| format!("Failed to canonicalize path {}", path.display()))?
-            .clean();
+    fn path_relative_to_project_root(&self, path: &Utf8Path) -> Result<Utf8PathBuf> {
+        let canonical = path
+            .canonicalize_utf8()
+            .with_context(|| format!("Failed to canonicalize path {path}"))?;
 
-        Ok(canonical
-            .strip_prefix(&self.project_root)
-            .map_err(|_| {
-                anyhow::anyhow!(FinderError::PrefixNotFound {
-                    path: path.to_path_buf(),
-                    prefix: self.project_root.clone(),
-                })
-            })
-            .with_context(|| {
-                format!(
-                    "Failed to make path {} relative to project root {}",
-                    path.display(),
-                    self.project_root.display()
-                )
-            })?
-            .to_path_buf()
-            .clean())
+        let stripped = canonical.strip_prefix(&self.project_root).map_err(|_| {
+            FinderError::PrefixNotFound {
+                path: path.to_path_buf(),
+                prefix: self.project_root.clone(),
+            }
+        })?;
+
+        // When the input canonicalizes to the project root itself, strip_prefix yields an empty
+        // path. Downstream code expects a non-empty value, so return "." in that case.
+        if stripped.as_str().is_empty() {
+            Ok(Utf8PathBuf::from("."))
+        } else {
+            Ok(stripped.to_path_buf())
+        }
     }
 
-    fn truncate_path_list(cli_paths: &[PathBuf]) -> String {
+    fn truncate_path_list(cli_paths: &[Utf8PathBuf]) -> String {
         let is_truncated = cli_paths.len() > 3;
         let truncated = cli_paths
             .iter()
-            .map(|p| p.display().to_string())
+            .map(|p| p.as_str().to_string())
             .take(3)
             .collect::<Vec<_>>()
             .join(", ");
@@ -439,24 +471,25 @@ impl Drop for Finder {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use camino::Utf8PathBuf;
     use itertools::Itertools;
     use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
     use std::fs;
 
-    fn new_finder(mode: Mode, root: PathBuf) -> Result<Finder> {
+    fn new_finder(mode: Mode, root: Utf8PathBuf) -> Result<Finder> {
         new_finder_with_excludes(mode, root.clone(), root, vec![])
     }
 
-    fn new_finder_with_cwd(mode: Mode, root: PathBuf, cwd: PathBuf) -> Result<Finder> {
+    fn new_finder_with_cwd(mode: Mode, root: Utf8PathBuf, cwd: Utf8PathBuf) -> Result<Finder> {
         new_finder_with_excludes(mode, root, cwd, vec![])
     }
 
     fn new_finder_with_excludes(
         mode: Mode,
-        root: PathBuf,
-        cwd: PathBuf,
+        root: Utf8PathBuf,
+        cwd: Utf8PathBuf,
         exclude: Vec<String>,
     ) -> Result<Finder> {
         Finder::new(mode, &root, cwd, exclude)
@@ -483,13 +516,36 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(unix)]
+    #[test]
+    #[parallel]
+    fn all_mode_errors_on_non_utf8_filename() -> Result<()> {
+        use crate::paths::utf8::{NonUtf8PathError, NonUtf8Source};
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let bad_name = OsStr::from_bytes(b"data\xff.bin");
+        let mut full = helper.precious_root().into_std_path_buf();
+        full.push(bad_name);
+        fs::write(&full, b"contents")?;
+
+        let mut finder = new_finder(Mode::All, helper.precious_root())?;
+        let err = finder.files(&[]).expect_err("expected non-UTF-8 error");
+        let downcast = err
+            .downcast_ref::<NonUtf8PathError>()
+            .expect("expected NonUtf8PathError");
+        assert_eq!(downcast.source, NonUtf8Source::FilesystemWalk);
+        Ok(())
+    }
+
     #[test]
     #[parallel]
     fn all_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
         let mut finder = new_finder(Mode::All, helper.precious_root())?;
-        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
+        assert_eq!(finder.files(&[])?, Some(helper.all_files1()));
         Ok(())
     }
 
@@ -501,7 +557,7 @@ mod tests {
         cwd.push("src");
 
         let mut finder = new_finder_with_cwd(Mode::All, helper.precious_root(), cwd)?;
-        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
+        assert_eq!(finder.files(&[])?, Some(helper.all_files1()));
         Ok(())
     }
 
@@ -509,14 +565,21 @@ mod tests {
     #[parallel]
     fn all_mode_with_gitignore() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut gitignores = helper.add_gitignore_files()?;
-        let mut expect = testhelper::TestHelper::non_ignored_files();
+        let mut gitignores: Vec<Utf8PathBuf> = helper
+            .add_gitignore_files()?
+            .into_iter()
+            .map(|p| Utf8PathBuf::try_from(p).expect("gitignore file is valid UTF-8"))
+            .collect();
+        let mut expect = testhelper::TestHelper::non_ignored_files()
+            .into_iter()
+            .map(|p| Utf8PathBuf::try_from(p).expect("non-ignored file is valid UTF-8"))
+            .collect::<Vec<_>>();
         expect.append(&mut gitignores);
         expect.sort();
         let expect = Vec1::try_from(expect).unwrap();
 
         let mut finder = new_finder(Mode::All, helper.precious_root())?;
-        assert_eq!(finder.files(vec![])?, Some(expect));
+        assert_eq!(finder.files(&[])?, Some(expect));
         Ok(())
     }
 
@@ -524,14 +587,14 @@ mod tests {
     #[parallel]
     fn all_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::All,
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
+        assert_eq!(finder.files(&[])?, Some(helper.all_files1()));
         Ok(())
     }
 
@@ -539,14 +602,14 @@ mod tests {
     #[parallel]
     fn all_mode_with_excluded_files_bare_dir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::All,
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(helper.all_files1()));
+        assert_eq!(finder.files(&[])?, Some(helper.all_files1()));
         Ok(())
     }
 
@@ -555,7 +618,7 @@ mod tests {
     fn git_modified_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
-        let res = finder.files(vec![]);
+        let res = finder.files(&[]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
         Ok(())
@@ -567,7 +630,7 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -579,7 +642,7 @@ mod tests {
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_cwd(Mode::GitModified, helper.precious_root(), cwd)?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -587,7 +650,7 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_changes_all_excluded() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
 
         let mut finder = new_finder_with_excludes(
@@ -596,7 +659,7 @@ mod tests {
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, None);
+        assert_eq!(finder.files(&[])?, None);
         Ok(())
     }
 
@@ -604,19 +667,19 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         helper.commit_all()?;
 
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -624,19 +687,19 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_excluded_files_bare_dir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         helper.commit_all()?;
 
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -644,12 +707,12 @@ mod tests {
     #[parallel]
     fn git_modified_mode_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         helper.commit_all()?;
 
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "new content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
@@ -658,7 +721,7 @@ mod tests {
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -672,7 +735,7 @@ mod tests {
         let mut project_root = helper.git_root();
         project_root.push("subdir");
         let mut finder = new_finder(Mode::GitModified, project_root)?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -681,9 +744,10 @@ mod tests {
     fn git_modified_mode_includes_staged() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        helper.stage_some(&[&modified[0]])?;
+        let first = modified[0].clone();
+        helper.stage_some(&[first.as_std_path()])?;
         let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -692,7 +756,7 @@ mod tests {
     fn git_staged_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
-        let res = finder.files(vec![]);
+        let res = finder.files(&[]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
         Ok(())
@@ -706,7 +770,7 @@ mod tests {
 
         {
             let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
-            let res = finder.files(vec![]);
+            let res = finder.files(&[]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
@@ -714,7 +778,7 @@ mod tests {
         {
             let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
             helper.stage_all()?;
-            assert_eq!(finder.files(vec![])?, Some(modified));
+            assert_eq!(finder.files(&[])?, Some(modified));
         }
         Ok(())
     }
@@ -731,7 +795,7 @@ mod tests {
         {
             let mut finder =
                 new_finder_with_cwd(Mode::GitStaged, helper.precious_root(), cwd.clone())?;
-            let res = finder.files(vec![]);
+            let res = finder.files(&[]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
@@ -739,7 +803,7 @@ mod tests {
         {
             let mut finder = new_finder_with_cwd(Mode::GitStaged, helper.precious_root(), cwd)?;
             helper.stage_all()?;
-            assert_eq!(finder.files(vec![])?, Some(modified));
+            assert_eq!(finder.files(&[])?, Some(modified));
         }
         Ok(())
     }
@@ -748,7 +812,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_with_changes_all_excluded() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
 
         let mut finder = new_finder_with_excludes(
@@ -757,7 +821,7 @@ mod tests {
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, None);
+        assert_eq!(finder.files(&[])?, None);
         Ok(())
     }
 
@@ -766,7 +830,7 @@ mod tests {
     fn git_staged_mode_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         let mut finder = new_finder_with_excludes(
             Mode::GitStaged,
@@ -774,7 +838,7 @@ mod tests {
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -783,7 +847,7 @@ mod tests {
     fn git_staged_mode_with_excluded_files_bare_dir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         let mut finder = new_finder_with_excludes(
             Mode::GitStaged,
@@ -791,7 +855,7 @@ mod tests {
             helper.precious_root(),
             vec!["vendor".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -800,7 +864,7 @@ mod tests {
     fn git_staged_mode_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         helper.stage_all()?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
@@ -810,7 +874,7 @@ mod tests {
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -821,14 +885,14 @@ mod tests {
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.stage_all()?;
         let unstaged = "tests/data/bar.txt";
-        helper.write_file(PathBuf::from(unstaged), "new content")?;
+        helper.write_file(Utf8PathBuf::from(unstaged), "new content")?;
 
         #[cfg(not(target_os = "windows"))]
         set_up_post_checkout_hook(&helper)?;
 
         {
             let mut finder = new_finder(Mode::GitStagedWithStash, helper.precious_root())?;
-            assert_eq!(finder.files(vec![])?, Some(modified));
+            assert_eq!(finder.files(&[])?, Some(modified));
             assert_eq!(
                 String::from_utf8(fs::read(helper.precious_root().join(unstaged))?)?,
                 String::from("some text"),
@@ -854,7 +918,7 @@ mod tests {
     fn git_staged_mode_with_stash_merge_stash() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
-        let file = Path::new("merge-conflict-here");
+        let file = Utf8Path::new("merge-conflict-here");
         helper.write_file(file, "line 1\nline 2\n")?;
         helper.stage_all()?;
         helper.commit_all()?;
@@ -874,8 +938,8 @@ mod tests {
 
         let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
         assert_eq!(
-            finder.files(vec![])?,
-            Some(vec1![PathBuf::from("merge-conflict-here")]),
+            finder.files(&[])?,
+            Some(vec1![Utf8PathBuf::from("merge-conflict-here")]),
         );
         assert!(!finder.stashed);
         Ok(())
@@ -887,13 +951,11 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut modified = helper.modify_files()?;
         helper.stage_all()?;
-        helper.delete_file(modified.remove(0))?;
+        let first = modified.remove(0);
+        helper.delete_file(&first)?;
 
         let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
-        assert_eq!(
-            finder.files(vec![])?,
-            Some(Vec1::try_from(modified).unwrap())
-        );
+        assert_eq!(finder.files(&[])?, Some(Vec1::try_from(modified).unwrap()));
         Ok(())
     }
 
@@ -909,7 +971,7 @@ mod tests {
             Mode::GitDiffFrom("master".to_string()),
             helper.precious_root(),
         )?;
-        assert_eq!(finder.files(vec![])?, None);
+        assert_eq!(finder.files(&[])?, None);
 
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         helper.commit_all()?;
@@ -918,7 +980,7 @@ mod tests {
             Mode::GitDiffFrom("master".to_string()),
             helper.precious_root(),
         )?;
-        assert_eq!(finder.files(vec![])?, Some(modified));
+        assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
 
@@ -934,7 +996,7 @@ mod tests {
             .sorted()
             .try_collect1()
             .unwrap();
-        assert_eq!(finder.files(vec![PathBuf::from("tests")])?, Some(expect));
+        assert_eq!(finder.files(&[Utf8PathBuf::from("tests")])?, Some(expect));
         Ok(())
     }
 
@@ -952,7 +1014,7 @@ mod tests {
             .sorted()
             .try_collect1()
             .unwrap();
-        assert_eq!(finder.files(vec![PathBuf::from(".")])?, Some(expect));
+        assert_eq!(finder.files(&[Utf8PathBuf::from(".")])?, Some(expect));
         Ok(())
     }
 
@@ -965,11 +1027,11 @@ mod tests {
         let mut finder = new_finder_with_cwd(Mode::FromCli, helper.precious_root(), cwd)?;
         let expect = ["src/main.rs", "src/module.rs"]
             .iter()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .try_collect1()
             .unwrap();
         assert_eq!(
-            finder.files(vec![PathBuf::from("main.rs"), PathBuf::from("module.rs")])?,
+            finder.files(&[Utf8PathBuf::from("main.rs"), Utf8PathBuf::from("module.rs")])?,
             Some(expect),
         );
         Ok(())
@@ -979,7 +1041,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_dir_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
             helper.precious_root(),
@@ -987,7 +1049,7 @@ mod tests {
             vec!["vendor/**/*".to_string()],
         )?;
         assert_eq!(
-            finder.files(vec![PathBuf::from(".")])?,
+            finder.files(&[Utf8PathBuf::from(".")])?,
             Some(helper.all_files1()),
         );
         Ok(())
@@ -997,7 +1059,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_dir_with_excluded_files_bare_dir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
             helper.precious_root(),
@@ -1005,7 +1067,7 @@ mod tests {
             vec!["vendor".to_string()],
         )?;
         assert_eq!(
-            finder.files(vec![PathBuf::from(".")])?,
+            finder.files(&[Utf8PathBuf::from(".")])?,
             Some(helper.all_files1()),
         );
         Ok(())
@@ -1015,7 +1077,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_dir_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
@@ -1031,10 +1093,10 @@ mod tests {
             "src/sub/mod.rs",
         ]
         .iter()
-        .map(PathBuf::from)
+        .map(Utf8PathBuf::from)
         .try_collect1()
         .unwrap();
-        assert_eq!(finder.files(vec![PathBuf::from(".")])?, Some(expect));
+        assert_eq!(finder.files(&[Utf8PathBuf::from(".")])?, Some(expect));
         Ok(())
     }
 
@@ -1042,19 +1104,17 @@ mod tests {
     #[parallel]
     fn cli_mode_given_files_with_excluded_files() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let expect = vec1![helper.all_files().pop().unwrap()];
-        let cli_paths = vec![
-            helper.all_files().pop().unwrap(),
-            PathBuf::from("vendor/foo/bar.txt"),
-        ];
-        assert_eq!(finder.files(cli_paths)?, Some(expect));
+        let last_file = helper.all_files().pop().unwrap();
+        let expect = vec1![last_file.clone()];
+        let cli_paths = vec![last_file, Utf8PathBuf::from("vendor/foo/bar.txt")];
+        assert_eq!(finder.files(&cli_paths)?, Some(expect));
         Ok(())
     }
 
@@ -1062,7 +1122,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_files_with_excluded_files_in_subdir() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("src/main.rs"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("src/main.rs"), "initial content")?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
@@ -1073,11 +1133,14 @@ mod tests {
         )?;
         let expect = ["src/module.rs"]
             .iter()
-            .map(PathBuf::from)
+            .map(Utf8PathBuf::from)
             .try_collect1()
             .unwrap();
-        let cli_paths = ["main.rs", "module.rs"].iter().map(PathBuf::from).collect();
-        assert_eq!(finder.files(cli_paths)?, Some(expect));
+        let cli_paths = ["main.rs", "module.rs"]
+            .iter()
+            .map(Utf8PathBuf::from)
+            .collect::<Vec<_>>();
+        assert_eq!(finder.files(&cli_paths)?, Some(expect));
         Ok(())
     }
 
@@ -1085,14 +1148,14 @@ mod tests {
     #[parallel]
     fn cli_mode_given_dir_all_excluded_singular() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let res = finder.files(vec![PathBuf::from("vendor")]);
+        let res = finder.files(&[Utf8PathBuf::from("vendor")]);
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert!(
@@ -1109,14 +1172,14 @@ mod tests {
     #[parallel]
     fn cli_mode_given_dir_all_excluded_multiple() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        helper.write_file(PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
             helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
-        let res = finder.files(vec![PathBuf::from("vendor"), PathBuf::from("vendor")]);
+        let res = finder.files(&[Utf8PathBuf::from("vendor"), Utf8PathBuf::from("vendor")]);
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert!(
@@ -1136,16 +1199,45 @@ mod tests {
         let mut finder = new_finder(Mode::FromCli, helper.precious_root())?;
         let cli_paths = vec![
             helper.all_files()[0].clone(),
-            PathBuf::from("does/not/exist"),
+            Utf8PathBuf::from("does/not/exist"),
         ];
-        let res = finder.files(cli_paths);
+        let res = finder.files(&cli_paths);
         assert!(res.is_err());
         let err = res.unwrap_err();
         assert_eq!(
             err.downcast_ref(),
             Some(&FinderError::NonExistentPathOnCli {
-                path: PathBuf::from("does/not/exist")
+                path: Utf8PathBuf::from("does/not/exist")
             })
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn cli_mode_given_path_outside_project_root() -> Result<()> {
+        // When precious_root is a subdir of git_root, a file that exists in
+        // git_root but above precious_root is outside the project root and
+        // path_relative_to_project_root must reject it with PrefixNotFound.
+        let helper = testhelper::TestHelper::new()?
+            .with_precious_root_in_subdir("subdir")
+            .with_git_repo()?;
+        let project_root = helper.precious_root();
+        let canonical_project_root = project_root.canonicalize_utf8()?;
+        let mut outside = helper.git_root();
+        outside.push("outside.txt");
+        std::fs::write(&outside, b"content")?;
+
+        let mut finder = new_finder(Mode::FromCli, project_root)?;
+        let err = finder
+            .files(&[outside.clone()])
+            .expect_err("expected PrefixNotFound");
+        assert_eq!(
+            err.downcast_ref(),
+            Some(&FinderError::PrefixNotFound {
+                path: outside,
+                prefix: canonical_project_root,
+            }),
         );
         Ok(())
     }

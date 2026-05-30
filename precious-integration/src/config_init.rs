@@ -253,6 +253,77 @@ fn init_auto() -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+#[serial]
+fn init_auto_fails_on_non_utf8_filename() -> Result<()> {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+
+    // A real on-disk file whose name is not valid UTF-8. `config init --auto`
+    // walks the cwd to detect components and must fail-fast here.
+    let bad = OsStr::from_bytes(b"data\xff.bin");
+    File::create(bad)?;
+
+    let stderr = run_precious_expecting_failure(&["config", "init", "--auto"])?;
+    assert!(
+        stderr.contains("non-UTF-8 path from filesystem walk"),
+        "expected FilesystemWalk diagnostic, got stderr:\n{stderr}",
+    );
+    assert!(
+        stderr.contains(r"data\xff.bin"),
+        "expected raw-byte escape in stderr, got:\n{stderr}",
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+#[serial]
+fn init_fails_on_non_utf8_cwd() -> Result<()> {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    compile_precious()?;
+    let td = tempfile::Builder::new()
+        .prefix("precious-integration-")
+        .tempdir()?;
+
+    // Create a subdirectory with a non-UTF-8 name and chdir into it. Any
+    // precious subcommand, including `config init`, must reject this cwd.
+    let bad_dir = td.path().join(OsStr::from_bytes(b"sub\xff"));
+    fs::create_dir(&bad_dir)?;
+    let _pd = Pushd::new(&bad_dir)?;
+
+    let stderr = run_precious_expecting_failure(&["config", "init", "--component", "go"])?;
+    assert!(
+        stderr.contains("non-UTF-8 path from current working directory"),
+        "expected Cwd diagnostic, got stderr:\n{stderr}",
+    );
+    assert!(
+        stderr.contains(r"sub\xff"),
+        "expected raw-byte escape in stderr, got:\n{stderr}",
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+fn run_precious_expecting_failure(args: &[&str]) -> Result<String> {
+    use std::process::Command;
+    let precious = precious_path()?;
+    let out = Command::new(&precious).args(args).output()?;
+    assert_ne!(
+        out.status.code(),
+        Some(0),
+        "expected non-zero exit; stderr was:\n{}",
+        String::from_utf8_lossy(&out.stderr),
+    );
+    Ok(String::from_utf8_lossy(&out.stderr).into_owned())
+}
+
 fn chdir_to_tempdir() -> Result<(TempDir, Pushd)> {
     let td = tempfile::Builder::new()
         .prefix("precious-integration-")
