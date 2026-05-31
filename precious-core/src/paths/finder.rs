@@ -20,6 +20,7 @@ pub struct Finder {
     mode: Mode,
     project_root: Utf8PathBuf,
     git_root: Option<Utf8PathBuf>,
+    canonical_git_root: Option<Utf8PathBuf>,
     cwd: Utf8PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
@@ -74,6 +75,7 @@ impl Finder {
             mode,
             project_root: canonical_root,
             git_root: None,
+            canonical_git_root: None,
             cwd,
             exclude_globs,
             stashed: false,
@@ -277,7 +279,11 @@ impl Finder {
     }
 
     fn walkdir_files(&self, root: &Utf8Path) -> Result<Vec<Utf8PathBuf>> {
-        let mut exclude_globs = ignore::overrides::OverrideBuilder::new(root);
+        let canonical_root = root
+            .canonicalize_utf8()
+            .with_context(|| format!("Failed to canonicalize walk root {root}"))?;
+
+        let mut exclude_globs = ignore::overrides::OverrideBuilder::new(&canonical_root);
         for d in vcs::DIRS {
             exclude_globs
                 .add(&format!("!{d}/**/*"))
@@ -288,23 +294,34 @@ impl Finder {
             .build()
             .context("Failed to build directory override patterns")?;
 
+        let exclude_matcher = self
+            .exclude_matcher()
+            .context("Failed to build exclude matcher")?;
+
         let mut files: Vec<Utf8PathBuf> = vec![];
-        for result in ignore::WalkBuilder::new(root)
+        for result in ignore::WalkBuilder::new(&canonical_root)
             .hidden(false)
             .overrides(overrides)
             .build()
         {
             match result {
                 Ok(ent) => {
-                    let p = ent.into_path();
-                    let utf8 = Utf8PathBuf::from_path_buf(p).map_err(|raw| NonUtf8PathError {
-                        raw,
-                        source: NonUtf8Source::FilesystemWalk,
+                    let path = Utf8PathBuf::from_path_buf(ent.into_path()).map_err(|raw| {
+                        NonUtf8PathError {
+                            raw,
+                            source: NonUtf8Source::FilesystemWalk,
+                        }
                     })?;
-                    if utf8.is_dir() {
+                    if path.is_dir() {
                         continue;
                     }
-                    files.push(utf8);
+
+                    let rel = self.path_relative_to_canonical_root(&canonical_root, &path)?;
+                    if exclude_matcher.path_matches(&rel, false) {
+                        continue;
+                    }
+
+                    files.push(rel);
                 }
                 Err(e) => {
                     return Err(e).with_context(|| format!("Failed to walk directory {root}"))?
@@ -312,21 +329,10 @@ impl Finder {
             }
         }
 
-        let exclude_matcher = self
-            .exclude_matcher()
-            .context("Failed to build exclude matcher")?;
-        Ok(self
-            .paths_relative_to_project_root(&self.project_root, files)
-            .context("Failed to compute paths relative to project root")?
-            .into_iter()
-            .filter(|f| !exclude_matcher.path_matches(f, false))
-            .collect::<Vec<_>>())
+        Ok(files)
     }
 
     fn files_from_git(&mut self, args: Vec<&str>) -> Result<Vec<Utf8PathBuf>> {
-        let git_root = self
-            .git_root()
-            .context("Failed to determine git root while getting file list")?;
         let output = Exec::builder()
             .exe("git")
             .args(args)
@@ -345,6 +351,7 @@ impl Finder {
                 // isn't necessary, because git will give us paths relative to the project root. But
                 // if the precious root _isn't_ the git root, we need to get the path relative to
                 // the project root, not the repo root.
+                let canonical_git_root = self.canonical_git_root()?;
                 let mut paths: Vec<Utf8PathBuf> = Vec::new();
                 for raw in bytes.split(|b| *b == 0).filter(|s| !s.is_empty()) {
                     let Ok(s) = std::str::from_utf8(raw) else {
@@ -354,24 +361,40 @@ impl Finder {
                         }
                         .into());
                     };
+
                     let rel = Utf8PathBuf::from(s);
                     if exclude_matcher.path_matches(&rel, false) {
                         continue;
                     }
-                    let mut f = git_root.clone();
-                    f.push(&rel);
-                    if !f.exists() {
+
+                    let full = canonical_git_root.join(&rel);
+                    if !full.exists() {
                         debug!(
-                            "The staged file at {rel} (abs path {f}) was deleted so it will be ignored.",
+                            "The staged file at {rel} (abs path {full}) was deleted so it will be ignored.",
                         );
                         continue;
                     }
-                    paths.push(f);
+
+                    paths.push(self.path_relative_to_canonical_root(&canonical_git_root, &full)?);
                 }
-                Ok(self.paths_relative_to_project_root(&git_root, paths)?)
+                Ok(paths)
             }
             None => Ok(vec![]),
         }
+    }
+
+    fn canonical_git_root(&mut self) -> Result<Utf8PathBuf> {
+        if let Some(r) = &self.canonical_git_root {
+            return Ok(r.clone());
+        }
+
+        let raw = self.git_root()?;
+        let canonical = raw
+            .canonicalize_utf8()
+            .with_context(|| format!("Failed to canonicalize git root path {raw}"))?;
+        self.canonical_git_root = Some(canonical.clone());
+
+        Ok(canonical)
     }
 
     fn exclude_matcher(&self) -> Result<Matcher> {
@@ -382,30 +405,6 @@ impl Finder {
             .context("Failed to add VCS directories to matcher")?
             .build()
             .context("Failed to build exclude matcher")
-    }
-
-    // We want to make all files relative. This lets us consistently produce
-    // path names starting at the root dir (without "./"). The given root is
-    // the _current_ root for the relative file, which can be the cwd or the
-    // git root instead of the project root.
-    fn paths_relative_to_project_root(
-        &self,
-        // This is the root to which the given paths are relative. This might
-        // be the project root or it might be the git root, which are not
-        // guaranteed to be the same thing.
-        path_root: &Utf8Path,
-        paths: Vec<Utf8PathBuf>,
-    ) -> Result<Vec<Utf8PathBuf>> {
-        let mut relative: Vec<Utf8PathBuf> = vec![];
-        for mut f in paths {
-            if !f.is_absolute() {
-                f = path_root.join(f);
-            }
-
-            relative.push(self.path_relative_to_project_root(&f)?);
-        }
-
-        Ok(relative)
     }
 
     fn path_relative_to_project_root(&self, path: &Utf8Path) -> Result<Utf8PathBuf> {
@@ -422,6 +421,36 @@ impl Finder {
 
         // When the input canonicalizes to the project root itself, strip_prefix yields an empty
         // path. Downstream code expects a non-empty value, so return "." in that case.
+        if stripped.as_str().is_empty() {
+            Ok(Utf8PathBuf::from("."))
+        } else {
+            Ok(stripped.to_path_buf())
+        }
+    }
+
+    // Like `path_relative_to_project_root` but without a per-path canonicalize.  The caller must
+    // have already canonicalized `path_root` and must guarantee that `rel` is a clean relative path
+    // (no `..`, no symlink-bearing components beyond `path_root` itself). Used in hot paths where
+    // we walk many files under a single fixed root.
+    fn path_relative_to_canonical_root(
+        &self,
+        path_root: &Utf8Path,
+        rel: &Utf8Path,
+    ) -> Result<Utf8PathBuf> {
+        let joined = if rel.is_absolute() {
+            rel.to_path_buf()
+        } else {
+            path_root.join(rel)
+        };
+
+        let stripped =
+            joined
+                .strip_prefix(&self.project_root)
+                .map_err(|_| FinderError::PrefixNotFound {
+                    path: joined.clone(),
+                    prefix: self.project_root.clone(),
+                })?;
+
         if stripped.as_str().is_empty() {
             Ok(Utf8PathBuf::from("."))
         } else {
@@ -1211,6 +1240,44 @@ mod tests {
             })
         );
         Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[parallel]
+    fn git_mode_works_when_project_root_reached_via_symlink() -> Result<()> {
+        // Reaching the project root via a symlink used to work only because we
+        // canonicalized every git-produced path. Now we canonicalize the git
+        // root once; this test guards that the cached canonical root is what we
+        // use, not the symlink path the user passed in.
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(Utf8Path::new("src/foo.rs"), "fn foo() {}\n")?;
+        helper.stage_all()?;
+
+        let real_root = helper.precious_root();
+        let parent = real_root.parent().expect("project root has a parent");
+        let link = parent.join(format!(
+            "{}-link",
+            real_root.file_name().expect("project root has a name"),
+        ));
+        // Best-effort cleanup if a prior failed run left it behind.
+        let _ = std::fs::remove_file(link.as_std_path());
+        std::os::unix::fs::symlink(real_root.as_std_path(), link.as_std_path())?;
+
+        let result = (|| -> Result<()> {
+            let mut finder = new_finder(Mode::GitStaged, link.clone())?;
+            let files = finder
+                .files(&[])?
+                .expect("expected at least one staged file");
+            assert!(
+                files.iter().any(|p| p == Utf8Path::new("src/foo.rs")),
+                "expected src/foo.rs in {files:?}",
+            );
+            Ok(())
+        })();
+
+        std::fs::remove_file(link.as_std_path())?;
+        result
     }
 
     #[test]
