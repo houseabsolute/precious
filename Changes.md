@@ -23,6 +23,8 @@
   canonicalized every file path individually. Now the relevant root directory (project root, git
   root, or walk root) is canonicalized once and per-file relative paths are computed via path
   arithmetic. No user-visible behavior change.
+- The `invoke.per-file-or-once`, `invoke.per-file-or-dir` and `invoke.per-dir-or-once`
+  configurations are no longer considered experimental.
 
 ## 0.10.2 2026-01-25
 
