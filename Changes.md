@@ -1,4 +1,4 @@
-## 0.11.0 - TBD
+## 0.11.0 - 2026-05-31
 
 - Added support for a `[shared]` top-level config table that maps named keys to glob lists. Commands
   can reference these keys via `shared-include` and `shared-exclude` fields to avoid duplicating
