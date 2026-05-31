@@ -29,6 +29,24 @@ command. It's features include:
 
 There are several ways to install this tool.
 
+### Use [mise](https://mise.jdx.dev/)
+
+[Mise](https://mise.jdx.dev/) is a tool for managing per-project dev tool configurations. You can
+configure it to install `precious` and all the tools that you have `precious` run. Here's an example
+`mise.toml`:
+
+```toml
+[tools]
+node = "24.14.0"
+"npm:prettier" = "3.8.1"
+shellcheck = "0.11.0"
+shfmt = "3.13.0"
+taplo = "0.10.0"
+typos = "1.44.0"
+"github:houseabsolute/omegasort" = "0.1.3"
+"github:houseabsolute/precious" = "0.11.0"
+```
+
 ### Use ubi
 
 Install my [universal binary installer (ubi)](https://github.com/houseabsolute/ubi) tool and you can
