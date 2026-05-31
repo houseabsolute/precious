@@ -19,6 +19,10 @@
   both a human-readable lossy approximation and the exact raw bytes of the path. Switching the
   internal `git ls-files`/`git diff` invocations to `-z` also fixes handling of valid non-ASCII
   names like `café.txt` that git would otherwise C-quote.
+- Reduced filesystem syscalls when finding files. In git modes and `--all` mode, precious previously
+  canonicalized every file path individually. Now the relevant root directory (project root, git
+  root, or walk root) is canonicalized once and per-file relative paths are computed via path
+  arithmetic. No user-visible behavior change.
 
 ## 0.10.2 2026-01-25
 
