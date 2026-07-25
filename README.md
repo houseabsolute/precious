@@ -675,3 +675,56 @@ exclude = [
 ### Cargo Audit On Push
 
 ![Cargo Audit On Push](https://github.com/houseabsolute/precious/actions/workflows/audit-on-push.yml/badge.svg)
+
+## Developing Precious
+
+Development happens inside a [dev container](https://containers.dev/), so the only things you need
+on your own machine are Docker and `mise`. The container provides Rust, `mise`, and every tool that
+`precious` itself runs.
+
+The `mise.toml` file in this repo pins versions of both `just` and the `devcontainer` CLI, so
+[activating `mise` in your shell](https://mise.jdx.dev/) gets you both of them. Make sure it is
+activated for whatever tool you use to make git commits as well, since the pre-commit hook runs
+`just`.
+
+All of the common tasks are `just` recipes. The first one you run builds the container, which takes
+a few minutes. After that it is reused.
+
+```
+# Runs the test suite
+just test
+# Passes extra arguments to cargo test
+just test "" -p precious-core
+# Sets RUST_LOG for the test run
+just test debug
+# Lints all code
+just lint -a
+# Tidies all code
+just tidy -a
+# Opens a shell inside the container
+just shell
+```
+
+If the container gets into a bad state, or if the `Justfile` or anything in `.devcontainer` changes,
+rebuild it:
+
+```
+just rebuild
+```
+
+Note that `devcontainer up` reuses an existing container without checking whether its mounts still
+match, so a container created before a `Justfile` change may need a `just rebuild` before it works
+again.
+
+### Git Hooks
+
+Run `git/setup.pl` once to install the pre-commit hook, which runs `just lint -s` to lint the files
+you have staged.
+
+### Working in a Git Worktree
+
+This all works from a `git worktree` as well as from the main checkout. In a worktree, the `.git`
+entry is a file pointing at a git dir outside the workspace, so the `Justfile` bind-mounts the main
+repo's git dir into the container at the same path it has on the host. Without this, git commands
+inside the container — including the ones `precious` runs to find staged or modified files — would
+fail.

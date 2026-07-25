@@ -1,3 +1,9 @@
+## 0.11.1 - TBD
+
+- Development of precious itself now happens in a dev container, driven by `just` recipes. See the
+  new "Developing Precious" section in the README for details. There are no changes to precious
+  itself in this release.
+
 ## 0.11.0 - 2026-05-31
 
 - Added support for a `[shared]` top-level config table that maps named keys to glob lists. Commands
