@@ -9,6 +9,7 @@ pub enum NonUtf8Source {
     FilesystemWalk,
     GitDiff,
     GitRoot,
+    GitPath,
     Cwd,
     DerivedPath,
 }
@@ -19,6 +20,7 @@ impl fmt::Display for NonUtf8Source {
             Self::FilesystemWalk => "filesystem walk",
             Self::GitDiff => "git diff",
             Self::GitRoot => "git rev-parse --show-toplevel",
+            Self::GitPath => "git rev-parse --git-path",
             Self::Cwd => "current working directory",
             Self::DerivedPath => "derived path",
         };

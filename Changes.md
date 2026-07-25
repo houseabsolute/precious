@@ -1,5 +1,9 @@
 ## 0.11.1 - TBD
 
+- Fixed a bug where the `--staged-with-stash` mode would stash your changes in the middle of an
+  in-progress merge if you were working in a git worktree or submodule. Precious checked for a
+  `MERGE_MODE` file under `<git root>/.git`, but in a worktree or submodule that file lives
+  elsewhere. It now asks git where the file is instead of guessing.
 - Development of precious itself now happens in a dev container, driven by `just` recipes. See the
   new "Developing Precious" section in the README for details. There are no changes to precious
   itself in this release.

@@ -51,6 +51,9 @@ pub enum FinderError {
     #[error(r#"Could not determine the repo root by running "git rev-parse --show-toplevel""#)]
     CouldNotDetermineRepoRoot,
 
+    #[error(r#"Could not determine the path of MERGE_MODE by running "git rev-parse --git-path MERGE_MODE""#)]
+    CouldNotDetermineMergeModePath,
+
     #[error(r#"The path "{path}" does not contain "{prefix}" as a prefix"#)]
     PrefixNotFound {
         path: Utf8PathBuf,
@@ -164,19 +167,8 @@ impl Finder {
             .as_deref()
             .ok_or(FinderError::CouldNotDetermineRepoRoot)
             .context("git rev-parse did not produce output")?;
-        // git rev-parse appends exactly one line terminator: \n on unix, \r\n
-        // on Windows. Strip that one terminator — never trim spaces, tabs, or
-        // repeated newlines, all of which are valid trailing characters in a
-        // path.
-        let trimmed = bytes
-            .strip_suffix(b"\r\n")
-            .or_else(|| bytes.strip_suffix(b"\n"))
-            .unwrap_or(bytes);
-        let s = std::str::from_utf8(trimmed).map_err(|_| NonUtf8PathError {
-            raw: crate::paths::utf8::bytes_to_pathbuf(trimmed),
-            source: NonUtf8Source::GitRoot,
-        })?;
-        self.git_root = Some(Utf8PathBuf::from(s));
+        let s = path_from_git_output(bytes, NonUtf8Source::GitRoot)?;
+        self.git_root = Some(s);
 
         Ok(self
             .git_root
@@ -248,11 +240,8 @@ impl Finder {
         }
 
         let git_root = self.git_root()?;
-        let mut mm = git_root.clone();
-        mm.push(".git");
-        mm.push("MERGE_MODE");
 
-        if !mm.exists() {
+        if !self.merge_in_progress()? {
             Exec::builder()
                 .exe("git")
                 .args(vec!["stash", "--keep-index"])
@@ -265,6 +254,33 @@ impl Finder {
         }
 
         Ok(())
+    }
+
+    // We have to ask git where MERGE_MODE lives instead of assuming it's at
+    // <git root>/.git/MERGE_MODE. In a worktree or submodule, `.git` is a file
+    // containing a gitdir: pointer and the real file lives somewhere else
+    // entirely.
+    fn merge_in_progress(&mut self) -> Result<bool> {
+        let git_root = self.git_root()?;
+        let res = Exec::builder()
+            .exe("git")
+            .args(vec!["rev-parse", "--git-path", "MERGE_MODE"])
+            .ok_exit_codes(&[0])
+            .in_dir(&git_root)
+            .build()
+            .run()
+            .context("Failed to run git rev-parse to determine the path of MERGE_MODE")?;
+
+        let bytes = res
+            .stdout_bytes
+            .as_deref()
+            .ok_or(FinderError::CouldNotDetermineMergeModePath)
+            .context("git rev-parse --git-path did not produce output")?;
+        // This path may be relative, in which case it's relative to the
+        // directory we ran git in.
+        let mm = git_root.join(path_from_git_output(bytes, NonUtf8Source::GitPath)?);
+
+        Ok(mm.exists())
     }
 
     fn git_modified_since(&mut self, since: &str) -> Result<Vec<Utf8PathBuf>> {
@@ -474,6 +490,22 @@ impl Finder {
     }
 }
 
+// git rev-parse appends exactly one line terminator to a path it prints: \n on
+// unix, \r\n on Windows. Strip that one terminator — never trim spaces, tabs,
+// or repeated newlines, all of which are valid trailing characters in a path.
+fn path_from_git_output(bytes: &[u8], source: NonUtf8Source) -> Result<Utf8PathBuf> {
+    let trimmed = bytes
+        .strip_suffix(b"\r\n")
+        .or_else(|| bytes.strip_suffix(b"\n"))
+        .unwrap_or(bytes);
+    let s = std::str::from_utf8(trimmed).map_err(|_| NonUtf8PathError {
+        raw: crate::paths::utf8::bytes_to_pathbuf(trimmed),
+        source,
+    })?;
+
+    Ok(Utf8PathBuf::from(s))
+}
+
 impl Drop for Finder {
     fn drop(&mut self) {
         if !self.stashed {
@@ -506,6 +538,10 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
     use std::fs;
+
+    // Some git commands write to stderr as a matter of course, so we have to
+    // ignore all of their stderr output.
+    static ANY_STDERR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap());
 
     fn new_finder(mode: Mode, root: &Utf8Path) -> Result<Finder> {
         new_finder_with_excludes(mode, root, root.to_path_buf(), vec![])
@@ -963,6 +999,64 @@ mod tests {
             finder.files(&[])?,
             Some(vec1![Utf8PathBuf::from("merge-conflict-here")]),
         );
+        assert!(!finder.stashed);
+        Ok(())
+    }
+
+    // In a worktree, `.git` is a file containing a gitdir: pointer, so the
+    // MERGE_MODE file is not at <git root>/.git/MERGE_MODE. If we don't detect
+    // the in-progress merge we'll stash in the middle of a conflicted merge.
+    #[test]
+    #[parallel]
+    fn git_staged_mode_with_stash_does_not_stash_during_merge_in_worktree() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+
+        let file = Utf8Path::new("merge-conflict-here");
+        helper.write_file(file, "line 1\nline 2\n")?;
+        helper.stage_all()?;
+        helper.commit_all()?;
+
+        helper.switch_to_branch("new-branch", false)?;
+        helper.write_file(file, "line 1\nline 1.5\nline 2\n")?;
+        helper.commit_all()?;
+
+        helper.switch_to_branch("master", true)?;
+        helper.write_file(file, "line 1\nline 1.6\nline 2\n")?;
+        helper.commit_all()?;
+
+        // A second TestHelper just gives us an empty temp directory that will
+        // be cleaned up when it's dropped. Git is happy to create a worktree
+        // in an existing empty directory.
+        let wt_helper = testhelper::TestHelper::new()?;
+        let wt_root = wt_helper.git_root();
+        Exec::builder()
+            .exe("git")
+            .args(vec!["worktree", "add", wt_root.as_str(), "new-branch"])
+            .ok_exit_codes(&[0])
+            .ignore_stderr(vec![ANY_STDERR_RE.clone()])
+            .in_dir(&helper.git_root())
+            .build()
+            .run()?;
+
+        Exec::builder()
+            .exe("git")
+            .args(vec!["merge", "--quiet", "--no-ff", "--no-commit", "master"])
+            .ok_exit_codes(&[0, 1])
+            .ignore_stderr(vec![ANY_STDERR_RE.clone()])
+            .in_dir(&wt_root)
+            .build()
+            .run()?;
+        fs::write(wt_root.join(file), "line 1\nline 1.7\nline 2\n")?;
+        Exec::builder()
+            .exe("git")
+            .args(vec!["add", "."])
+            .ok_exit_codes(&[0])
+            .in_dir(&wt_root)
+            .build()
+            .run()?;
+
+        let mut finder = new_finder(Mode::GitStagedWithStash, &wt_root)?;
+        assert_eq!(finder.files(&[])?, Some(vec1![file.to_path_buf()]));
         assert!(!finder.stashed);
         Ok(())
     }
