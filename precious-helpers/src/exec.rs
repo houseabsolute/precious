@@ -327,6 +327,9 @@ fn signal_from_status(_: process::ExitStatus) -> i32 {
 }
 
 #[cfg(test)]
+// These lints are about making non-test code robust against new enum variants. In tests we
+// deliberately match one specific error variant and treat everything else as a failure.
+#[allow(clippy::wildcard_enum_match_arm, clippy::unneeded_field_pattern)]
 mod tests {
     use super::*;
     use anyhow::{format_err, Result};
@@ -342,7 +345,7 @@ mod tests {
     #[test]
     #[parallel]
     fn run_exit_0() -> Result<()> {
-        if !which("echo").is_ok() {
+        if which("echo").is_err() {
             return Ok(());
         }
         let res = Exec::builder()

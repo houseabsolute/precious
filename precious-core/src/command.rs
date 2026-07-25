@@ -99,8 +99,8 @@ impl From<Invoke> for ActualInvoke {
 
 impl ActualInvoke {
     #[cfg(test)]
-    fn as_invoke(&self) -> Invoke {
-        match *self {
+    fn as_invoke(self) -> Invoke {
+        match self {
             ActualInvoke::PerFile => Invoke::PerFile,
             ActualInvoke::PerDir => Invoke::PerDir,
             ActualInvoke::Once => Invoke::Once,
@@ -1516,7 +1516,7 @@ mod tests {
             vec1!["dir/some.go", "dir/some.rs"],
             vec1!["foo/some/file.go", "foo/excluded.go"],
         ];
-        for i in include.iter() {
+        for i in &include {
             let files: Vec1<&Utf8Path> = i.iter1().map(Utf8Path::new).collect1();
             assert!(
                 command.should_act_on_files(ActualInvoke::PerDir, &files)?,
@@ -1531,7 +1531,7 @@ mod tests {
             vec1!["dir/foo.pl", "dir/file.txt"],
             vec1!["this/file.go", "foo/excluded.go"],
         ];
-        for e in exclude.iter() {
+        for e in &exclude {
             let files: Vec1<&Utf8Path> = e.iter1().map(Utf8Path::new).collect1();
             assert!(
                 !command.should_act_on_files(ActualInvoke::PerDir, &files)?,
@@ -1559,7 +1559,7 @@ mod tests {
             ["dir/foo", "dir/foo/foo.pl", "dir/foo/file.go"],
             [".", "foo/bar.go", "foo/some/file.go"],
         ];
-        for i in include.iter() {
+        for i in &include {
             let dir = Utf8PathBuf::from(i[0]);
             let files: Vec1<&Utf8Path> = i[1..].iter().map(Utf8Path::new).try_collect1().unwrap();
             let name = dir.clone();
@@ -1580,7 +1580,7 @@ mod tests {
             ["dir", "dir/foo.pl", "dir/file.txt"],
             [".", "this/file.go", "foo/also/excluded.go"],
         ];
-        for e in exclude.iter() {
+        for e in &exclude {
             let dir = Utf8PathBuf::from(e[0]);
             let files: Vec1<&Utf8Path> = e[1..].iter().map(Utf8Path::new).try_collect1().unwrap();
             let name = dir.clone();
@@ -1871,7 +1871,7 @@ mod tests {
         for name in expect_files {
             let mut file = dir.clone();
             file.push(name);
-            assert!(metadata.path_map.contains_key(&file), "contains {}", file,);
+            assert!(metadata.path_map.contains_key(&file), "contains {file}");
         }
         assert_eq!(metadata.path_map.len(), expect_files.len());
         assert_eq!(metadata.dir, Some(dir));
@@ -1988,7 +1988,7 @@ mod tests {
         let mut files = vec![];
         for path in &all_files {
             if path.starts_with("src/")
-                && path.as_str().ends_with(".rs")
+                && path.extension() == Some("rs")
                 && path.ancestors().count() == 3
             {
                 let mut file = git_root.clone();
@@ -1997,7 +1997,13 @@ mod tests {
             }
         }
 
-        let files = Vec1::try_from(files.iter().map(|f| f.as_path()).collect::<Vec<_>>()).unwrap();
+        let files = Vec1::try_from(
+            files
+                .iter()
+                .map(camino::Utf8PathBuf::as_path)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
         let prev = command.maybe_path_metadata_for(ActualInvoke::PerDir, &files)?;
         assert!(prev.is_some());
         let prev = prev.unwrap();
@@ -2032,7 +2038,7 @@ mod tests {
         let mut files = vec![];
         for path in &all_files {
             if path.starts_with("src/")
-                && path.as_str().ends_with(".rs")
+                && path.extension() == Some("rs")
                 && path.ancestors().count() == 3
             {
                 let mut file = git_root.clone();
@@ -2041,7 +2047,13 @@ mod tests {
             }
         }
 
-        let files = Vec1::try_from(files.iter().map(|f| f.as_path()).collect::<Vec<_>>()).unwrap();
+        let files = Vec1::try_from(
+            files
+                .iter()
+                .map(camino::Utf8PathBuf::as_path)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
         let prev = command.maybe_path_metadata_for(ActualInvoke::PerDir, &files)?;
         assert!(prev.is_some());
         let prev = prev.unwrap();
@@ -2141,14 +2153,15 @@ mod tests {
         include: &[&str],
         paths: &Slice1<&str>,
         expect: &str,
-    ) -> Result<()> {
+    ) {
         let mut command = default_command();
         command.name = String::from("Test");
         command.invocation.invoke = actual_invoke.as_invoke();
-        command.filter.include = include.iter().map(|i| i.to_string()).collect();
+        command.filter.include = include
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
         let paths: Vec1<&Utf8Path> = paths.iter1().map(Utf8Path::new).collect1();
         assert_eq!(&command.paths_summary(actual_invoke, &paths), expect);
-
-        Ok(())
     }
 }

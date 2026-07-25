@@ -507,21 +507,21 @@ mod tests {
     use serial_test::parallel;
     use std::fs;
 
-    fn new_finder(mode: Mode, root: Utf8PathBuf) -> Result<Finder> {
-        new_finder_with_excludes(mode, root.clone(), root, vec![])
+    fn new_finder(mode: Mode, root: &Utf8Path) -> Result<Finder> {
+        new_finder_with_excludes(mode, root, root.to_path_buf(), vec![])
     }
 
-    fn new_finder_with_cwd(mode: Mode, root: Utf8PathBuf, cwd: Utf8PathBuf) -> Result<Finder> {
+    fn new_finder_with_cwd(mode: Mode, root: &Utf8Path, cwd: Utf8PathBuf) -> Result<Finder> {
         new_finder_with_excludes(mode, root, cwd, vec![])
     }
 
     fn new_finder_with_excludes(
         mode: Mode,
-        root: Utf8PathBuf,
+        root: &Utf8Path,
         cwd: Utf8PathBuf,
         exclude: Vec<String>,
     ) -> Result<Finder> {
-        Finder::new(mode, &root, cwd, exclude)
+        Finder::new(mode, root, cwd, exclude)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -559,7 +559,7 @@ mod tests {
         full.push(bad_name);
         fs::write(&full, b"contents")?;
 
-        let mut finder = new_finder(Mode::All, helper.precious_root())?;
+        let mut finder = new_finder(Mode::All, &helper.precious_root())?;
         let err = finder.files(&[]).expect_err("expected non-UTF-8 error");
         let downcast = err
             .downcast_ref::<NonUtf8PathError>()
@@ -573,7 +573,7 @@ mod tests {
     fn all_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
 
-        let mut finder = new_finder(Mode::All, helper.precious_root())?;
+        let mut finder = new_finder(Mode::All, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(helper.all_files1()));
         Ok(())
     }
@@ -585,7 +585,7 @@ mod tests {
         let mut cwd = helper.precious_root();
         cwd.push("src");
 
-        let mut finder = new_finder_with_cwd(Mode::All, helper.precious_root(), cwd)?;
+        let mut finder = new_finder_with_cwd(Mode::All, &helper.precious_root(), cwd)?;
         assert_eq!(finder.files(&[])?, Some(helper.all_files1()));
         Ok(())
     }
@@ -594,20 +594,13 @@ mod tests {
     #[parallel]
     fn all_mode_with_gitignore() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut gitignores: Vec<Utf8PathBuf> = helper
-            .add_gitignore_files()?
-            .into_iter()
-            .map(|p| Utf8PathBuf::try_from(p).expect("gitignore file is valid UTF-8"))
-            .collect();
-        let mut expect = testhelper::TestHelper::non_ignored_files()
-            .into_iter()
-            .map(|p| Utf8PathBuf::try_from(p).expect("non-ignored file is valid UTF-8"))
-            .collect::<Vec<_>>();
+        let mut gitignores = helper.add_gitignore_files()?;
+        let mut expect = testhelper::TestHelper::non_ignored_files();
         expect.append(&mut gitignores);
         expect.sort();
         let expect = Vec1::try_from(expect).unwrap();
 
-        let mut finder = new_finder(Mode::All, helper.precious_root())?;
+        let mut finder = new_finder(Mode::All, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(expect));
         Ok(())
     }
@@ -619,7 +612,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::All,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -634,7 +627,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::All,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor".to_string()],
         )?;
@@ -646,7 +639,7 @@ mod tests {
     #[parallel]
     fn git_modified_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
+        let mut finder = new_finder(Mode::GitModified, &helper.precious_root())?;
         let res = finder.files(&[]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
@@ -658,7 +651,7 @@ mod tests {
     fn git_modified_mode_with_changes() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
-        let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
+        let mut finder = new_finder(Mode::GitModified, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
@@ -670,7 +663,7 @@ mod tests {
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         let mut cwd = helper.precious_root();
         cwd.push("src");
-        let mut finder = new_finder_with_cwd(Mode::GitModified, helper.precious_root(), cwd)?;
+        let mut finder = new_finder_with_cwd(Mode::GitModified, &helper.precious_root(), cwd)?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
@@ -684,7 +677,7 @@ mod tests {
 
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -704,7 +697,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -724,7 +717,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "new content")?;
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor".to_string()],
         )?;
@@ -746,7 +739,7 @@ mod tests {
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
             Mode::GitModified,
-            helper.precious_root(),
+            &helper.precious_root(),
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
@@ -763,7 +756,7 @@ mod tests {
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         let mut project_root = helper.git_root();
         project_root.push("subdir");
-        let mut finder = new_finder(Mode::GitModified, project_root)?;
+        let mut finder = new_finder(Mode::GitModified, &project_root)?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
@@ -775,7 +768,7 @@ mod tests {
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
         let first = modified[0].clone();
         helper.stage_some(&[first.as_std_path()])?;
-        let mut finder = new_finder(Mode::GitModified, helper.precious_root())?;
+        let mut finder = new_finder(Mode::GitModified, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
@@ -784,7 +777,7 @@ mod tests {
     #[parallel]
     fn git_staged_mode_empty() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
+        let mut finder = new_finder(Mode::GitStaged, &helper.precious_root())?;
         let res = finder.files(&[]);
         assert!(res.is_ok());
         assert!(res.unwrap().is_none());
@@ -798,14 +791,14 @@ mod tests {
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
 
         {
-            let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
+            let mut finder = new_finder(Mode::GitStaged, &helper.precious_root())?;
             let res = finder.files(&[]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
 
         {
-            let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
+            let mut finder = new_finder(Mode::GitStaged, &helper.precious_root())?;
             helper.stage_all()?;
             assert_eq!(finder.files(&[])?, Some(modified));
         }
@@ -823,14 +816,14 @@ mod tests {
 
         {
             let mut finder =
-                new_finder_with_cwd(Mode::GitStaged, helper.precious_root(), cwd.clone())?;
+                new_finder_with_cwd(Mode::GitStaged, &helper.precious_root(), cwd.clone())?;
             let res = finder.files(&[]);
             assert!(res.is_ok());
             assert!(res.unwrap().is_none());
         }
 
         {
-            let mut finder = new_finder_with_cwd(Mode::GitStaged, helper.precious_root(), cwd)?;
+            let mut finder = new_finder_with_cwd(Mode::GitStaged, &helper.precious_root(), cwd)?;
             helper.stage_all()?;
             assert_eq!(finder.files(&[])?, Some(modified));
         }
@@ -846,7 +839,7 @@ mod tests {
 
         let mut finder = new_finder_with_excludes(
             Mode::GitStaged,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -863,7 +856,7 @@ mod tests {
         helper.stage_all()?;
         let mut finder = new_finder_with_excludes(
             Mode::GitStaged,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -880,7 +873,7 @@ mod tests {
         helper.stage_all()?;
         let mut finder = new_finder_with_excludes(
             Mode::GitStaged,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor".to_string()],
         )?;
@@ -899,7 +892,7 @@ mod tests {
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
             Mode::GitStaged,
-            helper.precious_root(),
+            &helper.precious_root(),
             cwd,
             vec!["vendor/**/*".to_string()],
         )?;
@@ -920,7 +913,7 @@ mod tests {
         set_up_post_checkout_hook(&helper)?;
 
         {
-            let mut finder = new_finder(Mode::GitStagedWithStash, helper.precious_root())?;
+            let mut finder = new_finder(Mode::GitStagedWithStash, &helper.precious_root())?;
             assert_eq!(finder.files(&[])?, Some(modified));
             assert_eq!(
                 String::from_utf8(fs::read(helper.precious_root().join(unstaged))?)?,
@@ -965,7 +958,7 @@ mod tests {
         helper.write_file(file, "line 1\nline 1.7\nline 2\n")?;
         helper.stage_all()?;
 
-        let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
+        let mut finder = new_finder(Mode::GitStaged, &helper.precious_root())?;
         assert_eq!(
             finder.files(&[])?,
             Some(vec1![Utf8PathBuf::from("merge-conflict-here")]),
@@ -983,7 +976,7 @@ mod tests {
         let first = modified.remove(0);
         helper.delete_file(&first)?;
 
-        let mut finder = new_finder(Mode::GitStaged, helper.precious_root())?;
+        let mut finder = new_finder(Mode::GitStaged, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(Vec1::try_from(modified).unwrap()));
         Ok(())
     }
@@ -998,7 +991,7 @@ mod tests {
         // the branch finds no files.
         let mut finder = new_finder(
             Mode::GitDiffFrom("master".to_string()),
-            helper.precious_root(),
+            &helper.precious_root(),
         )?;
         assert_eq!(finder.files(&[])?, None);
 
@@ -1007,7 +1000,7 @@ mod tests {
 
         let mut finder = new_finder(
             Mode::GitDiffFrom("master".to_string()),
-            helper.precious_root(),
+            &helper.precious_root(),
         )?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
@@ -1017,7 +1010,7 @@ mod tests {
     #[parallel]
     fn cli_mode() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut finder = new_finder(Mode::FromCli, helper.precious_root())?;
+        let mut finder = new_finder(Mode::FromCli, &helper.precious_root())?;
         let expect = helper
             .all_files()
             .into_iter()
@@ -1035,7 +1028,7 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
-        let mut finder = new_finder_with_cwd(Mode::FromCli, helper.precious_root(), cwd)?;
+        let mut finder = new_finder_with_cwd(Mode::FromCli, &helper.precious_root(), cwd)?;
         let expect = helper
             .all_files()
             .into_iter()
@@ -1053,7 +1046,7 @@ mod tests {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let mut cwd = helper.precious_root();
         cwd.push("src");
-        let mut finder = new_finder_with_cwd(Mode::FromCli, helper.precious_root(), cwd)?;
+        let mut finder = new_finder_with_cwd(Mode::FromCli, &helper.precious_root(), cwd)?;
         let expect = ["src/main.rs", "src/module.rs"]
             .iter()
             .map(Utf8PathBuf::from)
@@ -1073,7 +1066,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -1091,7 +1084,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor".to_string()],
         )?;
@@ -1111,7 +1104,7 @@ mod tests {
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
-            helper.precious_root(),
+            &helper.precious_root(),
             cwd,
             vec!["src/main.rs".to_string()],
         )?;
@@ -1136,7 +1129,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -1156,7 +1149,7 @@ mod tests {
         cwd.push("src");
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
-            helper.precious_root(),
+            &helper.precious_root(),
             cwd,
             vec!["src/main.rs".to_string()],
         )?;
@@ -1180,7 +1173,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -1204,7 +1197,7 @@ mod tests {
         helper.write_file(Utf8PathBuf::from("vendor/foo/bar.txt"), "initial content")?;
         let mut finder = new_finder_with_excludes(
             Mode::FromCli,
-            helper.precious_root(),
+            &helper.precious_root(),
             helper.precious_root(),
             vec!["vendor/**/*".to_string()],
         )?;
@@ -1225,7 +1218,7 @@ mod tests {
     #[parallel]
     fn cli_mode_given_files_with_nonexistent_path() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
-        let mut finder = new_finder(Mode::FromCli, helper.precious_root())?;
+        let mut finder = new_finder(Mode::FromCli, &helper.precious_root())?;
         let cli_paths = vec![
             helper.all_files()[0].clone(),
             Utf8PathBuf::from("does/not/exist"),
@@ -1265,7 +1258,7 @@ mod tests {
         std::os::unix::fs::symlink(real_root.as_std_path(), link.as_std_path())?;
 
         let result = (|| -> Result<()> {
-            let mut finder = new_finder(Mode::GitStaged, link.clone())?;
+            let mut finder = new_finder(Mode::GitStaged, &link)?;
             let files = finder
                 .files(&[])?
                 .expect("expected at least one staged file");
@@ -1295,7 +1288,7 @@ mod tests {
         outside.push("outside.txt");
         std::fs::write(&outside, b"content")?;
 
-        let mut finder = new_finder(Mode::FromCli, project_root)?;
+        let mut finder = new_finder(Mode::FromCli, &project_root)?;
         let err = finder
             .files(&[outside.clone()])
             .expect_err("expected PrefixNotFound");

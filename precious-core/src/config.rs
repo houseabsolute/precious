@@ -401,7 +401,7 @@ mod tests {
         let keys = config
             .commands
             .keys()
-            .map(|k| k.as_str())
+            .map(std::string::String::as_str)
             .collect::<Vec<&str>>();
         let expect: Vec<&str> = vec!["rustfmt", "clippy", "omegasort-gitignore"];
         assert_eq!(keys, expect);
@@ -444,7 +444,7 @@ mod tests {
         let keys = config
             .commands
             .keys()
-            .map(|k| k.as_str())
+            .map(std::string::String::as_str)
             .collect::<Vec<&str>>();
         let expect: Vec<&str> = vec!["clippy", "rustfmt", "omegasort-gitignore"];
         assert_eq!(keys, expect);
@@ -487,7 +487,7 @@ mod tests {
         let keys = config
             .commands
             .keys()
-            .map(|k| k.as_str())
+            .map(std::string::String::as_str)
             .collect::<Vec<&str>>();
         let expect: Vec<&str> = vec!["omegasort-gitignore", "clippy", "rustfmt"];
         assert_eq!(keys, expect);
@@ -499,63 +499,63 @@ mod tests {
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::Dir,
-        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dir } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dir } ;
         r#"invoke = "per-file" + path-args = "dir""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::None,
-        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::None } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::None } ;
         r#"invoke = "per-file" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::Dot,
-        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dot } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dot } ;
         r#"invoke = "per-file" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::AbsoluteDir,
-        ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::AbsoluteDir } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::AbsoluteDir } ;
         r#"invoke = "per-file" + path-args = "absolute-dir""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::Root,
         PathArgs::None,
-        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
         r#"invoke = "per-dir" + working_dir = "root" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::Root,
         PathArgs::Dot,
-        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
         r#"invoke = "per-dir" + working_dir = "root" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
         PathArgs::None,
-        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
         r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
         PathArgs::Dot,
-        ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
         r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::Once,
         WorkingDir::Dir,
         PathArgs::File,
-        ConfigError::CannotInvokeOnceWithWorkingDirEqDir ;
+        &ConfigError::CannotInvokeOnceWithWorkingDirEqDir ;
         r#"invoke = "once" + working_dir = "dir""#
     )]
     #[parallel]
@@ -563,8 +563,8 @@ mod tests {
         invoke: Invoke,
         working_dir: WorkingDir,
         path_args: PathArgs,
-        expect_err: ConfigError,
-    ) -> Result<()> {
+        expect_err: &ConfigError,
+    ) {
         let config = CommandConfig {
             typ: CommandType::Lint,
             invoke: Some(invoke),
@@ -575,7 +575,7 @@ mod tests {
             shared_include: vec![],
             shared_exclude: vec![],
             cmd: vec![String::from("some-linter")],
-            env: Default::default(),
+            env: HashMap::default(),
             lint_flags: vec![],
             tidy_flags: vec![],
             path_flag: String::new(),
@@ -587,9 +587,7 @@ mod tests {
         };
         let res = config.try_into_command(Utf8Path::new("."), "some-linter");
         let err = res.unwrap_err().downcast::<ConfigError>().unwrap();
-        assert_eq!(err, expect_err);
-
-        Ok(())
+        assert_eq!(&err, expect_err);
     }
 
     #[test_case(vec![], "default", true)]
@@ -601,11 +599,7 @@ mod tests {
     #[test_case(vec!["foo".to_string()], "default", false)]
     #[test_case(vec!["default".to_string()], "foo", false)]
     #[parallel]
-    fn matches_label(
-        labels_in_config: Vec<String>,
-        label_to_match: &str,
-        expect_match: bool,
-    ) -> Result<()> {
+    fn matches_label(labels_in_config: Vec<String>, label_to_match: &str, expect_match: bool) {
         let config = CommandConfig {
             typ: CommandType::Lint,
             invoke: None,
@@ -616,7 +610,7 @@ mod tests {
             shared_include: vec![],
             shared_exclude: vec![],
             cmd: vec![String::from("some-linter")],
-            env: Default::default(),
+            env: HashMap::default(),
             lint_flags: vec![],
             tidy_flags: vec![],
             path_flag: String::new(),
@@ -631,8 +625,6 @@ mod tests {
         } else {
             assert!(!config.matches_label(label_to_match));
         }
-
-        Ok(())
     }
 
     #[test_case(

@@ -22,14 +22,14 @@ fn init_go() -> Result<()> {
     assert_eq!(output.exit_code, 0);
     assert!(output.stderr.is_none());
 
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["golangci-lint", "check-go-mod.sh"])?;
-    assert_file_exists(".golangci.yml")?;
+    assert_file_exists(".golangci.yml");
     assert_file_contains(
         ".golangci.yml",
         &["gofumpt", "govet", "check-type-assertions"],
     )?;
-    assert_file_exists("dev/bin/check-go-mod.sh")?;
+    assert_file_exists("dev/bin/check-go-mod.sh");
     #[cfg(target_family = "unix")]
     assert_file_is_executable("dev/bin/check-go-mod.sh")?;
 
@@ -50,7 +50,7 @@ fn init_rust() -> Result<()> {
     assert_eq!(output.exit_code, 0);
     assert!(output.stderr.is_none());
 
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["clippy", "rustfmt"])?;
 
     let stdout = output.stdout.unwrap();
@@ -69,7 +69,7 @@ fn init_perl() -> Result<()> {
     assert_eq!(output.exit_code, 0);
     assert!(output.stderr.is_none());
 
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["perlcritic", "perlimports", "perltidy"])?;
 
     let stdout = output.stdout.unwrap();
@@ -88,7 +88,7 @@ fn init_python() -> Result<()> {
     assert_eq!(output.exit_code, 0);
     assert!(output.stderr.is_none());
 
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["ruff-check", "ruff-format", "mypy"])?;
 
     let stdout = output.stdout.unwrap();
@@ -109,7 +109,7 @@ fn init_auto_detects_python() -> Result<()> {
     let output = init_with_auto()?;
 
     assert_eq!(output.exit_code, 0);
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["ruff-check", "ruff-format", "mypy"])?;
 
     Ok(())
@@ -125,7 +125,7 @@ fn init_typescript() -> Result<()> {
     assert_eq!(output.exit_code, 0);
     assert!(output.stderr.is_none());
 
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["eslint", "prettier-typescript"])?;
 
     let stdout = output.stdout.unwrap();
@@ -146,7 +146,7 @@ fn init_auto_detects_typescript() -> Result<()> {
     let output = init_with_auto()?;
 
     assert_eq!(output.exit_code, 0);
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["eslint", "prettier-typescript"])?;
 
     Ok(())
@@ -162,7 +162,7 @@ fn init_ruby() -> Result<()> {
     assert_eq!(output.exit_code, 0);
     assert!(output.stderr.is_none());
 
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["rubocop"])?;
 
     let stdout = output.stdout.unwrap();
@@ -182,7 +182,7 @@ fn init_auto_detects_ruby() -> Result<()> {
     let output = init_with_auto()?;
 
     assert_eq!(output.exit_code, 0);
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["rubocop"])?;
 
     Ok(())
@@ -243,7 +243,7 @@ fn init_auto() -> Result<()> {
     let output = init_with_auto()?;
 
     assert_eq!(output.exit_code, 0);
-    assert_file_exists("precious.toml")?;
+    assert_file_exists("precious.toml");
     assert_file_contains("precious.toml", &["clippy", "prettier"])?;
 
     let stdout = output.stdout.unwrap();
@@ -364,10 +364,9 @@ fn init_with_auto() -> Result<Output> {
         .run()
 }
 
-fn assert_file_exists(path: impl AsRef<Path>) -> Result<()> {
+fn assert_file_exists(path: impl AsRef<Path>) {
     let path = path.as_ref();
-    assert!(path.exists(), "file {:?} does not exist", path);
-    Ok(())
+    assert!(path.exists(), "file {} does not exist", path.display());
 }
 
 fn assert_file_contains(path: impl AsRef<Path>, contains: &[&str]) -> Result<()> {
@@ -376,9 +375,8 @@ fn assert_file_contains(path: impl AsRef<Path>, contains: &[&str]) -> Result<()>
     for c in contains {
         assert!(
             contents.contains(c),
-            "file {:?} does not contain {:?}:\n{contents}",
-            path,
-            c,
+            "file {} does not contain {c:?}:\n{contents}",
+            path.display(),
         );
     }
     Ok(())
@@ -390,8 +388,8 @@ fn assert_file_is_executable(path: impl AsRef<Path>) -> Result<()> {
     let perms = path.metadata()?.permissions();
     assert!(
         perms.mode() & 0o111 != 0,
-        "file {:?} is not executable",
-        path,
+        "file {} is not executable",
+        path.display(),
     );
     Ok(())
 }

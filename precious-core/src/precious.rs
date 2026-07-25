@@ -1051,12 +1051,12 @@ lint-failure-exit-codes = [1]
         Ok(())
     }
 
-    type FinderTestAction = Box<dyn Fn(&TestHelper) -> Result<()>>;
+    type FinderTestAction = &'static dyn Fn(&TestHelper) -> Result<()>;
 
     #[test_case(
         "--all",
         &[],
-        Box::new(|_| Ok(())),
+        &|_| Ok(()),
         &vec1![
             "README.md",
             "can_ignore.x",
@@ -1076,35 +1076,35 @@ lint-failure-exit-codes = [1]
     #[test_case(
         "--git",
         &[],
-        Box::new(|th| {
+        &|th| {
             th.modify_files()?;
             Ok(())
-        }),
+        },
         &vec1!["src/module.rs", "tests/data/foo.txt"] ;
         "--git"
     )]
     #[test_case(
         "--staged",
         &[],
-        Box::new(|th| {
+        &|th| {
             th.modify_files()?;
             th.stage_all()?;
             Ok(())
-        }),
+        },
         &vec1!["src/module.rs", "tests/data/foo.txt"] ;
         "--staged"
     )]
     #[test_case(
         "",
         &["main.rs", "module.rs"],
-        Box::new(|_| Ok(())),
+        &|_| Ok(()),
         &vec1!["src/main.rs", "src/module.rs"] ;
         "file paths from cli"
     )]
     #[test_case(
         "",
         &["."],
-        Box::new(|_| Ok(())),
+        &|_| Ok(()),
         &vec1![
             "src/bar.rs",
             "src/can_ignore.rs",
@@ -1131,10 +1131,10 @@ lint-failure-exit-codes = [1]
         let _pushd = Pushd::new(src_dir)?;
 
         let mut cmd = vec!["precious", "--quiet", "tidy"];
-        if !flag.is_empty() {
-            cmd.push(flag);
-        } else {
+        if flag.is_empty() {
             cmd.append(&mut paths.to_vec());
+        } else {
+            cmd.push(flag);
         }
         let app = App::try_parse_from(&cmd)?;
 
@@ -1362,7 +1362,7 @@ lint-failure-exit-codes = [1]
 
         let output = String::from_utf8(buffer)?;
         let expect = format!(
-            r#"Found config file at: {}
+            r"Found config file at: {}
 
 ┌──────┬──────┬──────────────────────────────────────┐
 │ Name ┆ Type ┆ Runs                                 │
@@ -1373,7 +1373,7 @@ lint-failure-exit-codes = [1]
 ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
 │ baz  ┆ both ┆ baz --fast-mode --no-verify          │
 └──────┴──────┴──────────────────────────────────────┘
-"#,
+",
             helper.config_file(DEFAULT_CONFIG_FILE_NAME),
         );
         assert_eq!(output, expect);

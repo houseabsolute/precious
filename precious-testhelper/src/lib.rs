@@ -1,3 +1,11 @@
+// This crate is only used by this workspace's own tests, so documenting every error and panic
+// case is just noise.
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::return_self_not_must_use
+)]
+
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use log::debug;
@@ -93,7 +101,7 @@ impl TestHelper {
 
     fn create_git_repo(&self) -> Result<()> {
         debug!("Creating git repo in {}", self.git_root);
-        for p in self.paths.iter() {
+        for p in &self.paths {
             let content = if is_rust_file(p) {
                 "fn foo() {}\n"
             } else {
@@ -138,26 +146,31 @@ impl TestHelper {
         Ok(Pushd::new(subdir)?)
     }
 
+    #[must_use]
     pub fn git_root(&self) -> Utf8PathBuf {
         self.git_root.clone()
     }
 
+    #[must_use]
     pub fn precious_root(&self) -> Utf8PathBuf {
         self.precious_root.clone()
     }
 
+    #[must_use]
     pub fn config_file(&self, file_name: &str) -> Utf8PathBuf {
         let mut path = self.precious_root.clone();
         path.push(file_name);
         path
     }
 
+    #[must_use]
     pub fn all_files(&self) -> Vec<Utf8PathBuf> {
         let mut files = self.paths.clone();
         files.sort();
         files
     }
 
+    #[must_use]
     pub fn all_files1(&self) -> Vec1<Utf8PathBuf> {
         let mut files = self.paths.clone();
         files.sort();
@@ -187,6 +200,7 @@ can_ignore.*
 generated.*
 ";
 
+    #[must_use]
     pub fn non_ignored_files() -> Vec<Utf8PathBuf> {
         Self::PATHS
             .iter()

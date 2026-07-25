@@ -322,11 +322,11 @@ fn cli_paths_all_excluded() -> Result<()> {
 #[serial]
 fn one_command() -> Result<()> {
     let helper = set_up_for_tests()?;
-    let content = r#"
+    let content = r"
 fn foo() -> u8   {
     42
 }
-"#;
+";
     helper.write_file("src/module.rs", content)?;
 
     let precious = precious_path()?;
@@ -360,7 +360,7 @@ fn foo() -> u8   {
 fn exit_codes() -> Result<()> {
     let helper = set_up_for_tests()?;
 
-    let all_codes = Vec::from_iter(0..=255);
+    let all_codes = (0..=255).collect::<Vec<_>>();
     let match_all_re = Regex::new(".*")?;
 
     let precious = precious_path()?;
@@ -458,7 +458,7 @@ fn output_on_failure() -> Result<()> {
 
     let stdout = out.stdout.unwrap_or_default();
     let stderr = out.stderr.unwrap_or_default();
-    let output = format!("{}{}", stdout, stderr);
+    let output = format!("{stdout}{stderr}");
 
     assert!(
         !output.contains(r"\u{1b}"),
@@ -479,6 +479,8 @@ fn output_on_failure() -> Result<()> {
 #[test]
 #[serial]
 fn all_invocation_options() -> Result<()> {
+    const EXPECT_COUNT: u8 = 28;
+
     let helper = set_up_for_tests()?;
     write_perl_script(&helper)?;
     create_file_tree(&helper)?;
@@ -510,7 +512,6 @@ fn all_invocation_options() -> Result<()> {
         }
         count += 1;
     }
-    const EXPECT_COUNT: u8 = 28;
     assert_eq!(count, EXPECT_COUNT, "tested {EXPECT_COUNT} examples");
 
     Ok(())
@@ -667,6 +668,13 @@ ok-exit-codes = 0
 }
 
 fn munge_invocation_output(output_dir: &Path) -> Result<String> {
+    #[derive(Debug)]
+    struct Invocation<'a> {
+        cwd: &'a str,
+        cmd: &'a str,
+        paths: Option<&'a str>,
+    }
+
     let mut got = String::new();
     for entry in fs::read_dir(output_dir)? {
         let entry = entry?;
@@ -694,17 +702,10 @@ fn munge_invocation_output(output_dir: &Path) -> Result<String> {
         ",
     )?;
 
-    #[derive(Debug)]
-    struct Invocation<'a> {
-        cwd: &'a str,
-        cmd: &'a str,
-        paths: Option<&'a str>,
-    }
-
     let mut invocations: Vec<Invocation> = vec![];
     for caps in output_re.captures_iter(&got) {
         invocations.push(Invocation {
-            cwd: caps.name("cwd").map(|c| c.as_str()).unwrap_or(""),
+            cwd: caps.name("cwd").map_or("", |c| c.as_str()),
             cmd: caps.name("cmd").unwrap().as_str(),
             paths: caps.name("paths").map(|p| p.as_str()),
         });
@@ -736,10 +737,7 @@ fn munge_invocation_output(output_dir: &Path) -> Result<String> {
             if let Some(paths) = i.paths {
                 output.push(' ');
                 output.push_str(&path_re.replace_all(paths, |caps: &Captures| {
-                    format!(
-                        "/example{}",
-                        caps.name("path").map(|p| p.as_str()).unwrap_or(""),
-                    )
+                    format!("/example{}", caps.name("path").map_or("", |p| p.as_str()))
                 }));
             }
             output.push('\n');
