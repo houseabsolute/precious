@@ -179,9 +179,9 @@ path-args = "dir"
 
 ```
 some-linter .
-some-linter pkg1
-some-linter pkg2
-some-linter pkg2/subpkg
+some-linter ./pkg1
+some-linter ./pkg2
+some-linter ./pkg2/subpkg
 ```
 
 ---
@@ -434,7 +434,7 @@ path-args = "dir"
 ```
 
 ```
-some-linter . pkg1 pkg2 pkg2/subpkg
+some-linter . ./pkg1 ./pkg2 ./pkg2/subpkg
 ```
 
 ---

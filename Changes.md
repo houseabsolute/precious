@@ -4,6 +4,10 @@
   in-progress merge if you were working in a git worktree or submodule. Precious checked for a
   `MERGE_MODE` file under `<git root>/.git`, but in a worktree or submodule that file lives
   elsewhere. It now asks git where the file is instead of guessing.
+- Paths passed for `path-args = "dir"` now start with `./` or `../` instead of being bare relative
+  paths like `foo/bar`. The working directory itself is still passed as `.` or `..`. Some tools,
+  notably `go fix`, treat a bare path as a package name and fail with errors like
+  `package foo/bar is not in std`. GH #104.
 - Development of precious itself now happens in a dev container, driven by `just` recipes. See the
   new "Developing Precious" section in the README for details.
 - Precious now rejects unknown keys in your config instead of silently ignoring them. This applies

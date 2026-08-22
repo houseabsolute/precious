@@ -3,7 +3,7 @@ use crate::paths::{
     utf8::{NonUtf8PathError, NonUtf8Source},
 };
 use anyhow::{Context, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use itertools::Itertools;
 use log::{debug, info};
 use mitsein::prelude::*;
@@ -784,7 +784,10 @@ impl Command {
                 .and_then(|fm| {
                     fm.into_keys()
                         .sorted()
-                        .map(|r| self.path_relative_to(r, in_dir))
+                        .map(|r| {
+                            self.path_relative_to(r, in_dir)
+                                .map(|p| Self::with_leading_dot_slash(&p))
+                        })
                         .collect::<Result<Vec<_>>>()
                 }),
             PathArgs::None => Ok(vec![]),
@@ -812,6 +815,16 @@ impl Command {
                         .sorted()
                         .collect()
                 }),
+        }
+    }
+
+    // Some tools, notably Go, require that relative directory paths start with
+    // "./" (or "../"). Without that leading dot they treat a path like
+    // "foo/bar" as a package name instead of a directory.
+    fn with_leading_dot_slash(path: &Utf8Path) -> Utf8PathBuf {
+        match path.components().next() {
+            Some(Utf8Component::Normal(_)) => Utf8PathBuf::from("./").join(path),
+            _ => path.to_path_buf(),
         }
     }
 
@@ -1641,7 +1654,7 @@ mod tests {
         let files = vec1![Utf8Path::new("file1"), Utf8Path::new("subdir/file2")];
         assert_eq!(
             command.operating_on(&files, &command.project_root)?,
-            vec![Utf8PathBuf::from("."), Utf8PathBuf::from("subdir")],
+            vec![Utf8PathBuf::from("."), Utf8PathBuf::from("./subdir")],
         );
 
         Ok(())
@@ -1661,7 +1674,33 @@ mod tests {
         in_dir.push("subdir");
         assert_eq!(
             command.operating_on(&files, &in_dir)?,
-            vec![Utf8PathBuf::from("."), Utf8PathBuf::from("more")],
+            vec![Utf8PathBuf::from("."), Utf8PathBuf::from("./more")],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_path_args_dir_outside_working_dir() -> Result<()> {
+        let mut command = default_command();
+        command.invocation.path_args = PathArgs::Dir;
+
+        let files = vec1![
+            Utf8Path::new("subdir/file1"),
+            Utf8Path::new("other/file2"),
+            Utf8Path::new("file3")
+        ];
+        let mut in_dir = command.project_root.clone();
+        in_dir.push("subdir");
+        assert_eq!(
+            command.operating_on(&files, &in_dir)?,
+            vec![
+                Utf8PathBuf::from(".."),
+                Utf8PathBuf::from("../other"),
+                Utf8PathBuf::from("."),
+            ],
+            "paths above the working directory keep their leading \"..\"",
         );
 
         Ok(())
