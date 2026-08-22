@@ -16,9 +16,13 @@ rebuild:
 shell: _up
     {{ _dce }} bash -i
 
-test rust-log="" *args: _up
+# Set RUST_LOG in the environment to turn on logging, e.g.
+# `RUST_LOG=debug just test`. It can't be a recipe parameter, because just
+# binds parameters positionally, so the first argument would always be taken
+# as the log level instead of being passed on to cargo.
+test *args: _up
     {{ _dce }} \
-      {{ if rust-log != "" { "--remote-env RUST_LOG=" + rust-log } else { "" } }} \
+      {{ if env("RUST_LOG", "") != "" { "--remote-env RUST_LOG=" + env("RUST_LOG", "") } else { "" } }} \
       cargo test {{ args }}
 
 lint *args: _up
