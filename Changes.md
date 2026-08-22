@@ -26,6 +26,9 @@
 - Releases of precious itself are now made with `cargo-release` via a `just release` recipe, and the
   crates are published to crates.io from CI. Previously the version bumps were made by hand and the
   publish step was easy to forget, which is why 0.11.0 never made it to crates.io.
+- The `precious-testhelper` and `precious-integration` crates are no longer published to crates.io.
+  Both exist only to support precious's own test suite, and neither is usable outside this
+  repository. The last published versions of both are 0.10.2.
 
 ## 0.11.0 - 2026-05-31
 

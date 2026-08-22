@@ -7,6 +7,10 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 version.workspace = true
+# This crate only exists to support precious's own tests, so there is no reason to put it on
+# crates.io. The dependency on it in [workspace.dependencies] deliberately has no version
+# requirement, which is what lets cargo drop it when packaging the crates that dev-depend on it.
+publish = false
 
 [dependencies]
 anyhow.workspace = true
