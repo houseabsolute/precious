@@ -1,4 +1,4 @@
-excludes = ["vendor/**/*"]
+exclude = ["vendor/**/*"]
 
 [commands.golangci-lint]
 type = "both"
