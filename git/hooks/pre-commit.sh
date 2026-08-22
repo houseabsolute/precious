@@ -2,4 +2,4 @@
 
 set -e
 
-just lint -s
+mise exec just -- just lint -s
