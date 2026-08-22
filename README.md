@@ -645,7 +645,7 @@ more details on how you can configure your shell to always activate `mise`.
 The behavior of `precious` when given a directory in an exclude list changed in 0.11.0.
 
 Before 0.11.0, bare directory names like `target` in an `exclude` list did not actually exclude
-files _inside_ that directory — only the exact path `target` itself. This was a bug. It is now
+files _inside_ that directory - only the exact path `target` itself. This was a bug. It is now
 fixed: `"target"` works exactly like a `.gitignore` entry and excludes the directory and all its
 contents.
 
@@ -726,5 +726,5 @@ you have staged.
 This all works from a `git worktree` as well as from the main checkout. In a worktree, the `.git`
 entry is a file pointing at a git dir outside the workspace, so the `Justfile` bind-mounts the main
 repo's git dir into the container at the same path it has on the host. Without this, git commands
-inside the container — including the ones `precious` runs to find staged or modified files — would
+inside the container - including the ones `precious` runs to find staged or modified files - would
 fail.
