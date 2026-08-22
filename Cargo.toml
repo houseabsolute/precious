@@ -56,7 +56,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/houseabsolute/precious"
-version = "0.11.0"
+version = "0.12.0"
 
 [workspace.dependencies]
 anyhow = { version = "1.0.104", default-features = false }
@@ -80,8 +80,8 @@ log = { version = "0.4.33", default-features = false }
 md5 = { version = "0.8.1", default-features = false }
 mitsein = { version = "0.9.0", default-features = false, features = ["itertools", "std"] }
 pathdiff = { version = "0.2.3", default-features = false }
-precious-core = { version = "0.11.0", path = "./precious-core" }
-precious-helpers = { version = "0.11.0", path = "./precious-helpers" }
+precious-core = { version = "0.12.0", path = "./precious-core" }
+precious-helpers = { version = "0.12.0", path = "./precious-helpers" }
 precious-testhelper = { path = "./precious-testhelper" }
 pretty_assertions = { version = "1.4.1", default-features = true }
 prettytable = { version = "0.10.0", default-features = false }

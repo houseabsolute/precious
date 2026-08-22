@@ -2,6 +2,8 @@
 
 ## NEXT - TBD
 
+## 0.12.0 - 2026-08-22
+
 - Fixed a bug where the `--staged-with-stash` mode would stash your changes in the middle of an
   in-progress merge if you were working in a git worktree or submodule. Precious checked for a
   `MERGE_MODE` file under `<git root>/.git`, but in a worktree or submodule that file lives
