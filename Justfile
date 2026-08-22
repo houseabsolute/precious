@@ -38,5 +38,5 @@ tidy *args: _up
 #
 # Unlike the other recipes, cargo-release runs on the host rather than in the dev container,
 # because the commit and tag are signed and the signing key lives outside the container.
-release level: test lint
+release level: (test "--workspace --locked") (lint "-a")
     mise exec -- cargo-release release {{ level }} --workspace --execute
