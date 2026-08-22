@@ -71,11 +71,11 @@ jobs:
             bin: precious
             name: precious-Linux-powerpc64le.tar.gz
             skip-tests: true
-          - os-name: Linux-riscv74
+          - os-name: Linux-riscv64
             runs-on: ubuntu-24.04
-            target: riscv74gc-unknown-linux-gnu
+            target: riscv64gc-unknown-linux-gnu
             bin: precious
-            name: precious-Linux-riscv74gc-gnu.tar.gz
+            name: precious-Linux-riscv64gc-gnu.tar.gz
           - os-name: Linux-s390x
             runs-on: ubuntu-24.04
             target: s390x-unknown-linux-gnu
