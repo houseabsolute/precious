@@ -163,3 +163,32 @@ jobs:
           executable-name: precious
           target: ${{ matrix.platform.target }}
         if: matrix.toolchain == 'stable'
+
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-24.04
+    # This only runs for the "v1.2.3" tag that cargo-release pushes, and only once every target has
+    # built and tested, so a release that cannot build never reaches crates.io.
+    needs: test
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    permissions:
+      # Naming any permission at all sets every other one to "none", so the checkout step needs
+      # `contents: read` spelled out here.
+      contents: read
+      # This is what lets the crates.io auth action mint a short-lived token via OIDC, so there is
+      # no crates.io token stored in the repo's secrets. Each crate has to have trusted publishing
+      # configured on crates.io for this repo and this workflow file.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Get a crates.io token
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - name: Publish
+        # This publishes every crate in the workspace that isn't marked `publish = false`, in
+        # dependency order.
+        run: cargo publish --workspace --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

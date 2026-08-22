@@ -7,6 +7,9 @@ license.workspace = true
 readme.workspace = true
 repository.workspace = true
 version.workspace = true
+# This crate only holds integration tests for precious itself, so there is no reason to put it on
+# crates.io.
+publish = false
 
 [dev-dependencies]
 anyhow.workspace = true

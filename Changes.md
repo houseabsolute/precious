@@ -1,4 +1,6 @@
-## 0.12.0 - TBD
+<!-- next-header -->
+
+## NEXT - TBD
 
 - Fixed a bug where the `--staged-with-stash` mode would stash your changes in the middle of an
   in-progress merge if you were working in a git worktree or submodule. Precious checked for a
@@ -21,6 +23,9 @@
   example was missed.
 - Development of precious itself now happens in a dev container, driven by `just` recipes. See the
   new "Developing Precious" section in the README for details.
+- Releases of precious itself are now made with `cargo-release` via a `just release` recipe, and the
+  crates are published to crates.io from CI. Previously the version bumps were made by hand and the
+  publish step was easy to forget, which is why 0.11.0 never made it to crates.io.
 
 ## 0.11.0 - 2026-05-31
 

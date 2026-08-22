@@ -780,6 +780,37 @@ Note that `devcontainer up` reuses an existing container without checking whethe
 match, so a container created before a `Justfile` change may need a `just rebuild` before it works
 again.
 
+### Making a Release
+
+Releases are driven by [`cargo-release`](https://github.com/crate-ci/cargo-release), which `mise`
+pins along with the other tools. This is the one task that does not run in the dev container, since
+the commit and tag are signed and the signing key lives on your machine, so it needs a Rust
+toolchain on the host as well:
+
+```
+just release minor
+```
+
+The level can be `patch`, `minor`, `major`, or an explicit version. This bumps the version in every
+crate, stamps the `## NEXT - TBD` heading in `Changes.md` with the version and today's date, adds a
+fresh `NEXT` section for the following release, then makes a signed commit and a signed `vX.Y.Z` tag
+and pushes both.
+
+Everything after that happens in CI, triggered by the tag. The `Tests and release` workflow builds
+binaries for every supported target, attaches them to a draft GitHub release along with their
+checksums, and publishes the crates to crates.io. The GitHub release is a draft, so you review it
+and publish it by hand.
+
+Two things to know:
+
+- Write your changelog entries under the `## NEXT - TBD` heading as you go. `cargo-release` will
+  refuse to release if that heading is missing.
+- Nothing is published from your machine. crates.io publishing uses trusted publishing, so it needs
+  no token in the repo's secrets, but each crate has to have this repo and the `ci.yml` workflow
+  registered under its trusted publishing settings on crates.io.
+- If the publish job fails partway through, the crates it already uploaded cannot be uploaded again.
+  Finish the release by hand with `cargo publish -p <crate>` for whatever is left.
+
 ### Git Hooks
 
 Run `git/setup.pl` once to install the pre-commit hook, which runs `just lint -s` to lint the files
