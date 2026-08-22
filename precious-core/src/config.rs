@@ -7,6 +7,7 @@ use std::{collections::HashMap, fs};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[allow(clippy::module_name_repetitions)]
 pub struct CommandConfig {
     #[serde(rename = "type")]
@@ -72,6 +73,7 @@ pub struct CommandConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default, deserialize_with = "string_or_seq_string")]
     pub(crate) exclude: Vec<String>,
@@ -365,6 +367,134 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
     use test_case::test_case;
+
+    #[test]
+    #[parallel]
+    fn unknown_top_level_key_is_rejected() -> Result<()> {
+        let toml_text = r#"
+            excludes = ["vendor/**/*"]
+
+            [commands.rustfmt]
+            type          = "both"
+            include       = "**/*.rs"
+            cmd           = ["rustfmt"]
+            ok-exit-codes = 0
+        "#;
+
+        let err = toml::from_str::<Config>(toml_text)
+            .expect_err("a misspelled top-level key is an error")
+            .to_string();
+        assert!(
+            err.contains("unknown field `excludes`"),
+            "the error names the offending key, got: {err}",
+        );
+        assert!(
+            err.contains("`exclude`"),
+            "the error suggests the accepted keys, got: {err}",
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn unknown_command_key_is_rejected() -> Result<()> {
+        let toml_text = r#"
+            [commands.rustfmt]
+            type          = "both"
+            include       = "**/*.rs"
+            exclude-paths = "vendor/**/*"
+            cmd           = ["rustfmt"]
+            ok-exit-codes = 0
+        "#;
+
+        let err = toml::from_str::<Config>(toml_text)
+            .expect_err("an unrecognized key in a command table is an error")
+            .to_string();
+        assert!(
+            err.contains("unknown field `exclude-paths`"),
+            "the error names the offending key, got: {err}",
+        );
+
+        Ok(())
+    }
+
+    // Both spellings of every aliased key are still accepted. This is the case
+    // most at risk of being broken by deny_unknown_fields, so pin it.
+    #[test_case("working-dir.chdir-to", r#""sub""# ; "kebab case alias")]
+    #[test_case("working_dir.chdir-to", r#""sub""# ; "snake case field name")]
+    #[parallel]
+    fn aliased_keys_are_still_accepted(key: &str, value: &str) -> Result<()> {
+        let toml_text = format!(
+            r#"
+            [commands.rustfmt]
+            type          = "both"
+            include       = "**/*.rs"
+            {key}         = {value}
+            cmd           = ["rustfmt"]
+            ok-exit-codes = 0
+            "#
+        );
+
+        toml::from_str::<Config>(&toml_text)
+            .with_context(|| format!("`{key}` should still be accepted"))?;
+
+        Ok(())
+    }
+
+    // The configs under examples/ are meant to be copied verbatim into a
+    // user's project, so a typo in one of them is a bug we ship. Loading them
+    // here means a bad key fails the test suite instead of silently giving
+    // someone a config that does not do what it says.
+    #[test]
+    #[parallel]
+    fn example_configs_are_valid() -> Result<()> {
+        let examples = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("the precious-core directory always has a parent")
+            .join("examples");
+
+        let mut checked: Vec<String> = vec![];
+        for entry in fs::read_dir(&examples)
+            .with_context(|| format!("Could not read the examples directory at {examples}"))?
+        {
+            let dir = Utf8PathBuf::try_from(entry?.path())?;
+            let file = dir.join("precious.toml");
+            if !file.exists() {
+                continue;
+            }
+
+            let config = Config::new(&file)
+                .with_context(|| format!("Could not load the example config at {file}"))?;
+            // Loading only checks that the TOML parses into a Config. Turning
+            // that into commands is what validates the individual command
+            // definitions, so do both.
+            config
+                .clone()
+                .into_lint_commands(&dir, None, None)
+                .with_context(|| format!("Could not build lint commands from {file}"))?;
+            config
+                .into_tidy_commands(&dir, None, None)
+                .with_context(|| format!("Could not build tidy commands from {file}"))?;
+
+            checked.push(
+                dir.file_name()
+                    .expect("every example path has a final component")
+                    .to_string(),
+            );
+        }
+
+        checked.sort();
+        let expect = ["golang", "perl", "python", "ruby", "rust", "typescript"]
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        // Compare against an explicit list so that an example being renamed or
+        // moved fails here instead of quietly checking nothing.
+        assert_eq!(checked, expect, "checked every example config");
+
+        Ok(())
+    }
 
     #[test]
     #[parallel]

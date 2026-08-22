@@ -2,8 +2,8 @@
 
 Some of the command configuration has changed dramatically in this release. The old `run_mode` and
 `chdir` config keys have been replaced by new options, `invoke`, `working_dir`, and `path_args`.
-**The old keys have been deprecated. They will continue to work for a while but are no longer
-documented.**
+**Support for the old keys was removed in 0.10.0. As of 0.12.0, a config that still contains them
+will fail to load with an "unknown field" error, rather than being silently ignored.**
 
 Here is what the new config looks like for all possible combinations of the `run_mode` and `chdir`
 keys.
