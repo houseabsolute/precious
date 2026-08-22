@@ -222,6 +222,70 @@ The `path-args` key tells precious how paths should be passed when the command i
 | <code>"absolute&#x2011;file"</code> | Passes the path to the matching file as an absolute path from the filesystem's root directory.                                                                                   |
 | <code>"absolute&#x2011;dir"</code>  | Passes the path to the directory containing the matching files as an absolute path from the filesystem's root directory.                                                         |
 
+##### Exclusions and Directory Paths
+
+When a command is configured to take a _directory_ instead of a list of files, it may lose the
+ability to respect your excludes.
+
+This applies to `path-args = "dir"`, `path-args = "absolute-dir"`, and `path-args = "dot"`, as well
+as to `working-dir = "dir"` for commands that recurse from their working directory.
+
+Precious always applies your `exclude` rules to the list of _files_ it generates based on the paths
+you select, and that part works correctly in every mode. But with directory-based path args,
+`precious` then collapses the surviving files down to the set of directories that contain them, and
+passes those directories to the command. The command re-expands each directory on its own terms, and
+`precious` has no say in what it finds there.
+
+The practical consequence is that excluding a subdirectory does not exclude it from a command whose
+directory argument is an ancestor of it. For example, consider this config:
+
+```toml
+exclude = ["foo/**/*"]
+
+[commands.golangci-lint]
+type = "both"
+include = "**/*.go"
+invoke = "once"
+path-args = "dir"
+cmd = ["golangci-lint", "run"]
+```
+
+If the project has `top.go`, `bar/a.go`, and `foo/b.go`, precious correctly drops `foo/b.go` from
+the file list - and then runs `golangci-lint run . bar`. That `.` is the project root, and
+`golangci-lint` will end up seeing `foo` because of that.
+
+This also produces a confusing asymmetry depending on what you pass on the command line:
+
+- `precious lint foo` - every file under `foo` is excluded, so no directories are produced and the
+  command never runs. This looks like the exclusion is working.
+- `precious lint '**/*.go'` - the root-level `top.go` survives, so `.` becomes a directory argument,
+  and `foo` is back in scope.
+
+You usually cannot avoid this by switching to `path-args = "file"`. Many tools either require a
+directory argument or, when given a single file, still operate on the whole directory containing it.
+This is especially common with Go tools, because a Go package _is_ a directory - `golangci-lint` and
+friends must load every file in a package to typecheck any one of them. For such tools,
+`path-args = "file"` just means precious does the same thing by a longer route: the tool still reads
+the excluded files, it is just reached from a filename rather than a directory name.
+
+So the fix is to mirror the exclusion in the tool's own configuration. For `golangci-lint` that
+means adding the directory to your `.golangci.yml`:
+
+```yaml
+issues:
+  skip-dirs:
+    - foo
+```
+
+Note that `precious config init --component go` generates both a `path-args = "dir"` config and a
+`.golangci.yml`, so a Go project with a root-level `.go` file and an excluded subdirectory runs into
+this by default.
+
+For a tool that genuinely operates on one file at a time and never looks at its neighbors, using
+`path-args = "file"` (or `"absolute-file"`) does make precious's `exclude` authoritative, since only
+the surviving files are ever named. The tradeoff is that you lose the batching that
+`path-args = "dir"` exists to provide.
+
 #### Nonsensical Combinations
 
 Most combinations of these configuration keys are allowed, but there are some nonsensical

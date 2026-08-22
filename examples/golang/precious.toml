@@ -8,6 +8,13 @@ include = "**/*.go"
 # directories to see what works best for your project.
 invoke = "once"
 path-args = "dir"
+# Because `path-args = "dir"` passes directories to golangci-lint rather than
+# individual files, precious's `exclude` setting cannot control what
+# golangci-lint looks at inside those directories. If you exclude a
+# subdirectory here, you must also list it under `issues.skip-dirs` in
+# `.golangci.yml`, or golangci-lint will still lint it. See the "Exclusions and
+# Directory Paths" section of the precious README for details.
+#
 # The `--allow-parallel-runners` flag is only relevant when `invoke` is not
 # set to `once`.
 #
