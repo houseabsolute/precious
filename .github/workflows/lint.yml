@@ -8,6 +8,13 @@ on:
       - "precious-*"
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+permissions:
+  contents: read
+
 env:
   CRATE_NAME: precious
   RUST_BACKTRACE: 1
@@ -27,14 +34,24 @@ jobs:
           - beta
           - nightly
     steps:
-      - uses: actions/checkout@v7
-      - name: Cache cargo & target directories
-        uses: Swatinem/rust-cache@v2
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{ matrix.toolchain }}
-          components: clippy,rustfmt
+          persist-credentials: false
+      - name: Cache cargo & target directories
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install toolchain
+        # The toolchain goes through the environment rather than straight into the script, so that
+        # the matrix value is never interpolated into the shell.
+        env:
+          TOOLCHAIN: ${{ matrix.toolchain }}
+        run: |
+          set -e
+          set -x
+          rustup toolchain install "$TOOLCHAIN" \
+              --profile minimal \
+              --component clippy,rustfmt \
+              --no-self-update
+          rustup default "$TOOLCHAIN"
       - name: Run cargo install
         run: cargo install --path . --locked
       - name: Install mise

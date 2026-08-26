@@ -1,0 +1,6 @@
+rules:
+  # The lint workflow builds nothing that is ever published - it only runs
+  # precious - so a poisoned cache cannot reach a release artifact.
+  cache-poisoning:
+    ignore:
+      - lint.yml
