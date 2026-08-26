@@ -17,6 +17,10 @@ jobs:
   test:
     name: ${{ matrix.platform.os-name }} with rust ${{ matrix.toolchain }}
     runs-on: ${{ matrix.platform.runs-on }}
+    permissions:
+      # The release itself is created by the "publish-release" job below. Nothing here needs more
+      # than read, since uploading a workflow artifact doesn't use this token.
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -123,12 +127,41 @@ jobs:
           args: "--locked --release"
           strip: true
           cross-version: 107433fa9d71d7eb506cd5bf5467bab89edb7a52
-      - name: Publish artifacts and release
-        uses: houseabsolute/actions-rust-release@v0
+      - name: Package artifacts
+        # There is no "v1" tag in this repo, only a "v1" branch, so this is pinned to the commit
+        # for the v1.0.1 release rather than to a ref that moves.
+        uses: houseabsolute/actions-rust-release@9e126fd5fc18f4cecf358b3909f3991ad59663dc # v1.0.1
         with:
           executable-name: precious
           target: ${{ matrix.platform.target }}
         if: matrix.toolchain == 'stable'
+
+  publish-release:
+    name: Publish GitHub release
+    runs-on: ubuntu-24.04
+    # Every target has to have packaged its archive before this can collect them, and waiting also
+    # means a version that cannot build on some platform never gets a release at all. In v0 each
+    # matrix leg created the release itself, so an early finisher could publish a release that was
+    # still missing other platforms' executables.
+    needs: test
+    # The action checks the tag against its own `release-tag-regex` too. This is here so that a
+    # push to a branch doesn't start a job that has nothing to do.
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    permissions:
+      # This is what lets the action ask the API which artifacts belong to this run.
+      actions: read
+      # Creating the release writes to this repository. This also covers the checkout step, which
+      # would otherwise need `contents: read` spelled out.
+      contents: write
+    steps:
+      # The action uses Changes.md as the body of the release, so the file has to be on disk.
+      - uses: actions/checkout@v7
+      - name: Publish
+        uses: houseabsolute/actions-rust-release/publish@9e126fd5fc18f4cecf358b3909f3991ad59663dc # v1.0.1
+        with:
+          # This is only used to build the default `artifact-regex`, which decides which of the
+          # run's artifacts are attached to the release.
+          executable-name: precious
 
   publish-crates:
     name: Publish to crates.io
