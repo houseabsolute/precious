@@ -762,9 +762,9 @@ a few minutes. After that it is reused.
 # Runs the test suite
 just test
 # Passes extra arguments to cargo test
-just test "" -p precious-core
+just test -p precious-core
 # Sets RUST_LOG for the test run
-just test debug
+RUST_LOG=debug just test
 # Lints all code
 just lint -a
 # Tidies all code
