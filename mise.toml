@@ -8,7 +8,7 @@ shfmt = "3.13.1"
 typos = "1.48.0"
 zizmor = "1.29.0"
 "github:houseabsolute/omegasort" = "0.2.1"
-"github:houseabsolute/precious" = "0.11.0"
+"github:houseabsolute/precious" = "0.12.0"
 "github:crate-ci/cargo-release" = "0.25.10"
 
 [settings]
