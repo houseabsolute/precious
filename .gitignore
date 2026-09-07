@@ -1,9 +1,9 @@
+\#*\#
+/**/*.rs.bk
+.\#*
 /bin
 /fatlib
 /node_modules
 /package-lock.json
 /package.json
 /target
-/**/*.rs.bk
-.\#*
-\#*\#
