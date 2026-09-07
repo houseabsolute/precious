@@ -747,9 +747,13 @@ on your own machine are Docker and `mise`. The container provides Rust, `mise`, 
 `precious` itself runs.
 
 The `mise.toml` file in this repo pins versions of both `just` and the `devcontainer` CLI, so
-[activating `mise` in your shell](https://mise.jdx.dev/) gets you both of them. Make sure it is
-activated for whatever tool you use to make git commits as well, since the pre-commit hook runs
-`just`.
+[activating `mise` in your shell](https://mise.jdx.dev/) gets you both of them. You only need
+[`mise` installed](https://mise.jdx.dev/), not activated, for the pre-commit hook, which finds it on
+its own.
+
+The recipes also work from a shell inside the container, where they run the tools directly instead
+of starting another container. The exceptions are `just rebuild` and `just release`, which have to
+run on the host.
 
 All of the common tasks are `just` recipes. The first one you run builds the container, which takes
 a few minutes. After that it is reused.

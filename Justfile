@@ -1,4 +1,13 @@
-_dce := "devcontainer exec --workspace-folder ."
+# Set by devcontainer.json, so recipes can tell whether they are already running inside the dev
+# container. Outside it, everything is wrapped in `devcontainer exec`. Inside, there is nothing to
+# wrap - the tools are right there, and wrapping would try to start a nested container. Like the
+# git mount below, a container created before this variable existed needs a `just rebuild` once.
+_in_container := env("PRECIOUS_DEVCONTAINER", "")
+# The devcontainer CLI is pinned in mise.toml, so go through mise rather than assuming the caller
+# has mise activated in their shell. Git hooks in particular run with a bare PATH.
+_dce := if _in_container != "" { "" } else { "mise exec -- devcontainer exec --workspace-folder ." }
+# `devcontainer exec` takes env vars as flags. A plain shell needs `env` instead.
+_env := if _in_container != "" { "env" } else { "--remote-env" }
 # When we're in a git worktree, the workspace's .git is a file pointing at a
 # gitdir outside the workspace, so git doesn't work in the container unless we
 # also mount the main repo's git dir at the same path. Note that `devcontainer
@@ -7,11 +16,24 @@ _dce := "devcontainer exec --workspace-folder ."
 _git_common_dir := `test -f .git && realpath "$(git rev-parse --git-common-dir)" || true`
 _git_mount := if _git_common_dir != "" { "--mount 'type=bind,source=" + _git_common_dir + ",target=" + _git_common_dir + "'" } else { "" }
 
-_up:
-    devcontainer up --workspace-folder . {{ _git_mount }}
+_host_only recipe:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{ _in_container }}" ]; then
+        echo "just {{ recipe }} has to run on the host, not inside the dev container" >&2
+        exit 1
+    fi
 
-rebuild:
-    devcontainer up --workspace-folder . {{ _git_mount }} --remove-existing-container
+_up:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{ _in_container }}" ]; then
+        exit 0
+    fi
+    .devcontainer/up.sh --workspace-folder . {{ _git_mount }}
+
+rebuild: (_host_only "rebuild")
+    .devcontainer/up.sh --workspace-folder . {{ _git_mount }} --remove-existing-container
 
 shell: _up
     {{ _dce }} bash -i
@@ -22,7 +44,7 @@ shell: _up
 # as the log level instead of being passed on to cargo.
 test *args: _up
     {{ _dce }} \
-      {{ if env("RUST_LOG", "") != "" { "--remote-env RUST_LOG=" + env("RUST_LOG", "") } else { "" } }} \
+      {{ if env("RUST_LOG", "") != "" { _env + " RUST_LOG=" + env("RUST_LOG", "") } else { "" } }} \
       cargo test {{ args }}
 
 lint *args: _up
@@ -38,5 +60,5 @@ tidy *args: _up
 #
 # Unlike the other recipes, cargo-release runs on the host rather than in the dev container,
 # because the commit and tag are signed and the signing key lives outside the container.
-release level: (test "--workspace --locked") (lint "-a")
+release level: (_host_only "release") (test "--workspace --locked") (lint "-a")
     mise exec -- cargo-release release {{ level }} --workspace --execute
