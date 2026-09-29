@@ -618,10 +618,10 @@ impl LintOrTidyRunner {
             | paths::mode::Mode::GitDiffFrom(_) => vec![],
         };
 
-        let finder_result = self
-            .finder()
-            .context("Failed to create file finder")?
-            .files(&cli_paths);
+        // The finder has to live until every command has run. In --staged-with-stash mode, dropping
+        // it pops the stash, and commands must not see the unstaged changes.
+        let mut finder = self.finder().context("Failed to create file finder")?;
+        let finder_result = finder.files(&cli_paths);
 
         let files = match finder_result {
             Err(e) => return Err(e.context(format!("Failed to find files for {action}"))),
@@ -647,6 +647,7 @@ impl LintOrTidyRunner {
                     }
                 }
 
+                drop(finder);
                 Ok(self.make_exit(&all_failures, action))
             }
         }

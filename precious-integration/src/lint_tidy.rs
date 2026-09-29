@@ -129,6 +129,52 @@ fn staged() -> Result<()> {
     Ok(())
 }
 
+// The stash has to stay in place until every command has run. This lint command fails if it sees
+// the unstaged text, and afterwards the unstaged text must be back in the file.
+#[test]
+#[serial]
+fn staged_with_stash_hides_unstaged_changes_from_commands() -> Result<()> {
+    compile_precious()?;
+    let config = r#"
+[commands.no-unstaged]
+type    = "lint"
+include = "*.txt"
+cmd     = [ "sh", "-c", "! grep -q UNSTAGED \"$1\"", "sh" ]
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#;
+    let helper = TestHelper::new()?
+        .with_git_repo()?
+        .with_config_file("precious.toml", config)?;
+    // The staged and unstaged edits are separated in the file so that `git stash pop` can merge
+    // them without a conflict.
+    let base = (1..=10).map(|n| format!("line {n}\n")).join("");
+    helper.write_file("stash.txt", &base)?;
+    helper.stage_all()?;
+    helper.commit_all()?;
+    let staged = format!("STAGED\n{base}");
+    helper.write_file("stash.txt", &staged)?;
+    helper.stage_all()?;
+    let unstaged = format!("{staged}UNSTAGED\n");
+    helper.write_file("stash.txt", &unstaged)?;
+
+    let precious = precious_path()?;
+    Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--staged-with-stash"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+
+    assert_eq!(
+        fs::read_to_string(helper.precious_root().join("stash.txt"))?,
+        unstaged,
+    );
+
+    Ok(())
+}
+
 #[test]
 #[serial]
 fn cli_paths() -> Result<()> {

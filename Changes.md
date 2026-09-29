@@ -2,6 +2,10 @@
 
 ## NEXT - TBD
 
+- Fixed a bug where the `--staged-with-stash` mode popped the stash right after finding the files to
+  check, before running any commands. Commands saw your unstaged changes, and a tidier could rewrite
+  them. The stash is now popped after every command has run.
+
 ## 0.12.0 - 2026-08-22
 
 - Fixed a bug where the `--staged-with-stash` mode would stash your changes in the middle of an
