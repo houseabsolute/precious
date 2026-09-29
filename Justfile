@@ -42,10 +42,13 @@ shell: _up
 # `RUST_LOG=debug just test`. It can't be a recipe parameter, because just
 # binds parameters positionally, so the first argument would always be taken
 # as the log level instead of being passed on to cargo.
+#
+# With no arguments, this tests the whole workspace. The root package is a binary crate with no
+# tests, and a plain `cargo test` at the root only tests that one package.
 test *args: _up
     {{ _dce }} \
       {{ if env("RUST_LOG", "") != "" { _env + " RUST_LOG=" + env("RUST_LOG", "") } else { "" } }} \
-      cargo test {{ args }}
+      cargo test {{ if args == "" { "--workspace" } else { args } }}
 
 lint *args: _up
     {{ _dce }} mise exec -- precious lint {{ args }}
