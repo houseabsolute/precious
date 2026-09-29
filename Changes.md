@@ -5,6 +5,9 @@
 - Fixed a bug where the `--staged-with-stash` mode popped the stash right after finding the files to
   check, before running any commands. Commands saw your unstaged changes, and a tidier could rewrite
   them. The stash is now popped after every command has run.
+- Fixed a bug where the `--staged-with-stash` mode would pop a stash that already existed when
+  `precious` ran. When there were no unstaged changes, `git` made no new stash, but `precious` still
+  ran `git stash pop` at the end, which applied and dropped your most recent stash.
 
 ## 0.12.0 - 2026-08-22
 

@@ -242,6 +242,7 @@ impl Finder {
         let git_root = self.git_root()?;
 
         if !self.merge_in_progress()? {
+            let before = Self::stash_tip(&git_root)?;
             Exec::builder()
                 .exe("git")
                 .args(vec!["stash", "--keep-index"])
@@ -250,10 +251,27 @@ impl Finder {
                 .in_dir(&git_root)
                 .build()
                 .run()?;
-            self.stashed = true;
+            // When there's nothing to stash, git exits 0 without creating an entry. If we set
+            // `stashed` anyway, dropping the finder would pop a stash the user made earlier.
+            self.stashed = Self::stash_tip(&git_root)? != before;
         }
 
         Ok(())
+    }
+
+    fn stash_tip(git_root: &Utf8Path) -> Result<Option<String>> {
+        let res = Exec::builder()
+            .exe("git")
+            .args(vec!["rev-parse", "-q", "--verify", "refs/stash"])
+            .ok_exit_codes(&[0, 1])
+            .in_dir(git_root)
+            .build()
+            .run()
+            .context("Failed to run git rev-parse to get the stash tip")?;
+        if res.exit_code != 0 {
+            return Ok(None);
+        }
+        Ok(res.stdout.map(|s| s.trim().to_string()))
     }
 
     // We have to ask git where MERGE_MODE lives instead of assuming it's at
@@ -961,6 +979,41 @@ mod tests {
             String::from_utf8(fs::read(helper.precious_root().join(unstaged))?)?,
             String::from("new content"),
         );
+        Ok(())
+    }
+
+    // When there are no unstaged changes, `git stash` creates no entry. We must not pop a stash
+    // that the user made before running precious.
+    #[test]
+    #[parallel]
+    fn git_staged_mode_with_stash_leaves_existing_stash_alone() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let file = Utf8PathBuf::from("tests/data/bar.txt");
+        helper.write_file(&file, "old work in progress")?;
+        Exec::builder()
+            .exe("git")
+            .args(vec!["stash"])
+            .ok_exit_codes(&[0])
+            .ignore_stderr(vec![ANY_STDERR_RE.clone()])
+            .in_dir(&helper.git_root())
+            .build()
+            .run()?;
+
+        {
+            let mut finder = new_finder(Mode::GitStagedWithStash, &helper.precious_root())?;
+            assert_eq!(finder.files(&[])?, None);
+            assert!(!finder.stashed);
+        }
+
+        assert_eq!(helper.read_file(&file)?, "some text");
+        let list = Exec::builder()
+            .exe("git")
+            .args(vec!["stash", "list"])
+            .ok_exit_codes(&[0])
+            .in_dir(&helper.git_root())
+            .build()
+            .run()?;
+        assert_eq!(list.stdout.unwrap_or_default().lines().count(), 1);
         Ok(())
     }
 
