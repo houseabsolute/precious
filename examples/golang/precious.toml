@@ -29,7 +29,7 @@ path-args = "dir"
 # Alternatively, for smaller projects you can set `invoke = "once"` and
 # `path-args = "none"` to run it once for all code in the project, in which
 # case you can remove this flag.
-cmd = ["golangci-lint", "run", "-c", "--allow-parallel-runners"]
+cmd = ["golangci-lint", "run", "--allow-parallel-runners"]
 tidy-flags = "--fix"
 env = { "FAIL_ON_WARNINGS" = "1" }
 ok-exit-codes = [0]
