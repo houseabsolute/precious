@@ -15,6 +15,7 @@ use std::{
     fmt, fs,
     io::ErrorKind,
     num::NonZeroUsize,
+    str::FromStr,
     time::SystemTime,
 };
 use thiserror::Error;
@@ -115,10 +116,10 @@ pub enum WorkingDir {
     ChdirTo(Utf8PathBuf),
 }
 
-impl TryFrom<&str> for WorkingDir {
-    type Error = &'static str;
+impl FromStr for WorkingDir {
+    type Err = &'static str;
 
-    fn try_from(from: &str) -> Result<WorkingDir, Self::Error> {
+    fn from_str(from: &str) -> Result<WorkingDir, Self::Err> {
         match from {
             "root" => Ok(WorkingDir::Root),
             "dir" => Ok(WorkingDir::Dir),

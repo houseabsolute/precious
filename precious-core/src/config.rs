@@ -147,7 +147,7 @@ where
     }
 
     match WorkingDirSerialization::deserialize(deserializer)? {
-        WorkingDirSerialization::Simple(s) => match s.as_str().try_into() {
+        WorkingDirSerialization::Simple(s) => match s.parse() {
             Ok(w) => Ok(Some(w)),
             Err(_) => Err(de::Error::invalid_value(
                 de::Unexpected::Str(&s),

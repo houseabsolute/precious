@@ -84,7 +84,6 @@ precious-core = { version = "0.12.0", path = "./precious-core" }
 precious-helpers = { version = "0.12.0", path = "./precious-helpers" }
 precious-testhelper = { path = "./precious-testhelper" }
 pretty_assertions = { version = "1.4.1", default-features = true }
-prettytable = { version = "0.10.0", default-features = false }
 pushd = { version = "0.0.2", default-features = false }
 rayon = { version = "1.12.0", default-features = false }
 regex = { version = "1.13.1", default-features = true }
