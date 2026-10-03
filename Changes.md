@@ -31,6 +31,10 @@
   files, even when it changed no files. This affected commands with `invoke = "per-dir"`, and
   commands with `invoke.per-file-or-dir = n` when the number of files was at or above the threshold.
   These commands now correctly report whether or not they've changed files.
+- Fixed a bug where `working_dir.chdir_to` and `working-dir.chdir_to` were rejected with a config
+  parse error. Only the `chdir-to` spelling of this key was accepted. The underscore spelling
+  stopped working in 0.10.0, even though the underscore names for config keys are meant to keep
+  working.
 
 ## 0.12.0 - 2026-08-22
 

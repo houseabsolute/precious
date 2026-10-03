@@ -165,7 +165,9 @@ where
                 .into_iter()
                 .next()
                 .expect("we already know there is exactly 1 entry");
-            if key != "chdir-to" {
+            // Every key has an underscore alias, and this one cannot use serde's `alias` because
+            // it is a key in a map, not a struct field.
+            if key != "chdir-to" && key != "chdir_to" {
                 return Err(de::Error::invalid_value(
                     de::Unexpected::Map,
                     &r#"a map with a single key, "chdir-to""#,
@@ -436,6 +438,8 @@ mod tests {
     // most at risk of being broken by deny_unknown_fields, so pin it.
     #[test_case("working-dir.chdir-to", r#""sub""# ; "kebab case alias")]
     #[test_case("working_dir.chdir-to", r#""sub""# ; "snake case field name")]
+    #[test_case("working-dir.chdir_to", r#""sub""# ; "kebab case alias with snake case chdir_to")]
+    #[test_case("working_dir.chdir_to", r#""sub""# ; "snake case field name with snake case chdir_to")]
     #[parallel]
     fn aliased_keys_are_still_accepted(key: &str, value: &str) -> Result<()> {
         let toml_text = format!(
