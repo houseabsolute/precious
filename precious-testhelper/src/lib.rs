@@ -116,6 +116,9 @@ impl TestHelper {
         // up if this isnt't set. This fixes
         // https://github.com/houseabsolute/precious/issues/15.
         self.run_git(vec!["config", "user.email", "precious@example.com"])?;
+        // Without this, git has to guess a name from the passwd database. The commit fails with
+        // "empty ident name" when the current user has no name there, as happens in CI.
+        self.run_git(vec!["config", "user.name", "Precious Tester"])?;
         // With this on I get line ending warnings from git on Windows if I
         // don't write out files with CRLF. Disabling this simplifies things
         // greatly.
