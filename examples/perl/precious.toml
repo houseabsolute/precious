@@ -46,7 +46,7 @@ lint-failure-exit-codes = 2
 [commands.perltidy]
 type = "both"
 shared-include = "perl-code"
-cmd = ["perltidy", "--profile=$PRECIOUS-ROOT/perltidyrc"]
+cmd = ["perltidy", "--profile=$PRECIOUS_ROOT/perltidyrc"]
 lint-flags = ["--assert-tidy", "--no-standard-output", "--outfile=/dev/null"]
 tidy-flags = ["--backup-and-modify-in-place", "--backup-file-extension=/"]
 ok-exit-codes = 0
