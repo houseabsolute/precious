@@ -16,6 +16,10 @@
 - Fixed a bug where the `--staged-with-stash` mode would pop a stash that already existed when
   `precious` ran. When there were no unstaged changes, `git` made no new stash, but `precious` still
   ran `git stash pop` at the end, which applied and dropped your most recent stash.
+- Fixed a bug where a tidy command that runs once per directory was always reported as having tidied
+  files, even when it changed no files. This affected commands with `invoke = "per-dir"`, and
+  commands with `invoke.per-file-or-dir = n` when the number of files was at or above the threshold.
+  These commands now correctly report whether or not they've changed files.
 
 ## 0.12.0 - 2026-08-22
 

@@ -898,7 +898,11 @@ impl Command {
                 .with_context(|| format!("Failed to get metadata for file {full_path}"))?;
             path_map.insert(full_path, meta);
         } else if full_path.is_dir() {
-            dir = Some(path.to_path_buf());
+            // This has to be the absolute path. We read the directory again in
+            // `paths_were_changed`, and a relative path would be resolved against the current
+            // directory, not the project root. The entries from an absolute path are also
+            // absolute, so they match the keys in `path_map`.
+            dir = Some(full_path.clone());
             let entries = full_path
                 .read_dir_utf8()
                 .with_context(|| format!("Failed to read directory {full_path}"))?;
@@ -2106,6 +2110,44 @@ mod tests {
 
         fs::remove_file(files.last())?;
         assert!(command.paths_were_changed(prev)?);
+
+        Ok(())
+    }
+
+    // The other tests in this group use an empty project root and absolute paths, which is not
+    // how precious calls these methods. In a real run the project root is set and the paths are
+    // relative to it.
+    #[test]
+    #[parallel]
+    fn tidy_per_dir_is_unchanged_when_command_changes_nothing() -> Result<()> {
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.precious_root();
+
+        let mut command = default_command();
+        command.project_root = root.clone();
+        command.name = "noop".to_string();
+        command.typ = CommandType::Tidy;
+        command.invocation.invoke = Invoke::PerDir;
+        command.invocation.path_args = PathArgs::Dir;
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.execution.cmd = vec!["true".to_string()];
+        command.execution.ok_exit_codes = vec![0];
+
+        let files = helper
+            .all_files()
+            .into_iter()
+            .filter(|p| {
+                p.starts_with("src/") && p.extension() == Some("rs") && p.ancestors().count() == 3
+            })
+            .collect::<Vec<_>>();
+        let files = Vec1::try_from(files.iter().map(Utf8PathBuf::as_path).collect::<Vec<_>>())
+            .expect("the test repo has .rs files in src/");
+
+        assert_eq!(
+            command.tidy(ActualInvoke::PerDir, &files)?,
+            Some(TidyOutcome::Unchanged),
+            "a per-dir tidy command that changes nothing is reported as unchanged",
+        );
 
         Ok(())
     }
