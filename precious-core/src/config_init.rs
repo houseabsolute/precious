@@ -63,7 +63,7 @@ path-args = "dir"
 # Because `path-args = "dir"` passes directories to golangci-lint rather than
 # individual files, precious's `exclude` setting cannot control what
 # golangci-lint looks at inside those directories. If you exclude a
-# subdirectory here, you must also list it under `issues.skip-dirs` in
+# subdirectory here, you must also list it under `linters.exclusions.paths` in
 # `.golangci.yml`, or golangci-lint will still lint it. See the "Exclusions and
 # Directory Paths" section of the precious README for details.
 #
@@ -111,12 +111,16 @@ lint-failure-exit-codes = [1]
     ),
 ];
 
+// This is in the format for golangci-lint v2, which refuses to load a config without a `version`.
 const GOLANGCI_YML: &str = "
+version: \"2\"
+
 linters:
-  disable-all: true
+  default: none
   enable:
     - bidichk
     - bodyclose
+    - copyloopvar
     - decorder
     - dupl
     - dupword
@@ -126,19 +130,15 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
-    - gci
     - gocheckcompilerdirectives
     - goconst
     - gocritic
     - godot
-    - gofumpt
-    - gomnd
-    - gosimple
     - govet
     - importas
     - ineffassign
     - misspell
+    - mnd
     - nolintlint
     - lll
     - mirror
@@ -149,29 +149,33 @@ linters:
     - sloglint
     - sqlclosecheck
     - staticcheck
-    - tenv
     - testifylint
     - thelper
-    - typecheck
     - unconvert
     - unused
     - usestdlibvars
+    - usetesting
     - wastedassign
     - whitespace
     - wrapcheck
-  fast: false
+  settings:
+    errcheck:
+      check-type-assertions: true
+    govet:
+      enable:
+        - shadow
+    importas:
+      no-extra-aliases: true
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  gci:
-    sections:
-      - standard
-      - default
-  govet:
-    check-shadowing: true
-  importas:
-    no-extra-aliases: true
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
 ";
 
 const CHECK_GO_MOD: &str = r#"

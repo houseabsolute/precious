@@ -272,10 +272,14 @@ So the fix is to mirror the exclusion in the tool's own configuration. For `gola
 means adding the directory to your `.golangci.yml`:
 
 ```yaml
-issues:
-  skip-dirs:
-    - foo
+linters:
+  exclusions:
+    paths:
+      - foo
 ```
+
+This is the format for `golangci-lint` v2. If you also enable formatters in your `.golangci.yml`,
+add the same path under `formatters.exclusions.paths`.
 
 Note that `precious config init --component go` generates both a `path-args = "dir"` config and a
 `.golangci.yml`, so a Go project with a root-level `.go` file and an excluded subdirectory runs into

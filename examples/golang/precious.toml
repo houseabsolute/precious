@@ -11,7 +11,7 @@ path-args = "dir"
 # Because `path-args = "dir"` passes directories to golangci-lint rather than
 # individual files, precious's `exclude` setting cannot control what
 # golangci-lint looks at inside those directories. If you exclude a
-# subdirectory here, you must also list it under `issues.skip-dirs` in
+# subdirectory here, you must also list it under `linters.exclusions.paths` in
 # `.golangci.yml`, or golangci-lint will still lint it. See the "Exclusions and
 # Directory Paths" section of the precious README for details.
 #
