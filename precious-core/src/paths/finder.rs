@@ -20,7 +20,6 @@ pub struct Finder {
     mode: Mode,
     project_root: Utf8PathBuf,
     git_root: Option<Utf8PathBuf>,
-    canonical_git_root: Option<Utf8PathBuf>,
     cwd: Utf8PathBuf,
     exclude_globs: Vec<String>,
     stashed: bool,
@@ -78,7 +77,6 @@ impl Finder {
             mode,
             project_root: canonical_root,
             git_root: None,
-            canonical_git_root: None,
             cwd,
             exclude_globs,
             stashed: false,
@@ -216,6 +214,7 @@ impl Finder {
         self.files_from_git(vec![
             "diff",
             "--name-only",
+            "--relative",
             "-z",
             "--diff-filter=ACM",
             "HEAD",
@@ -229,6 +228,7 @@ impl Finder {
             "diff",
             "--cached",
             "--name-only",
+            "--relative",
             "-z",
             "--diff-filter=ACM",
         ])
@@ -306,6 +306,7 @@ impl Finder {
         self.files_from_git(vec![
             "diff",
             "--name-only",
+            "--relative",
             "-z",
             "--diff-filter=ACM",
             &since_dot,
@@ -381,11 +382,9 @@ impl Finder {
 
         match output.stdout_bytes.as_deref() {
             Some(bytes) => {
-                // In the common case where the git repo root and project root are the same, this
-                // isn't necessary, because git will give us paths relative to the project root. But
-                // if the precious root _isn't_ the git root, we need to get the path relative to
-                // the project root, not the repo root.
-                let canonical_git_root = self.canonical_git_root()?;
+                // We pass `--relative` and run git in the project root, so git only lists paths
+                // under the project root, relative to it. That matters when the precious root is
+                // a subdirectory of the git root, as in a monorepo.
                 let mut paths: Vec<Utf8PathBuf> = Vec::new();
                 for raw in bytes.split(|b| *b == 0).filter(|s| !s.is_empty()) {
                     let Ok(s) = std::str::from_utf8(raw) else {
@@ -401,7 +400,7 @@ impl Finder {
                         continue;
                     }
 
-                    let full = canonical_git_root.join(&rel);
+                    let full = self.project_root.join(&rel);
                     if !full.exists() {
                         debug!(
                             "The staged file at {rel} (abs path {full}) was deleted so it will be ignored.",
@@ -409,26 +408,12 @@ impl Finder {
                         continue;
                     }
 
-                    paths.push(self.path_relative_to_canonical_root(&canonical_git_root, &full)?);
+                    paths.push(rel);
                 }
                 Ok(paths)
             }
             None => Ok(vec![]),
         }
-    }
-
-    fn canonical_git_root(&mut self) -> Result<Utf8PathBuf> {
-        if let Some(r) = &self.canonical_git_root {
-            return Ok(r.clone());
-        }
-
-        let raw = self.git_root()?;
-        let canonical = raw
-            .canonicalize_utf8()
-            .with_context(|| format!("Failed to canonicalize git root path {raw}"))?;
-        self.canonical_git_root = Some(canonical.clone());
-
-        Ok(canonical)
     }
 
     fn exclude_matcher(&self) -> Result<Matcher> {
@@ -812,6 +797,36 @@ mod tests {
         let mut project_root = helper.git_root();
         project_root.push("subdir");
         let mut finder = new_finder(Mode::GitModified, &project_root)?;
+        assert_eq!(finder.files(&[])?, Some(modified));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn git_modified_mode_ignores_changes_outside_precious_root() -> Result<()> {
+        git_mode_ignores_changes_outside_precious_root(Mode::GitModified)
+    }
+
+    #[test]
+    #[parallel]
+    fn git_staged_mode_ignores_changes_outside_precious_root() -> Result<()> {
+        git_mode_ignores_changes_outside_precious_root(Mode::GitStaged)
+    }
+
+    fn git_mode_ignores_changes_outside_precious_root(mode: Mode) -> Result<()> {
+        let helper = testhelper::TestHelper::new()?
+            .with_precious_root_in_subdir("subdir")
+            .with_git_repo()?;
+        let outside = helper.git_root().join("outside.txt");
+        fs::write(&outside, "some text")?;
+        helper.stage_all()?;
+        helper.commit_all()?;
+
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
+        fs::write(&outside, "new text")?;
+        helper.stage_all()?;
+
+        let mut finder = new_finder(mode, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }

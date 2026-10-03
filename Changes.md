@@ -2,6 +2,14 @@
 
 ## NEXT - TBD
 
+- When the `precious` config is in a subdirectory of a larger git project, it was inconsistent about
+  what files it would consider. If given specific files or the `--all` flag, it only looked at files
+  in or below the directory containing its config file. However, when given any flag which was
+  git-related, including `--git`, `--staged`, `--staged-with-stash`, and `--git-diff-from`,
+  `precious` saw changed files outside of this tree, which caused it to fail. Now `precious` only
+  looks at changed files under the project root, which is the directory containing the precious
+  config file. This also makes top-level `exclude` patterns anchored with a leading `/` work in
+  these modes.
 - Fixed a bug where the `--staged-with-stash` mode popped the stash right after finding the files to
   check, before running any commands. Commands saw your unstaged changes, and a tidier could rewrite
   them. The stash is now popped after every command has run.
