@@ -16,6 +16,11 @@
   `invoke.per-dir-or-once = 2` and `working-dir = "dir"` was accepted. When it ran once, it only ran
   in the first file's directory, but `precious` reported every file as passing. This is a breaking
   change for any config with one of these combinations, which will now fail to load.
+- Fixed a bug where a command with `type = "both"` treated the `lint-failure-exit-codes` ok exit
+  codes even when tidying. This meant that if the command exited with those codes when tidying, it
+  was treated as successful. Now only the `ok-exit-codes` are ok when tidying, as the documentation
+  says. If your tidier exits with one of these codes on a normal exit, add that code to its
+  `ok-exit-codes`.
 - Fixed a bug where the `--staged-with-stash` mode popped the stash right after finding the files to
   check, before running any commands. Commands saw your unstaged changes, and a tidier could rewrite
   them. The stash is now popped after every command has run.

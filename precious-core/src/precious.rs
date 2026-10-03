@@ -1205,6 +1205,34 @@ lint-failure-exit-codes = [1]
         Ok(())
     }
 
+    // The `lint-failure-exit-codes` key only applies when linting. When tidying, an exit code that
+    // is only in that list is not ok.
+    #[test]
+    #[serial]
+    #[cfg(not(target_os = "windows"))]
+    fn tidy_fails_with_lint_failure_exit_code() -> Result<()> {
+        let config = r#"
+    [commands.exit-one]
+    type    = "both"
+    include = "**/*"
+    cmd     = ["sh", "-c", "exit 1", "exit-one"]
+    lint-flags = "--check"
+    ok-exit-codes = [0]
+    lint-failure-exit-codes = [1]
+    "#;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let _pushd = helper.pushd_to_git_root()?;
+
+        let app = App::try_parse_from(["precious", "--quiet", "tidy", "--all"])?;
+
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let status = lt.run();
+
+        assert_eq!(status, 1);
+
+        Ok(())
+    }
+
     #[test]
     #[serial]
     #[cfg(not(target_os = "windows"))]

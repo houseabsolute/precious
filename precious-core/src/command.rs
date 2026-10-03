@@ -224,7 +224,11 @@ struct Execution {
     lint_flags: Option<Vec<String>>,
     tidy_flags: Option<Vec<String>>,
     path_flag: Option<String>,
+    // The exit codes that are ok when tidying.
     ok_exit_codes: Vec<i32>,
+    // The exit codes that are ok when linting. This is `ok_exit_codes` plus
+    // `lint_failure_exit_codes`, because a lint failure is still a normal exit for a linter.
+    lint_ok_exit_codes: Vec<i32>,
     lint_failure_exit_codes: HashSet<i32>,
     ignore_stderr: Vec<Regex>,
 }
@@ -365,7 +369,8 @@ impl Command {
                 } else {
                     Some(params.path_flag)
                 },
-                ok_exit_codes: Self::unique_exit_codes(
+                ok_exit_codes: Self::unique_exit_codes(&params.ok_exit_codes, None),
+                lint_ok_exit_codes: Self::unique_exit_codes(
                     &params.ok_exit_codes,
                     Some(&params.lint_failure_exit_codes),
                 ),
@@ -650,7 +655,7 @@ impl Command {
             .args(args.iter().map(String::as_str).collect::<Vec<_>>())
             .num_paths(operating_on.len())
             .env(self.execution.env.clone())
-            .ok_exit_codes(&self.execution.ok_exit_codes)
+            .ok_exit_codes(&self.execution.lint_ok_exit_codes)
             .ignore_stderr(self.execution.ignore_stderr.clone())
             .in_dir(&in_dir)
             .build();
@@ -1179,6 +1184,7 @@ mod tests {
                 tidy_flags: None,
                 path_flag: None,
                 ok_exit_codes: vec![],
+                lint_ok_exit_codes: vec![],
                 lint_failure_exit_codes: HashSet::new(),
                 ignore_stderr: vec![],
             },
