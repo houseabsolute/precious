@@ -606,7 +606,7 @@ const YAML_COMMANDS: [(&str, &str); 1] = [(
     "prettier-yaml",
     r#"
 type = "both"
-include = "**/*.yml"
+include = ["**/*.yml", "**/*.yaml"]
 cmd = ["./node_modules/.bin/prettier", "--no-config"]
 lint-flags = "--check"
 tidy-flags = "--write"
