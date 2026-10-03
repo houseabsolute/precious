@@ -112,6 +112,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The integration tests run `rustfmt`. The runner images only ship it for the stable
+      # toolchain, so without this the tests fail for beta and nightly.
+      - name: Install rustfmt for the integration tests
+        run: rustup toolchain install "$TOOLCHAIN" --profile minimal --component rustfmt
+        shell: bash
+        env:
+          TOOLCHAIN: ${{ matrix.toolchain }}
+        if: ${{ !matrix.platform.skip-tests }}
       - name: Run tests
         uses: houseabsolute/actions-rust-cross@21b0f18dc621b25bfae556ff2791fca4173121e8 # v1.0.8
         with:

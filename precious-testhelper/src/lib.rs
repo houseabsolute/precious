@@ -314,7 +314,6 @@ generated.*
         Ok(fs::remove_dir_all(full)?)
     }
 
-    #[cfg(not(target_os = "windows"))]
     pub fn read_file(&self, rel: &Utf8Path) -> Result<String> {
         let mut full = self.precious_root.clone();
         full.push(rel);

@@ -253,7 +253,8 @@ fn init_auto() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
+// The default macOS filesystems refuse to create a file with a non-UTF-8 name.
+#[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 #[serial]
 fn init_auto_fails_on_non_utf8_filename() -> Result<()> {
@@ -280,7 +281,8 @@ fn init_auto_fails_on_non_utf8_filename() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
+// The default macOS filesystems refuse to create a file with a non-UTF-8 name.
+#[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 #[serial]
 fn init_fails_on_non_utf8_cwd() -> Result<()> {

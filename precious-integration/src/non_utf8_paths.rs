@@ -13,7 +13,8 @@ ok-exit-codes = 0
 lint-failure-exit-codes = 1
 "#;
 
-#[cfg(unix)]
+// The default macOS filesystems refuse to create a file with a non-UTF-8 name.
+#[cfg(all(unix, not(target_os = "macos")))]
 #[test]
 #[serial]
 fn non_utf8_filename_fails_with_clear_error() -> Result<()> {

@@ -581,7 +581,8 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(unix)]
+    // The default macOS filesystems refuse to create a file with a non-UTF-8 name.
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     #[parallel]
     fn all_mode_errors_on_non_utf8_filename() -> Result<()> {
