@@ -264,6 +264,7 @@ cmd = ["perlimports"]
 lint-flags = ["--lint"]
 tidy-flags = ["-i"]
 ok-exit-codes = 0
+lint-failure-exit-codes = 1
 expect-stderr = true
 "#,
     ),
