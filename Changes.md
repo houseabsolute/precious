@@ -10,6 +10,12 @@
   looks at changed files under the project root, which is the directory containing the precious
   config file. This also makes top-level `exclude` patterns anchored with a leading `/` work in
   these modes.
+- The `invoke.per-file-or-dir`, `invoke.per-file-or-once`, and `invoke.per-dir-or-once` options are
+  now checked against the same rules as the two plain `invoke` modes they can turn into. Before,
+  none of the checks for nonsensical combinations applied to them. For example, a command with
+  `invoke.per-dir-or-once = 2` and `working-dir = "dir"` was accepted. When it ran once, it only ran
+  in the first file's directory, but `precious` reported every file as passing. This is a breaking
+  change for any config with one of these combinations, which will now fail to load.
 - Fixed a bug where the `--staged-with-stash` mode popped the stash right after finding the files to
   check, before running any commands. Commands saw your unstaged changes, and a tidier could rewrite
   them. The stash is now popped after every command has run.

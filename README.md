@@ -317,6 +317,11 @@ working-dir = "dir"
 
 You cannot invoke a command once if the working directory is set to each matching directory in turn.
 
+The `invoke.per-file-or-dir`, `invoke.per-file-or-once`, and `invoke.per-dir-or-once` options each
+turn into one of two plain modes when `precious` runs. So the rest of the command's config must be
+valid for both of those modes. For example, `invoke.per-dir-or-once` must follow the rules for both
+`invoke = "per-dir"` and `invoke = "once"`, so it cannot be combined with `working-dir = "dir"`.
+
 #### Invocation Examples
 
 See the [Invocation Examples documentation](docs/invocation-examples.md) for comprehensive examples

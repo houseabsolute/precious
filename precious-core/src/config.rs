@@ -86,12 +86,12 @@ pub struct Config {
 pub(crate) enum ConfigError {
     #[error("File at {file} cannot be read: {error:}")]
     FileCannotBeRead { file: Utf8PathBuf, error: String },
-    #[error(r#"Cannot set invoke = "per-file" and path-args = "{path_args:}""#)]
-    CannotInvokePerFileWithPathArgs { path_args: PathArgs },
-    #[error(r#"Cannot set invoke = "per-dir" and path-args = "{path_args:}""#)]
-    CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs },
-    #[error(r#"Cannot set invoke = "once" and working-dir = "dir""#)]
-    CannotInvokeOnceWithWorkingDirEqDir,
+    #[error(r#"Cannot set {invoke:} and path-args = "{path_args:}""#)]
+    CannotInvokePerFileWithPathArgs { invoke: Invoke, path_args: PathArgs },
+    #[error(r#"Cannot set {invoke:} and path-args = "{path_args:}""#)]
+    CannotInvokePerDirInRootWithPathArgs { invoke: Invoke, path_args: PathArgs },
+    #[error(r#"Cannot set {invoke:} and working-dir = "dir""#)]
+    CannotInvokeOnceWithWorkingDirEqDir { invoke: Invoke },
     #[error("Command \"{command}\" references unknown shared key \"{key}\"")]
     UnknownSharedKey { command: String, key: String },
     #[error("Command \"{command}\" does not define an \"include\" or \"shared-include\"")]
@@ -331,21 +331,34 @@ impl CommandConfig {
         let working_dir = working_dir.unwrap_or(WorkingDir::Root);
         let path_args = path_args.unwrap_or(PathArgs::File);
 
-        match (invoke, &working_dir, path_args) {
-            (Invoke::PerFile, _, path_args)
-                if path_args != PathArgs::File && path_args != PathArgs::AbsoluteFile =>
-            {
-                return Err(ConfigError::CannotInvokePerFileWithPathArgs { path_args }.into());
-            }
-            (Invoke::PerDir, &WorkingDir::Root | &WorkingDir::ChdirTo(_), path_args)
-                if path_args == PathArgs::Dot || path_args == PathArgs::None =>
-            {
-                return Err(ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args }.into());
-            }
-            (Invoke::Once, &WorkingDir::Dir, _) => {
-                return Err(ConfigError::CannotInvokeOnceWithWorkingDirEqDir.into());
-            }
-            _ => (),
+        // The threshold modes turn into one of two plain modes at run time, depending on how many
+        // files or directories there are. So the config has to be valid for both of them.
+        let may_be_per_file = matches!(
+            invoke,
+            Invoke::PerFile | Invoke::PerFileOrDir(_) | Invoke::PerFileOrOnce(_)
+        );
+        let may_be_per_dir = matches!(
+            invoke,
+            Invoke::PerDir | Invoke::PerFileOrDir(_) | Invoke::PerDirOrOnce(_)
+        );
+        let may_be_once = matches!(
+            invoke,
+            Invoke::Once | Invoke::PerFileOrOnce(_) | Invoke::PerDirOrOnce(_)
+        );
+
+        if may_be_per_file && path_args != PathArgs::File && path_args != PathArgs::AbsoluteFile {
+            return Err(ConfigError::CannotInvokePerFileWithPathArgs { invoke, path_args }.into());
+        }
+        if may_be_per_dir
+            && matches!(working_dir, WorkingDir::Root | WorkingDir::ChdirTo(_))
+            && (path_args == PathArgs::Dot || path_args == PathArgs::None)
+        {
+            return Err(
+                ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke, path_args }.into(),
+            );
+        }
+        if may_be_once && working_dir == WorkingDir::Dir {
+            return Err(ConfigError::CannotInvokeOnceWithWorkingDirEqDir { invoke }.into());
         }
 
         Ok((invoke, working_dir, path_args))
@@ -629,64 +642,171 @@ mod tests {
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::Dir,
-        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dir } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFile, path_args: PathArgs::Dir } ;
         r#"invoke = "per-file" + path-args = "dir""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::None,
-        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::None } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFile, path_args: PathArgs::None } ;
         r#"invoke = "per-file" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::Dot,
-        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::Dot } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFile, path_args: PathArgs::Dot } ;
         r#"invoke = "per-file" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::PerFile,
         WorkingDir::Root,
         PathArgs::AbsoluteDir,
-        &ConfigError::CannotInvokePerFileWithPathArgs { path_args: PathArgs::AbsoluteDir } ;
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFile, path_args: PathArgs::AbsoluteDir } ;
         r#"invoke = "per-file" + path-args = "absolute-dir""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::Root,
         PathArgs::None,
-        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDir, path_args: PathArgs::None } ;
         r#"invoke = "per-dir" + working_dir = "root" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::Root,
         PathArgs::Dot,
-        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDir, path_args: PathArgs::Dot } ;
         r#"invoke = "per-dir" + working_dir = "root" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
         PathArgs::None,
-        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::None } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDir, path_args: PathArgs::None } ;
         r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "none""#
     )]
     #[test_case(
         Invoke::PerDir,
         WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
         PathArgs::Dot,
-        &ConfigError::CannotInvokePerDirInRootWithPathArgs { path_args: PathArgs::Dot } ;
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDir, path_args: PathArgs::Dot } ;
         r#"invoke = "per-dir" + working_dir.chdir-to = "foo" + path-args = "dot""#
     )]
     #[test_case(
         Invoke::Once,
         WorkingDir::Dir,
         PathArgs::File,
-        &ConfigError::CannotInvokeOnceWithWorkingDirEqDir ;
+        &ConfigError::CannotInvokeOnceWithWorkingDirEqDir { invoke: Invoke::Once } ;
         r#"invoke = "once" + working_dir = "dir""#
+    )]
+    // The threshold modes resolve to one of two plain modes at run time, so a config has to be
+    // valid for both of them.
+    #[test_case(
+        Invoke::PerFileOrDir(2),
+        WorkingDir::Root,
+        PathArgs::Dir,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrDir(2), path_args: PathArgs::Dir } ;
+        r#"invoke.per-file-or-dir + path-args = "dir""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrDir(2),
+        WorkingDir::Root,
+        PathArgs::None,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrDir(2), path_args: PathArgs::None } ;
+        r#"invoke.per-file-or-dir + path-args = "none""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrDir(2),
+        WorkingDir::Root,
+        PathArgs::Dot,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrDir(2), path_args: PathArgs::Dot } ;
+        r#"invoke.per-file-or-dir + path-args = "dot""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrDir(2),
+        WorkingDir::Root,
+        PathArgs::AbsoluteDir,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrDir(2), path_args: PathArgs::AbsoluteDir } ;
+        r#"invoke.per-file-or-dir + path-args = "absolute-dir""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrOnce(2),
+        WorkingDir::Root,
+        PathArgs::Dir,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrOnce(2), path_args: PathArgs::Dir } ;
+        r#"invoke.per-file-or-once + path-args = "dir""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrOnce(2),
+        WorkingDir::Root,
+        PathArgs::None,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrOnce(2), path_args: PathArgs::None } ;
+        r#"invoke.per-file-or-once + path-args = "none""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrOnce(2),
+        WorkingDir::Root,
+        PathArgs::Dot,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrOnce(2), path_args: PathArgs::Dot } ;
+        r#"invoke.per-file-or-once + path-args = "dot""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrOnce(2),
+        WorkingDir::Root,
+        PathArgs::AbsoluteDir,
+        &ConfigError::CannotInvokePerFileWithPathArgs { invoke: Invoke::PerFileOrOnce(2), path_args: PathArgs::AbsoluteDir } ;
+        r#"invoke.per-file-or-once + path-args = "absolute-dir""#
+    )]
+    #[test_case(
+        Invoke::PerFileOrOnce(2),
+        WorkingDir::Dir,
+        PathArgs::File,
+        &ConfigError::CannotInvokeOnceWithWorkingDirEqDir { invoke: Invoke::PerFileOrOnce(2) } ;
+        r#"invoke.per-file-or-once + working_dir = "dir""#
+    )]
+    #[test_case(
+        Invoke::PerDirOrOnce(2),
+        WorkingDir::Root,
+        PathArgs::None,
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDirOrOnce(2), path_args: PathArgs::None } ;
+        r#"invoke.per-dir-or-once + working_dir = "root" + path-args = "none""#
+    )]
+    #[test_case(
+        Invoke::PerDirOrOnce(2),
+        WorkingDir::Root,
+        PathArgs::Dot,
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDirOrOnce(2), path_args: PathArgs::Dot } ;
+        r#"invoke.per-dir-or-once + working_dir = "root" + path-args = "dot""#
+    )]
+    #[test_case(
+        Invoke::PerDirOrOnce(2),
+        WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
+        PathArgs::None,
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDirOrOnce(2), path_args: PathArgs::None } ;
+        r#"invoke.per-dir-or-once + working_dir.chdir-to = "foo" + path-args = "none""#
+    )]
+    #[test_case(
+        Invoke::PerDirOrOnce(2),
+        WorkingDir::ChdirTo(Utf8PathBuf::from("foo")),
+        PathArgs::Dot,
+        &ConfigError::CannotInvokePerDirInRootWithPathArgs { invoke: Invoke::PerDirOrOnce(2), path_args: PathArgs::Dot } ;
+        r#"invoke.per-dir-or-once + working_dir.chdir-to = "foo" + path-args = "dot""#
+    )]
+    #[test_case(
+        Invoke::PerDirOrOnce(2),
+        WorkingDir::Dir,
+        PathArgs::File,
+        &ConfigError::CannotInvokeOnceWithWorkingDirEqDir { invoke: Invoke::PerDirOrOnce(2) } ;
+        r#"invoke.per-dir-or-once + working_dir = "dir""#
+    )]
+    #[test_case(
+        Invoke::PerDirOrOnce(2),
+        WorkingDir::Dir,
+        PathArgs::None,
+        &ConfigError::CannotInvokeOnceWithWorkingDirEqDir { invoke: Invoke::PerDirOrOnce(2) } ;
+        r#"invoke.per-dir-or-once + working_dir = "dir" + path-args = "none""#
     )]
     #[parallel]
     fn invalid_command_config(
@@ -718,6 +838,21 @@ mod tests {
         let res = config.try_into_command(Utf8Path::new("."), "some-linter");
         let err = res.unwrap_err().downcast::<ConfigError>().unwrap();
         assert_eq!(&err, expect_err);
+    }
+
+    #[test]
+    #[parallel]
+    fn invalid_command_config_error_names_the_configured_invoke() {
+        let err = CommandConfig::invoke_args(
+            Some(Invoke::PerDirOrOnce(2)),
+            Some(WorkingDir::Dir),
+            Some(PathArgs::File),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            r#"Cannot set invoke.per-dir-or-once = 2 and working-dir = "dir""#,
+        );
     }
 
     #[test_case(vec![], "default", true)]
