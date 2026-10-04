@@ -1,6 +1,6 @@
-# See examples/bin/install-dev-tools.sh for an example script to install all
-# of the tools needed by this config. You can copy it into your project and
-# modify it as needed to only install the tools you need.
+# See examples/mise.toml.example for an example mise config that installs
+# precious and some of the tools used by the example configs. You can copy it
+# into your project as mise.toml and change it to install the tools you need.
 
 # This list is appropriate for a Perl distribution that you upload to
 # CPAN. For Perl applications you develop locally, you can probably remove
