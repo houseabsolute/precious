@@ -218,7 +218,7 @@ impl Finder {
             "--name-only",
             "--relative",
             "-z",
-            "--diff-filter=ACM",
+            "--diff-filter=ACMR",
             "HEAD",
         ])
     }
@@ -232,7 +232,7 @@ impl Finder {
             "--name-only",
             "--relative",
             "-z",
-            "--diff-filter=ACM",
+            "--diff-filter=ACMR",
         ])
     }
 
@@ -320,7 +320,7 @@ impl Finder {
             "--name-only",
             "--relative",
             "-z",
-            "--diff-filter=ACM",
+            "--diff-filter=ACMR",
             &since_dot,
         ])
     }
@@ -1207,6 +1207,56 @@ mod tests {
             git_root.join(".git").join(head_file).exists(),
             "{head_file} still exists after finding the staged files",
         );
+        Ok(())
+    }
+
+    // Git reports a file that was moved and then edited as a rename, not as an added file. The new
+    // path still has changed content, so it has to be included.
+    #[test]
+    #[parallel]
+    fn git_modes_include_renamed_files() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let root = helper.precious_root();
+
+        // The file needs enough content that git still sees it as the same file after the edit.
+        let content = (1..=20).map(|i| format!("line {i}")).join("\n") + "\n";
+        helper.write_file("old-name.txt", &content)?;
+        helper.stage_all()?;
+        helper.commit_all()?;
+
+        helper.switch_to_branch("new-branch", false)?;
+        fs::rename(root.join("old-name.txt"), root.join("new-name.txt"))?;
+        helper.write_file("new-name.txt", &format!("{content}one more line\n"))?;
+        helper.stage_all()?;
+
+        let status = Exec::builder()
+            .exe("git")
+            .args(vec!["diff", "--cached", "--name-status"])
+            .ok_exit_codes(&[0])
+            .in_dir(&helper.git_root())
+            .build()
+            .run()?;
+        assert!(
+            status.stdout.unwrap_or_default().starts_with('R'),
+            "git reports the file as renamed",
+        );
+
+        let expect = Some(vec1![Utf8PathBuf::from("new-name.txt")]);
+
+        let mut finder = new_finder(Mode::GitStaged, &root)?;
+        assert_eq!(finder.files(&[])?, expect, "--staged finds the new path");
+
+        let mut finder = new_finder(Mode::GitModified, &root)?;
+        assert_eq!(finder.files(&[])?, expect, "--git finds the new path");
+
+        helper.commit_all()?;
+        let mut finder = new_finder(Mode::GitDiffFrom("master".to_string()), &root)?;
+        assert_eq!(
+            finder.files(&[])?,
+            expect,
+            "--git-diff-from finds the new path",
+        );
+
         Ok(())
     }
 

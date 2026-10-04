@@ -68,6 +68,9 @@
   revert. The stash made git forget that the cherry-pick or revert was in progress, so
   `git cherry-pick --continue` failed and a plain `git commit` lost the original commit message. Now
   `precious` skips the stash in these cases, like it already did for a merge.
+- Fixed a bug where the `--git`, `--staged`, `--staged-with-stash`, and `--git-diff-from` flags
+  skipped files that were renamed. A file that was moved and then edited was never linted or tidied
+  under its new name.
 
 ## 0.12.0 - 2026-08-22
 
