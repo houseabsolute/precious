@@ -92,6 +92,8 @@ pub(crate) enum ConfigError {
     CannotInvokePerDirInRootWithPathArgs { invoke: Invoke, path_args: PathArgs },
     #[error(r#"Cannot set {invoke:} and working-dir = "dir""#)]
     CannotInvokeOnceWithWorkingDirEqDir { invoke: Invoke },
+    #[error("Cannot set {invoke:} because the number must be at least 1")]
+    InvokeThresholdIsZero { invoke: Invoke },
     #[error("Command \"{command}\" references unknown shared key \"{key}\"")]
     UnknownSharedKey { command: String, key: String },
     #[error("Command \"{command}\" does not define an \"include\" or \"shared-include\"")]
@@ -332,6 +334,14 @@ impl CommandConfig {
         let invoke = invoke.unwrap_or(Invoke::PerFile);
         let working_dir = working_dir.unwrap_or(WorkingDir::Root);
         let path_args = path_args.unwrap_or(PathArgs::File);
+
+        // There is always at least one file or directory, so a threshold of 0 has no meaning.
+        if matches!(
+            invoke,
+            Invoke::PerFileOrDir(0) | Invoke::PerFileOrOnce(0) | Invoke::PerDirOrOnce(0)
+        ) {
+            return Err(ConfigError::InvokeThresholdIsZero { invoke }.into());
+        }
 
         // The threshold modes turn into one of two plain modes at run time, depending on how many
         // files or directories there are. So the config has to be valid for both of them.
@@ -856,6 +866,22 @@ mod tests {
         assert_eq!(
             err.to_string(),
             r#"Cannot set invoke.per-dir-or-once = 2 and working-dir = "dir""#,
+        );
+    }
+
+    // A threshold of 0 has no meaning, since there is always at least one file or directory. It
+    // has to be rejected when the config is loaded and not when the command is run.
+    #[test_case(Invoke::PerFileOrDir(0); "per-file-or-dir")]
+    #[test_case(Invoke::PerFileOrOnce(0); "per-file-or-once")]
+    #[test_case(Invoke::PerDirOrOnce(0); "per-dir-or-once")]
+    #[parallel]
+    fn invoke_threshold_of_zero_is_an_error(invoke: Invoke) {
+        let err =
+            CommandConfig::invoke_args(Some(invoke), Some(WorkingDir::Root), Some(PathArgs::File))
+                .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            format!("Cannot set {invoke} because the number must be at least 1"),
         );
     }
 

@@ -87,6 +87,9 @@
   with a name that is not valid UTF-8, even a file that the command does not include. Now `precious`
   only reports an error for a non-UTF-8 file name when the file matches the command's `include` and
   `exclude` rules, and that error shows the raw bytes of the name.
+- A value of `0` for `invoke.per-file-or-dir`, `invoke.per-file-or-once`, or
+  `invoke.per-dir-or-once` is now a config error. Before, the first two made `precious` panic when
+  it ran the command, and the third was accepted and always ran the command once.
 
 ## 0.12.0 - 2026-08-22
 

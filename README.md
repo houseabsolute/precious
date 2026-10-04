@@ -180,6 +180,8 @@ These are written like this:
 invoke.per-file-or-dir = 42
 ```
 
+The number must be at least `1`.
+
 These experimental options are useful for optimizing the speed of running a command. In some cases,
 a command can be run in multiple ways, and how quickly it completes depends on how many files or
 directories need to be linted or tidied.
