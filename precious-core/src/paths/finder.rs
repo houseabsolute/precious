@@ -50,8 +50,10 @@ pub enum FinderError {
     #[error(r#"Could not determine the repo root by running "git rev-parse --show-toplevel""#)]
     CouldNotDetermineRepoRoot,
 
-    #[error(r#"Could not determine the path of MERGE_MODE by running "git rev-parse --git-path MERGE_MODE""#)]
-    CouldNotDetermineMergeModePath,
+    #[error(
+        r#"Could not determine the path of {file} by running "git rev-parse --git-path {file}""#
+    )]
+    CouldNotDetermineGitPath { file: &'static str },
 
     #[error(r#"The path "{path}" does not contain "{prefix}" as a prefix"#)]
     PrefixNotFound {
@@ -241,7 +243,7 @@ impl Finder {
 
         let git_root = self.git_root()?;
 
-        if !self.merge_in_progress()? {
+        if !self.git_operation_in_progress()? {
             let before = Self::stash_tip(&git_root)?;
             Exec::builder()
                 .exe("git")
@@ -274,31 +276,41 @@ impl Finder {
         Ok(res.stdout.map(|s| s.trim().to_string()))
     }
 
-    // We have to ask git where MERGE_MODE lives instead of assuming it's at
-    // <git root>/.git/MERGE_MODE. In a worktree or submodule, `.git` is a file
-    // containing a gitdir: pointer and the real file lives somewhere else
-    // entirely.
-    fn merge_in_progress(&mut self) -> Result<bool> {
+    // Stashing in the middle of a merge, cherry-pick, or revert throws away the state of that
+    // operation, so we look for the file that git creates for each one. A conflicted cherry-pick
+    // or revert does not create MERGE_MODE.
+    //
+    // We have to ask git where these files live instead of assuming they're in <git root>/.git. In
+    // a worktree or submodule, `.git` is a file containing a gitdir: pointer and the real files
+    // live somewhere else entirely.
+    fn git_operation_in_progress(&mut self) -> Result<bool> {
         let git_root = self.git_root()?;
-        let res = Exec::builder()
-            .exe("git")
-            .args(vec!["rev-parse", "--git-path", "MERGE_MODE"])
-            .ok_exit_codes(&[0])
-            .in_dir(&git_root)
-            .build()
-            .run()
-            .context("Failed to run git rev-parse to determine the path of MERGE_MODE")?;
+        for file in ["MERGE_MODE", "CHERRY_PICK_HEAD", "REVERT_HEAD"] {
+            let res = Exec::builder()
+                .exe("git")
+                .args(vec!["rev-parse", "--git-path", file])
+                .ok_exit_codes(&[0])
+                .in_dir(&git_root)
+                .build()
+                .run()
+                .with_context(|| {
+                    format!("Failed to run git rev-parse to determine the path of {file}")
+                })?;
 
-        let bytes = res
-            .stdout_bytes
-            .as_deref()
-            .ok_or(FinderError::CouldNotDetermineMergeModePath)
-            .context("git rev-parse --git-path did not produce output")?;
-        // This path may be relative, in which case it's relative to the
-        // directory we ran git in.
-        let mm = git_root.join(path_from_git_output(bytes, NonUtf8Source::GitPath)?);
+            let bytes = res
+                .stdout_bytes
+                .as_deref()
+                .ok_or(FinderError::CouldNotDetermineGitPath { file })
+                .context("git rev-parse --git-path did not produce output")?;
+            // This path may be relative, in which case it's relative to the
+            // directory we ran git in.
+            let path = git_root.join(path_from_git_output(bytes, NonUtf8Source::GitPath)?);
+            if path.exists() {
+                return Ok(true);
+            }
+        }
 
-        Ok(mm.exists())
+        Ok(false)
     }
 
     fn git_modified_since(&mut self, since: &str) -> Result<Vec<Utf8PathBuf>> {
@@ -541,6 +553,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serial_test::parallel;
     use std::fs;
+    use test_case::test_case;
 
     // Some git commands write to stderr as a matter of course, so we have to
     // ignore all of their stderr output.
@@ -1127,6 +1140,70 @@ mod tests {
         let mut finder = new_finder(Mode::GitStagedWithStash, &wt_root)?;
         assert_eq!(finder.files(&[])?, Some(vec1![file.to_path_buf()]));
         assert!(!finder.stashed);
+        Ok(())
+    }
+
+    // A conflicted cherry-pick or revert does not create MERGE_MODE, but stashing in the middle of
+    // one still throws away its state. Git deletes CHERRY_PICK_HEAD or REVERT_HEAD when it stashes,
+    // so the user can no longer continue the operation.
+    #[test_case("cherry-pick", "CHERRY_PICK_HEAD"; "cherry-pick")]
+    #[test_case("revert", "REVERT_HEAD"; "revert")]
+    #[parallel]
+    fn git_staged_mode_with_stash_does_not_stash_during(op: &str, head_file: &str) -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let git_root = helper.git_root();
+
+        let file = Utf8Path::new("conflict-here");
+        helper.write_file(file, "line 1\nline 2\n")?;
+        helper.stage_all()?;
+        helper.commit_all()?;
+
+        // Both operations conflict because the commit they apply changes a line that the current
+        // HEAD has also changed.
+        let commit = if op == "cherry-pick" {
+            helper.switch_to_branch("new-branch", false)?;
+            helper.write_file(file, "line 1\nline 1.5\nline 2\n")?;
+            helper.commit_all()?;
+
+            helper.switch_to_branch("master", true)?;
+            helper.write_file(file, "line 1\nline 1.6\nline 2\n")?;
+            helper.commit_all()?;
+
+            "new-branch"
+        } else {
+            helper.write_file(file, "line 1\nline 1.5\nline 2\n")?;
+            helper.commit_all()?;
+            helper.write_file(file, "line 1\nline 1.6\nline 2\n")?;
+            helper.commit_all()?;
+
+            "HEAD~1"
+        };
+
+        Exec::builder()
+            .exe("git")
+            .args(vec![op, "--no-edit", commit])
+            .ok_exit_codes(&[1])
+            .ignore_stderr(vec![ANY_STDERR_RE.clone()])
+            .in_dir(&git_root)
+            .build()
+            .run()?;
+        assert!(
+            git_root.join(".git").join(head_file).exists(),
+            "{head_file} exists after a conflicted {op}",
+        );
+
+        helper.write_file(file, "line 1\nline 1.7\nline 2\n")?;
+        helper.stage_all()?;
+        // Without an unstaged change there would be nothing to stash.
+        helper.write_file("README.md", "an unstaged change\n")?;
+
+        let mut finder = new_finder(Mode::GitStagedWithStash, &helper.precious_root())?;
+        assert_eq!(finder.files(&[])?, Some(vec1![file.to_path_buf()]));
+        assert!(!finder.stashed, "did not stash during a {op}");
+        assert!(
+            git_root.join(".git").join(head_file).exists(),
+            "{head_file} still exists after finding the staged files",
+        );
         Ok(())
     }
 
