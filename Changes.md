@@ -114,6 +114,9 @@
 - Running `precious config init --auto` no longer looks at files under the `.git`, `.hg`, and `.svn`
   directories. Before, a git branch or tag with a name like `release/notes.md` or `v1.pl` made it
   generate config for Markdown or Perl, even when the project had no files of that type.
+- When the paths given on the command line overlap, each file is now only handled once. Before, a
+  command like `precious tidy . src/a.txt` or `precious lint a.txt a.txt` passed the same file to a
+  command more than once, and ran a per-file command on that file more than once.
 
 ## 0.12.0 - 2026-08-22
 

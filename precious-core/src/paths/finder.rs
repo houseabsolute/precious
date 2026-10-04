@@ -120,6 +120,9 @@ impl Finder {
                 .with_context(|| format!(r#"Failed to get files modified since "{from}""#))?,
         };
         files.sort();
+        // Paths from the command line can overlap, like a directory and a file inside it. Without
+        // this, a command would be given the same file more than once.
+        files.dedup();
 
         if files.is_empty() {
             return match self.mode {
@@ -1453,6 +1456,43 @@ mod tests {
             .try_collect1()
             .unwrap();
         assert_eq!(finder.files(&[Utf8PathBuf::from("tests")])?, Some(expect));
+        Ok(())
+    }
+
+    // A file that is listed twice would be passed to a command twice, and a command that runs once
+    // per file would run on it twice, maybe at the same time.
+    #[test_case(&["src", "src/main.rs"]; "a dir and a file inside it")]
+    #[test_case(&["src", "src"]; "the same dir twice")]
+    #[test_case(&["src", "./src"]; "the same dir spelled two ways")]
+    #[parallel]
+    fn cli_mode_given_overlapping_paths_has_no_duplicates(cli_paths: &[&str]) -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let mut finder = new_finder(Mode::FromCli, &helper.precious_root())?;
+        let expect = helper
+            .all_files()
+            .into_iter()
+            .filter(|p| p.starts_with("src/"))
+            .sorted()
+            .try_collect1()
+            .unwrap();
+        let cli_paths = cli_paths.iter().map(Utf8PathBuf::from).collect::<Vec<_>>();
+        assert_eq!(finder.files(&cli_paths)?, Some(expect));
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn cli_mode_given_the_same_file_twice_has_no_duplicates() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let mut finder = new_finder(Mode::FromCli, &helper.precious_root())?;
+        let expect = vec1![Utf8PathBuf::from("src/main.rs")];
+        assert_eq!(
+            finder.files(&[
+                Utf8PathBuf::from("src/main.rs"),
+                Utf8PathBuf::from("src/main.rs"),
+            ])?,
+            Some(expect),
+        );
         Ok(())
     }
 
