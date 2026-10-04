@@ -121,6 +121,9 @@
   `exclude = ["vendor", "!vendor/keep.txt"]`. When the directory was given on the command line, as
   in `precious lint vendor`, the file was not found and `precious` said that the path was excluded.
   The file was found with `--all` or when a parent directory was given.
+- A submodule with a new commit is no longer passed to commands when running with `--git`,
+  `--staged`, `--staged-with-stash`, or `--git-diff-from`. Git reports the submodule as one changed
+  path, and `precious` treated that directory as if it were a file.
 
 ## 0.12.0 - 2026-08-22
 

@@ -443,9 +443,12 @@ impl Finder {
                     }
 
                     let full = self.project_root.join(&rel);
-                    if !full.exists() {
+                    // A path that git lists may have been deleted since. It can also be a
+                    // directory, because git reports a submodule with a new commit as one changed
+                    // path.
+                    if !full.is_file() {
                         debug!(
-                            "The staged file at {rel} (abs path {full}) was deleted so it will be ignored.",
+                            "The path at {rel} (abs path {full}) is not a regular file so it will be ignored.",
                         );
                         continue;
                     }
@@ -985,6 +988,57 @@ mod tests {
         );
 
         let mut finder = new_finder(Mode::GitModified, &helper.precious_root())?;
+        assert_eq!(finder.files(&[])?, Some(modified));
+        Ok(())
+    }
+
+    // Git reports a submodule with a new commit as one changed path, but that path is a directory.
+    // Commands expect files here, and a linter that recurses into directories would end up
+    // checking all of the submodule's content.
+    #[test_case(Mode::GitModified; "git")]
+    #[test_case(Mode::GitStaged; "staged")]
+    #[parallel]
+    fn git_modes_ignore_changed_submodule(mode: Mode) -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let sub = helper.git_root().join("sub");
+        fs::create_dir(&sub)?;
+
+        let git = |dir: &Utf8Path, args: Vec<&str>| -> Result<()> {
+            Exec::builder()
+                .exe("git")
+                .args(args)
+                .ok_exit_codes(&[0])
+                .ignore_stderr(vec![ANY_STDERR_RE.clone()])
+                .in_dir(dir)
+                .build()
+                .run()?;
+            Ok(())
+        };
+        let commit_in_sub = |content: &str| -> Result<()> {
+            helper.write_file(Utf8PathBuf::from("sub/file.txt"), content)?;
+            git(&sub, vec!["add", "file.txt"])?;
+            git(&sub, vec!["commit", "-m", "a commit in the submodule"])
+        };
+
+        git(&sub, vec!["init", "--initial-branch", "master"])?;
+        git(&sub, vec!["config", "user.email", "precious@example.com"])?;
+        git(&sub, vec!["config", "user.name", "Precious Tester"])?;
+        commit_in_sub("first")?;
+
+        // Adding a directory that is its own git repo records it the same way as a submodule.
+        git(&helper.git_root(), vec!["add", "sub"])?;
+        git(
+            &helper.git_root(),
+            vec!["commit", "-m", "add the submodule"],
+        )?;
+
+        commit_in_sub("second")?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
+        if mode == Mode::GitStaged {
+            helper.stage_all()?;
+        }
+
+        let mut finder = new_finder(mode, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
