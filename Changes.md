@@ -54,6 +54,10 @@
   `examples/perl/precious.toml`, now ignores the stderr output that `podchecker` prints when it
   finds POD errors. Before, a file with POD errors was reported as an unexpected stderr error and
   not as a lint failure.
+- Fixed a bug on Windows where `precious` could run a different executable than the one it found in
+  your `PATH`. Windows looks in its system directories before it looks in `PATH`. This meant that
+  `cmd = ["bash", ...]` could run the WSL launcher in `C:\Windows\System32` even when Git's `bash`
+  came first in `PATH`. Now `precious` always runs the executable that it finds in `PATH`.
 
 ## 0.12.0 - 2026-08-22
 

@@ -12,6 +12,7 @@ use regex::Regex;
 use std::{
     collections::HashMap,
     env,
+    ffi::OsStr,
     process::{self, Command},
     sync::mpsc::{self, RecvTimeoutError},
     thread::{self, JoinHandle},
@@ -112,7 +113,10 @@ impl<'a> Exec<'a> {
     }
 
     pub fn run(self) -> Result<Output> {
-        if which(self.exe).is_err() {
+        // We run the path that `which` found, not just the name. On Windows, the standard library
+        // looks in the system directories before it looks in `PATH`, so a name like `bash` could
+        // run a different executable than the one we just checked for.
+        let Ok(exe_path) = which(self.exe) else {
             let path = match env::var("PATH") {
                 Ok(p) => p,
                 Err(e) => format!("<could not get PATH environment variable: {e}>"),
@@ -122,10 +126,18 @@ impl<'a> Exec<'a> {
                 path,
             }
             .into());
-        }
+        };
+
+        // A relative entry in `PATH` gives us a relative path. That path is relative to our own
+        // current directory, which may not be the directory the command runs in.
+        let exe_path = if exe_path.is_relative() {
+            env::current_dir()?.join(exe_path)
+        } else {
+            exe_path
+        };
 
         let cmd = self
-            .as_command()
+            .command_for(exe_path.as_os_str())
             .with_context(|| format!("Failed to prepare command '{}'", self.exe))?;
 
         if log_enabled!(Debug) {
@@ -133,7 +145,7 @@ impl<'a> Exec<'a> {
                 "Running command [{}] with cwd = {}",
                 self.loggable_command,
                 cmd.get_current_dir()
-                    .expect("we just set the current_dir in as_command so this should be Some")
+                    .expect("we just set the current_dir in command_for so this should be Some")
                     .display(),
             );
             for kv in self.env.iter().sorted_by(|a, b| a.0.cmp(b.0)) {
@@ -281,7 +293,11 @@ impl<'a> Exec<'a> {
     }
 
     pub fn as_command(&self) -> Result<Command> {
-        let mut cmd = Command::new(self.exe);
+        self.command_for(OsStr::new(self.exe))
+    }
+
+    fn command_for(&self, exe: &OsStr) -> Result<Command> {
+        let mut cmd = Command::new(exe);
         cmd.args(&self.args);
 
         let in_dir = if let Some(d) = &self.in_dir {
