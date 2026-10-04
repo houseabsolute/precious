@@ -75,6 +75,9 @@
   failed when `git diff` printed a warning. For example, with `core.autocrlf` turned on, git warns
   that "LF will be replaced by CRLF", and `precious` treated this as an error. Now `precious` only
   looks at the exit code from `git diff`.
+- Fixed a bug where a file with a name that is not valid UTF-8 made `precious` fail even when the
+  file was excluded. Now `precious` only reports an error for a non-UTF-8 file name when the file is
+  not excluded.
 
 ## 0.12.0 - 2026-08-22
 

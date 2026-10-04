@@ -355,12 +355,24 @@ impl Finder {
         {
             match result {
                 Ok(ent) => {
-                    let path = Utf8PathBuf::from_path_buf(ent.into_path()).map_err(|raw| {
-                        NonUtf8PathError {
-                            raw,
-                            source: NonUtf8Source::FilesystemWalk,
+                    let path = match Utf8PathBuf::from_path_buf(ent.into_path()) {
+                        Ok(p) => p,
+                        Err(raw) => {
+                            // An excluded file is never passed to a command, so it does not matter
+                            // that its name is not UTF-8.
+                            let is_excluded = raw
+                                .strip_prefix(&self.project_root)
+                                .is_ok_and(|rel| exclude_matcher.raw_path_matches(rel, false));
+                            if is_excluded || raw.is_dir() {
+                                continue;
+                            }
+                            return Err(NonUtf8PathError {
+                                raw,
+                                source: NonUtf8Source::FilesystemWalk,
+                            }
+                            .into());
                         }
-                    })?;
+                    };
                     if path.is_dir() {
                         continue;
                     }
@@ -405,8 +417,14 @@ impl Finder {
                 let mut paths: Vec<Utf8PathBuf> = Vec::new();
                 for raw in bytes.split(|b| *b == 0).filter(|s| !s.is_empty()) {
                     let Ok(s) = std::str::from_utf8(raw) else {
+                        // An excluded file is never passed to a command, so it does not matter
+                        // that its name is not UTF-8.
+                        let raw = crate::paths::utf8::bytes_to_pathbuf(raw);
+                        if exclude_matcher.raw_path_matches(&raw, false) {
+                            continue;
+                        }
                         return Err(NonUtf8PathError {
-                            raw: crate::paths::utf8::bytes_to_pathbuf(raw),
+                            raw,
                             source: NonUtf8Source::GitDiff,
                         }
                         .into());
@@ -619,6 +637,42 @@ mod tests {
             .downcast_ref::<NonUtf8PathError>()
             .expect("expected NonUtf8PathError");
         assert_eq!(downcast.source, NonUtf8Source::FilesystemWalk);
+        Ok(())
+    }
+
+    // A file that is excluded is never passed to a command, so its name does not have to be valid
+    // UTF-8. The default macOS filesystems refuse to create a file with a non-UTF-8 name.
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test_case(Mode::All; "all")]
+    #[test_case(Mode::GitStaged; "staged")]
+    #[parallel]
+    fn excluded_non_utf8_filename_is_not_an_error(mode: Mode) -> Result<()> {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let mut full = helper.precious_root().into_std_path_buf();
+        full.push("vendor");
+        fs::create_dir(&full)?;
+        full.push(OsStr::from_bytes(b"data\xff.txt"));
+        fs::write(&full, b"contents")?;
+        helper.stage_all()?;
+
+        // In `--all` mode we find every file in the repo. In `--staged` mode the only staged file
+        // is the excluded one.
+        let expect = if mode == Mode::All {
+            Some(helper.all_files1())
+        } else {
+            None
+        };
+
+        let mut finder = new_finder_with_excludes(
+            mode,
+            &helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor".to_string()],
+        )?;
+        assert_eq!(finder.files(&[])?, expect);
         Ok(())
     }
 

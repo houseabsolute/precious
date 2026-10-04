@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use camino::Utf8Path;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use std::path::Path;
 
 #[derive(Debug)]
 #[allow(clippy::module_name_repetitions)]
@@ -42,6 +43,12 @@ pub struct Matcher {
 
 impl Matcher {
     pub fn path_matches(&self, path: &Utf8Path, is_dir: bool) -> bool {
+        self.raw_path_matches(path.as_std_path(), is_dir)
+    }
+
+    // This exists so that we can check a path with a non-UTF-8 name. We need to know if such a
+    // path is excluded before we decide that its name is an error.
+    pub fn raw_path_matches(&self, path: &Path, is_dir: bool) -> bool {
         self.gitignore
             .matched_path_or_any_parents(path, is_dir)
             .is_ignore()
