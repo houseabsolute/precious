@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error(r#"Could not find "{exe:}" in your path ({path:}"#)]
+    #[error(r#"Could not find "{exe:}" in your path ({path:})"#)]
     ExecutableNotInPath { exe: String, path: String },
 
     #[error(

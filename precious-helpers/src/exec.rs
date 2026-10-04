@@ -591,7 +591,12 @@ mod tests {
             .env(env)
             .build()
             .run();
-        match error_from_run(res)? {
+        let e = error_from_run(res)?;
+        assert_eq!(
+            e.to_string(),
+            r#"Could not find "precious-exec-test-no-such-tool" in your path (/does/not/exist)"#,
+        );
+        match e {
             Error::ExecutableNotInPath { exe, path } => {
                 assert_eq!(exe, "precious-exec-test-no-such-tool");
                 assert_eq!(path, "/does/not/exist");

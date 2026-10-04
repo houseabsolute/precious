@@ -133,6 +133,8 @@
   stdout and stderr. Before, that output was thrown away.
 - When a command fails because it printed something unexpected to stderr, the error that `precious`
   prints now includes the command's stdout as well as its stderr.
+- Fixed the error message for an executable that cannot be found. It was missing the closing
+  parenthesis after the `PATH` value.
 
 ## 0.12.0 - 2026-08-22
 
