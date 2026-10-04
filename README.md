@@ -99,11 +99,17 @@ The following components are supported:
 - `perl` - Generates config for a Perl project which uses a variety of tools, including
   [`perlcritic`](https://metacpan.org/dist/Perl-Critic) and
   [`perltidy`](https://metacpan.org/dist/Perl-Tidy).
+- `python` - Generates config for a Python project which uses [`ruff`](https://docs.astral.sh/ruff/)
+  for linting and tidying and [`mypy`](https://mypy.readthedocs.io/) for linting.
+- `ruby` - Generates config for a Ruby project which uses [`rubocop`](https://rubocop.org/) for
+  linting and tidying.
 - `rust` - Generates config for a Rust project which uses
   [`rustfmt`](https://rust-lang.github.io/rustfmt/) for tidying and
   [`clippy`](https://doc.rust-lang.org/stable/clippy/) for linting.
 - `shell` - Generated config which uses [`shfmt`](https://github.com/mvdan/sh) for tidying and
   [`shellcheck`](https://www.shellcheck.net/) for linting.
+- `typescript` - Generates config for a TypeScript or JavaScript project which uses
+  [`eslint`](https://eslint.org/) and [`prettier`](https://prettier.io/) for linting and tidying.
 - `gitignore` - Generates config to lint and tidy (by sorting) `.gitignore` files using
   [`omegasort`](https://github.com/houseabsolute/omegasort).
 - `markdown` - Generates config to lint and tidy Markdown files using
