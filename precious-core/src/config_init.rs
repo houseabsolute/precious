@@ -299,7 +299,11 @@ shared-include = "perl-docs"
 cmd = ["podchecker", "--warnings", "--warnings"]
 ok-exit-codes = [0, 2]
 lint-failure-exit-codes = 1
-ignore-stderr = [".+ pod syntax OK", ".+ does not contain any pod commands"]
+ignore-stderr = [
+    ".+ pod syntax OK",
+    ".+ does not contain any pod commands",
+    ".+ has [0-9]+ pod syntax errors?",
+]
 "#,
     ),
     (
