@@ -1,3 +1,4 @@
+use crate::vcs;
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::ValueEnum;
@@ -762,7 +763,15 @@ fn auto_or_component(
     let mut components: HashSet<InitComponent> = HashSet::new();
     debug!("Looking at all files under {cwd} to determine which components to include.");
 
-    for result in ignore::WalkBuilder::new(cwd).hidden(false).build() {
+    // The walk has to look at hidden files to see things like `.gitignore` and `.github`. But the
+    // files a VCS keeps for itself are not part of the project. For example, git stores each branch
+    // and tag as a file under `.git`, so a branch named `release/notes.md` would look like a
+    // Markdown file.
+    let walker = ignore::WalkBuilder::new(cwd)
+        .hidden(false)
+        .filter_entry(|e| !vcs::DIRS.iter().any(|d| e.file_name() == *d))
+        .build();
+    for result in walker {
         let entry = result.with_context(|| format!("Failed to walk directory {cwd}"))?;
         // The only time this is `None` is when the entry is for stdin, which
         // will never happen here.

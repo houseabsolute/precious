@@ -111,6 +111,9 @@
 - The config that `precious config init --component shell` generates no longer has
   `exclude = ["target"]`. That is the Rust build directory, and it has nothing to do with shell
   scripts. It made `precious` skip every directory named `target` for all commands.
+- Running `precious config init --auto` no longer looks at files under the `.git`, `.hg`, and `.svn`
+  directories. Before, a git branch or tag with a name like `release/notes.md` or `v1.pl` made it
+  generate config for Markdown or Perl, even when the project had no files of that type.
 
 ## 0.12.0 - 2026-08-22
 

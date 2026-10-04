@@ -253,6 +253,45 @@ fn init_auto() -> Result<()> {
     Ok(())
 }
 
+// The files a VCS keeps for itself are not part of the project. For example, git stores each branch
+// and tag as a file under `.git`, so a branch named `release/notes.md` is a file with a `.md`
+// extension.
+#[test]
+#[serial]
+fn init_auto_ignores_files_under_vcs_dirs() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+
+    for path in [
+        "src/foo.rs",
+        ".git/refs/heads/release/notes.md",
+        ".git/refs/tags/v1.pl",
+        ".hg/store/data/foo.py",
+        ".svn/pristine/foo.rb",
+    ]
+    .iter()
+    .map(Path::new)
+    {
+        fs::create_dir_all(path.parent().unwrap())?;
+        File::create(path)?;
+    }
+
+    let output = init_with_auto()?;
+
+    assert_eq!(output.exit_code, 0);
+    assert_file_contains("precious.toml", &["clippy"])?;
+
+    let contents = fs::read_to_string("precious.toml")?;
+    for c in ["prettier-markdown", "perltidy", "ruff", "rubocop"] {
+        assert!(
+            !contents.contains(c),
+            "precious.toml should not contain {c:?}:\n{contents}",
+        );
+    }
+
+    Ok(())
+}
+
 // A config file with no commands is not valid, so every later run of `precious` would fail. It is
 // better to fail here, where the error can say what went wrong.
 #[test]
