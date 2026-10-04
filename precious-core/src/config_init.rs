@@ -533,7 +533,7 @@ lint_failure_exit_codes = 1
 
 pub(crate) fn shell_init() -> Init {
     Init {
-        excludes: &["target"],
+        excludes: &[],
         shared: &[],
         commands: &SHELL_COMMANDS,
         extra_files: vec![],

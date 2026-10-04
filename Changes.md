@@ -108,6 +108,9 @@
 - Running `precious config init --auto` in a directory with no files that `precious` knows how to
   generate config for is now an error. Before, it wrote an empty `precious.toml` and exited with
   `0`, and every later run of `precious` failed with an error about a missing `commands` field.
+- The config that `precious config init --component shell` generates no longer has
+  `exclude = ["target"]`. That is the Rust build directory, and it has nothing to do with shell
+  scripts. It made `precious` skip every directory named `target` for all commands.
 
 ## 0.12.0 - 2026-08-22
 
