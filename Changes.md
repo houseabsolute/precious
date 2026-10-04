@@ -131,6 +131,8 @@
   `PATH` from `env` failed with an error that said the executable could not be found.
 - When a command is killed by a signal, the error that `precious` prints now includes the command's
   stdout and stderr. Before, that output was thrown away.
+- When a command fails because it printed something unexpected to stderr, the error that `precious`
+  prints now includes the command's stdout as well as its stderr.
 
 ## 0.12.0 - 2026-08-22
 

@@ -422,6 +422,32 @@ mod tests {
         Ok(())
     }
 
+    // The stdout can hold the details that explain what the stderr output is about, so the error
+    // has to show both.
+    #[test]
+    #[parallel]
+    fn run_exit_0_with_unexpected_stderr_shows_stdout() -> Result<()> {
+        if which("bash").is_err() {
+            println!("Skipping test since bash is not in path");
+            return Ok(());
+        }
+
+        let script = r#"echo "STDOUT" && echo "STDERR" 1>&2"#;
+        let res = Exec::builder()
+            .exe("bash")
+            .args(vec!["-c", script])
+            .ok_exit_codes(&[0])
+            .build()
+            .run();
+        let e = error_from_run(res)?;
+        let expect = format!(
+            "Got unexpected stderr output from `bash -c {script}` with exit code 0.\nStdout:\nSTDOUT\n\nStderr:\nSTDERR\n\n",
+        );
+        assert_eq!(format!("{e}"), expect, "error display output");
+
+        Ok(())
+    }
+
     #[test]
     #[parallel]
     fn run_exit_0_with_matching_ignore_stderr() -> Result<()> {

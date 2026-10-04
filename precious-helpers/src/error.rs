@@ -27,7 +27,10 @@ pub enum Error {
         stderr: String,
     },
 
-    #[error("Got unexpected stderr output from `{cmd:}` with exit code {code:}:\n{stderr:}")]
+    #[error(
+        "Got unexpected stderr output from `{cmd:}` with exit code {code:}.{}",
+        exec_output_summary(stdout, stderr)
+    )]
     UnexpectedStderr {
         cmd: String,
         code: i32,
