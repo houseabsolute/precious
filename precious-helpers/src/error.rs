@@ -16,7 +16,10 @@ pub enum Error {
         stderr: String,
     },
 
-    #[error("Ran `{cmd:}` and it was killed by signal {signal:}")]
+    #[error(
+        "Ran `{cmd:}` and it was killed by signal {signal:}.{}",
+        exec_output_summary(stdout, stderr)
+    )]
     ProcessKilledBySignal {
         cmd: String,
         signal: i32,

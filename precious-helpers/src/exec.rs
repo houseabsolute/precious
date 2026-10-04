@@ -778,6 +778,34 @@ STDERR
         Ok(())
     }
 
+    // The output is often the only clue about why the command was killed, so the error has to
+    // show it.
+    #[cfg(target_family = "unix")]
+    #[test]
+    #[parallel]
+    fn run_exit_from_sig_kill_shows_output() -> Result<()> {
+        if which("bash").is_err() {
+            println!("Skipping test since bash is not in path");
+            return Ok(());
+        }
+
+        let script = r#"echo "STDOUT" && echo "STDERR" 1>&2 && kill -TERM "$$""#;
+        let res = Exec::builder()
+            .exe("bash")
+            .args(vec!["-c", script])
+            .ok_exit_codes(&[0])
+            .build()
+            .run();
+        let e = error_from_run(res)?;
+        let expect = format!(
+            "Ran `bash -c {script}` and it was killed by signal {}.\nStdout:\nSTDOUT\n\nStderr:\nSTDERR\n\n",
+            libc::SIGTERM,
+        );
+        assert_eq!(format!("{e}"), expect, "error display output");
+
+        Ok(())
+    }
+
     #[cfg(target_family = "unix")]
     #[test]
     #[parallel]

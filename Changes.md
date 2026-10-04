@@ -129,6 +129,8 @@
 - When a command's `env` sets `PATH`, `precious` now uses that `PATH` to find the command's
   executable. Before, it looked in its own `PATH`, so a command whose executable was only in the
   `PATH` from `env` failed with an error that said the executable could not be found.
+- When a command is killed by a signal, the error that `precious` prints now includes the command's
+  stdout and stderr. Before, that output was thrown away.
 
 ## 0.12.0 - 2026-08-22
 
