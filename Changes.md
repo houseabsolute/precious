@@ -102,6 +102,9 @@
   passed. Before, `--command` on its own still only looked at commands with the `default` label. So
   a command with `labels` that did not include `default` could not be run by name alone, and
   `precious` said that no commands matched the name.
+- The `check-go-mod.sh` script that `precious config init --component go` creates now prints the
+  output from `go mod tidy` when that command fails, and exits with `2`. Before, the script exited
+  with `1` and printed nothing, so `precious` reported a lint failure with no explanation.
 
 ## 0.12.0 - 2026-08-22
 

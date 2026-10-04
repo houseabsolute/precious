@@ -194,7 +194,12 @@ fi
 BEFORE_MOD=$(md5sum "$ROOT/go.mod")
 BEFORE_SUM=$(md5sum "$ROOT/go.sum")
 
-OUTPUT=$(go mod tidy -v 2>&1)
+# With "set -e", a plain assignment would exit the script as soon as go mod tidy failed, before any
+# of its output was printed. The exit code is 2 because this is not a lint failure.
+if ! OUTPUT=$(go mod tidy -v 2>&1); then
+    printf "Running go mod tidy -v failed:\n%s\n" "$OUTPUT"
+    exit 2
+fi
 
 AFTER_MOD=$(md5sum "$ROOT/go.mod")
 AFTER_SUM=$(md5sum "$ROOT/go.sum")
