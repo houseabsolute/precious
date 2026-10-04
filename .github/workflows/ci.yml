@@ -178,6 +178,9 @@ jobs:
           # This is only used to build the default `artifact-regex`, which decides which of the
           # run's artifacts are attached to the release.
           executable-name: precious
+          # A release is public as soon as it is published, so this leaves a chance to check the
+          # notes and the attached files first.
+          draft: "true"
 
   publish-crates:
     name: Publish to crates.io
