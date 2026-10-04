@@ -261,15 +261,15 @@ cmd = ["golangci-lint", "run"]
 ```
 
 If the project has `top.go`, `bar/a.go`, and `foo/b.go`, precious correctly drops `foo/b.go` from
-the file list - and then runs `golangci-lint run . bar`. That `.` is the project root, and
+the file list - and then runs `golangci-lint run . ./bar`. That `.` is the project root, and
 `golangci-lint` will end up seeing `foo` because of that.
 
 This also produces a confusing asymmetry depending on what you pass on the command line:
 
-- `precious lint foo` - every file under `foo` is excluded, so no directories are produced and the
-  command never runs. This looks like the exclusion is working.
-- `precious lint '**/*.go'` - the root-level `top.go` survives, so `.` becomes a directory argument,
-  and `foo` is back in scope.
+- `precious lint foo` - every file under `foo` is excluded, so `precious` exits with an error that
+  says the path is excluded, and the command never runs. This looks like the exclusion is working.
+- `precious lint .` or `precious lint --all` - the root-level `top.go` survives, so `.` becomes a
+  directory argument, and `foo` is back in scope.
 
 You usually cannot avoid this by switching to `path-args = "file"`. Many tools either require a
 directory argument or, when given a single file, still operate on the whole directory containing it.
