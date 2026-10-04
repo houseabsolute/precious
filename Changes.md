@@ -124,6 +124,8 @@
 - A submodule with a new commit is no longer passed to commands when running with `--git`,
   `--staged`, `--staged-with-stash`, or `--git-diff-from`. Git reports the submodule as one changed
   path, and `precious` treated that directory as if it were a file.
+- When exactly one command failed, the summary line that `precious` printed had a NUL character in
+  it, right after the word "Error". This made tools like `grep` treat the output as binary.
 
 ## 0.12.0 - 2026-08-22
 

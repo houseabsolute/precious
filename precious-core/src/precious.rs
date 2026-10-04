@@ -696,7 +696,7 @@ impl LintOrTidyRunner {
             (0, None)
         } else {
             let (red, ansi_off) = self.maybe_red();
-            let plural = if failures.len() > 1 { 's' } else { '\0' };
+            let plural = if failures.len() > 1 { "s" } else { "" };
 
             let error = format!(
                 "{}Error{} when {} files:{}\n{}",
@@ -1248,6 +1248,31 @@ lint-failure-exit-codes = [1]
         let status = lt.run();
 
         assert_eq!(status, 43);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(not(target_os = "windows"))]
+    fn error_message_for_one_failure_has_no_nul_char() -> Result<()> {
+        let config = r#"
+    [commands.false]
+    type    = "tidy"
+    include = "precious.toml"
+    cmd     = ["false"]
+    ok-exit-codes = [0]
+    "#;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let _pushd = helper.pushd_to_git_root()?;
+
+        let app = App::try_parse_from(["precious", "--quiet", "--no-color", "tidy", "--all"])?;
+
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let error = lt.run_subcommand()?.error.unwrap();
+        let first_line = error.lines().next().unwrap();
+
+        assert_eq!(first_line, "Error when tidying files:");
 
         Ok(())
     }
