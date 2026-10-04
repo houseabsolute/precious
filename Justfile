@@ -15,6 +15,14 @@ _env := if _in_container != "" { "env" } else { "--remote-env" }
 # created before this mount existed needs a `just rebuild` once.
 _git_common_dir := `test -f .git && realpath "$(git rev-parse --git-common-dir)" || true`
 _git_mount := if _git_common_dir != "" { "--mount 'type=bind,source=" + _git_common_dir + ",target=" + _git_common_dir + "'" } else { "" }
+# Git points hooks at the index for the commit being made with GIT_INDEX_FILE. For `git commit -a`
+# and `git commit <paths>` that is a temporary index, not `.git/index`, so without this a command
+# in the container looks at the wrong index and misses the files being committed. Git sets this to
+# a path on the host, and the workspace is at a different path in the container. An index in a
+# worktree's git dir needs no change, since that dir is mounted at the same path. Inside the
+# container the variable is inherited as is.
+_git_index := env("GIT_INDEX_FILE", "")
+_git_index_env := if _in_container != "" { "" } else if _git_index == "" { "" } else { "--remote-env " + quote("GIT_INDEX_FILE=" + replace(_git_index, justfile_directory() + "/", "/workspace/")) }
 
 _host_only recipe:
     #!/usr/bin/env bash
@@ -51,10 +59,10 @@ test *args: _up
       cargo test {{ if args == "" { "--workspace" } else { args } }}
 
 lint *args: _up
-    {{ _dce }} mise exec -- precious lint {{ args }}
+    {{ _dce }} {{ _git_index_env }} mise exec -- precious lint {{ args }}
 
 tidy *args: _up
-    {{ _dce }} mise exec -- precious tidy {{ args }}
+    {{ _dce }} {{ _git_index_env }} mise exec -- precious tidy {{ args }}
 
 # Cut a release. The level is anything cargo-release accepts, so "patch", "minor", "major", or an
 # explicit version like "0.12.0". This bumps the version everywhere, stamps the "NEXT" section in
