@@ -80,7 +80,9 @@ subcommand takes the following flags:
 | `-p`, <code>&#x2011;&#x2011;path&nbsp;&lt;PATH&gt;</code>           | The path to which the config file should be written. Defaults to `./precious.toml` |
 
 You must pass either `--auto` or at least one `--component`. In `--auto` mode, `precious` will look
-at all the files in your project and generate config based on the types of files it finds.
+at all the files in your project and generate config based on the types of files it finds. If it
+does not find any files that it knows how to generate config for, it exits with an error and does
+not write a config file.
 
 Here's an example for a Rust project:
 

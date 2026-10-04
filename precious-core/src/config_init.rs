@@ -49,6 +49,11 @@ pub(crate) enum InitComponent {
 enum ConfigInitError {
     #[error("A file already exists at the given path: {path}")]
     FileExists { path: Utf8PathBuf },
+    #[error(
+        "The --auto flag did not find any files that precious knows how to generate config for \
+         under {dir}"
+    )]
+    AutoFoundNoComponents { dir: Utf8PathBuf },
 }
 
 const GO_COMMANDS: [(&str, &str); 3] = [
@@ -792,6 +797,15 @@ fn auto_or_component(
         };
         debug!("File {path} matches component {component:?}");
         components.insert(component);
+    }
+
+    // Without any components the config file would be empty. That is not a valid config, so every
+    // later run of `precious` would fail with an error about a missing `commands` field.
+    if components.is_empty() {
+        return Err(ConfigInitError::AutoFoundNoComponents {
+            dir: cwd.to_owned(),
+        }
+        .into());
     }
 
     Ok(components.into_iter().collect())

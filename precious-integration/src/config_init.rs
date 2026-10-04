@@ -253,6 +253,34 @@ fn init_auto() -> Result<()> {
     Ok(())
 }
 
+// A config file with no commands is not valid, so every later run of `precious` would fail. It is
+// better to fail here, where the error can say what went wrong.
+#[test]
+#[serial]
+fn init_auto_fails_when_no_components_are_detected() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    File::create("README.txt")?;
+
+    let precious = precious_path()?;
+    let out = std::process::Command::new(&precious)
+        .args(["config", "init", "--auto"])
+        .output()?;
+    let stderr = String::from_utf8_lossy(&out.stderr);
+
+    assert_eq!(out.status.code(), Some(42), "stderr was:\n{stderr}");
+    assert!(
+        stderr.contains("did not find any files"),
+        "expected an error about finding no files, got stderr:\n{stderr}",
+    );
+    assert!(
+        !Path::new("precious.toml").exists(),
+        "no config file was written",
+    );
+
+    Ok(())
+}
+
 // The default macOS filesystems refuse to create a file with a non-UTF-8 name.
 #[cfg(all(unix, not(target_os = "macos")))]
 #[test]

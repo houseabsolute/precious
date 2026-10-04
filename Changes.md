@@ -105,6 +105,9 @@
 - The `check-go-mod.sh` script that `precious config init --component go` creates now prints the
   output from `go mod tidy` when that command fails, and exits with `2`. Before, the script exited
   with `1` and printed nothing, so `precious` reported a lint failure with no explanation.
+- Running `precious config init --auto` in a directory with no files that `precious` knows how to
+  generate config for is now an error. Before, it wrote an empty `precious.toml` and exited with
+  `0`, and every later run of `precious` failed with an error about a missing `commands` field.
 
 ## 0.12.0 - 2026-08-22
 
