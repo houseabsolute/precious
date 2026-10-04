@@ -1163,7 +1163,7 @@ mod tests {
     use camino::{Utf8Path, Utf8PathBuf};
     use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
-    use serial_test::parallel;
+    use serial_test::{parallel, serial};
     use std::env;
     use test_case::test_case;
     use testhelper::TestHelper;
@@ -2147,7 +2147,9 @@ mod tests {
     #[test_case(WorkingDir::Root; "working-dir = root")]
     #[test_case(WorkingDir::Dir; "working-dir = dir")]
     #[test_case(WorkingDir::ChdirTo(Utf8PathBuf::from("src")); "working-dir.chdir-to = src")]
-    #[parallel]
+    // This writes a script and then runs it. If a test in another thread forks while the script is
+    // open for writing, the child holds the file open and running it fails with "Text file busy".
+    #[serial]
     fn relative_cmd_is_resolved_from_project_root(working_dir: WorkingDir) -> Result<()> {
         use std::{fs, os::unix::fs::PermissionsExt};
 

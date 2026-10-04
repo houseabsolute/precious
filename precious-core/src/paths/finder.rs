@@ -551,7 +551,7 @@ mod tests {
     use itertools::Itertools;
     use precious_testhelper as testhelper;
     use pretty_assertions::assert_eq;
-    use serial_test::parallel;
+    use serial_test::{parallel, serial};
     use std::fs;
     use test_case::test_case;
 
@@ -983,8 +983,11 @@ mod tests {
         Ok(())
     }
 
+    // This writes a hook script that git then runs. If a test in another thread forks while the
+    // script is open for writing, the child holds the file open and running it fails with "Text
+    // file busy".
     #[test]
-    #[parallel]
+    #[serial]
     fn git_staged_mode_with_stash_stashes_unindexed() -> Result<()> {
         let helper = testhelper::TestHelper::new()?.with_git_repo()?;
         let modified = Vec1::try_from(helper.modify_files()?).unwrap();
