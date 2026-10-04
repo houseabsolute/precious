@@ -71,6 +71,10 @@
 - Fixed a bug where the `--git`, `--staged`, `--staged-with-stash`, and `--git-diff-from` flags
   skipped files that were renamed. A file that was moved and then edited was never linted or tidied
   under its new name.
+- Fixed a bug where the `--git`, `--staged`, `--staged-with-stash`, and `--git-diff-from` flags
+  failed when `git diff` printed a warning. For example, with `core.autocrlf` turned on, git warns
+  that "LF will be replaced by CRLF", and `precious` treated this as an error. Now `precious` only
+  looks at the exit code from `git diff`.
 
 ## 0.12.0 - 2026-08-22
 

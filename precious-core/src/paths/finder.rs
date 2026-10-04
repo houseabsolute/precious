@@ -62,7 +62,9 @@ pub enum FinderError {
     },
 }
 
-static KEEP_INDEX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap());
+// Git writes to stderr even when nothing is wrong, so for some commands we only look at the exit
+// code.
+static ANY_STDERR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap());
 
 impl Finder {
     pub fn new(
@@ -249,7 +251,7 @@ impl Finder {
                 .exe("git")
                 .args(vec!["stash", "--keep-index"])
                 .ok_exit_codes(&[0])
-                .ignore_stderr(vec![KEEP_INDEX_RE.clone()])
+                .ignore_stderr(vec![ANY_STDERR_RE.clone()])
                 .in_dir(&git_root)
                 .build()
                 .run()?;
@@ -384,6 +386,9 @@ impl Finder {
             .exe("git")
             .args(args)
             .ok_exit_codes(&[0])
+            // Git prints warnings here that do not stop it from listing the files, like the line
+            // ending warning when `core.autocrlf` is on.
+            .ignore_stderr(vec![ANY_STDERR_RE.clone()])
             .in_dir(&self.project_root)
             .build()
             .run()
@@ -554,10 +559,6 @@ mod tests {
     use serial_test::{parallel, serial};
     use std::fs;
     use test_case::test_case;
-
-    // Some git commands write to stderr as a matter of course, so we have to
-    // ignore all of their stderr output.
-    static ANY_STDERR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(".*").unwrap());
 
     fn new_finder(mode: Mode, root: &Utf8Path) -> Result<Finder> {
         new_finder_with_excludes(mode, root, root.to_path_buf(), vec![])
@@ -840,6 +841,72 @@ mod tests {
         helper.stage_all()?;
 
         let mut finder = new_finder(mode, &helper.precious_root())?;
+        assert_eq!(finder.files(&[])?, Some(modified));
+        Ok(())
+    }
+
+    // An anchored exclude like `vendor/**/*` is relative to the precious root, so it has to be
+    // matched against paths relative to that root and not to the git root.
+    #[test_case(Mode::GitModified; "git")]
+    #[test_case(Mode::GitStaged; "staged")]
+    #[test_case(Mode::GitDiffFrom("master".to_string()); "git-diff-from")]
+    #[parallel]
+    fn git_modes_apply_excludes_when_repo_root_ne_precious_root(mode: Mode) -> Result<()> {
+        let helper = testhelper::TestHelper::new()?
+            .with_precious_root_in_subdir("subdir")
+            .with_git_repo()?;
+        helper.write_file("vendor/foo/bar.txt", "initial content")?;
+        helper.stage_all()?;
+        helper.commit_all()?;
+
+        helper.switch_to_branch("new-branch", false)?;
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
+        helper.write_file("vendor/foo/bar.txt", "new content")?;
+        helper.stage_all()?;
+        if matches!(mode, Mode::GitDiffFrom(_)) {
+            helper.commit_all()?;
+        }
+
+        let mut finder = new_finder_with_excludes(
+            mode,
+            &helper.precious_root(),
+            helper.precious_root(),
+            vec!["vendor/**/*".to_string()],
+        )?;
+        assert_eq!(finder.files(&[])?, Some(modified));
+        Ok(())
+    }
+
+    // Git prints warnings to stderr that do not mean anything went wrong. The best known one is
+    // the line ending warning that Windows users see when `core.autocrlf` is on.
+    #[test]
+    #[parallel]
+    fn git_modified_mode_ignores_git_warnings_on_stderr() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        Exec::builder()
+            .exe("git")
+            .args(vec!["config", "core.autocrlf", "true"])
+            .ok_exit_codes(&[0])
+            .in_dir(&helper.git_root())
+            .build()
+            .run()?;
+
+        let modified = Vec1::try_from(helper.modify_files()?).unwrap();
+
+        let warning = Exec::builder()
+            .exe("git")
+            .args(vec!["diff", "--name-only", "HEAD"])
+            .ok_exit_codes(&[0])
+            .ignore_stderr(vec![ANY_STDERR_RE.clone()])
+            .in_dir(&helper.git_root())
+            .build()
+            .run()?;
+        assert!(
+            warning.stderr.unwrap_or_default().contains("warning:"),
+            "git diff prints a warning to stderr",
+        );
+
+        let mut finder = new_finder(Mode::GitModified, &helper.precious_root())?;
         assert_eq!(finder.files(&[])?, Some(modified));
         Ok(())
     }
