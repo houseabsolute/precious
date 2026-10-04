@@ -18,7 +18,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use which::which;
+use which::{which, which_in};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::prelude::*;
@@ -116,10 +116,20 @@ impl<'a> Exec<'a> {
         // We run the path that `which` found, not just the name. On Windows, the standard library
         // looks in the system directories before it looks in `PATH`, so a name like `bash` could
         // run a different executable than the one we just checked for.
-        let Ok(exe_path) = which(self.exe) else {
-            let path = match env::var("PATH") {
-                Ok(p) => p,
-                Err(e) => format!("<could not get PATH environment variable: {e}>"),
+        //
+        // The command runs with the `PATH` from its own `env` when that is set, so that is the
+        // `PATH` we have to look in.
+        let found = match self.env.get("PATH") {
+            Some(path) => which_in(self.exe, Some(path), env::current_dir()?),
+            None => which(self.exe),
+        };
+        let Ok(exe_path) = found else {
+            let path = match self.env.get("PATH") {
+                Some(p) => p.clone(),
+                None => match env::var("PATH") {
+                    Ok(p) => p,
+                    Err(e) => format!("<could not get PATH environment variable: {e}>"),
+                },
             };
             return Err(Error::ExecutableNotInPath {
                 exe: self.exe.to_string(),
@@ -508,6 +518,61 @@ mod tests {
             }
             e => return Err(e.into()),
         }
+        Ok(())
+    }
+
+    // The command runs with the `PATH` from its `env`, so that is the `PATH` that has to be used
+    // to find the executable.
+    #[test]
+    #[serial]
+    #[cfg(target_family = "unix")]
+    fn run_finds_exe_in_path_from_env() -> Result<()> {
+        use std::fs;
+
+        let td = tempdir()?;
+        let exe = "precious-exec-test-tool";
+        let exe_path = td.path().join(exe);
+        fs::write(&exe_path, "#!/bin/sh\necho found\n")?;
+        fs::set_permissions(&exe_path, fs::Permissions::from_mode(0o755))?;
+
+        let path = env::join_paths(
+            std::iter::once(td.path().to_path_buf())
+                .chain(env::split_paths(&env::var("PATH").unwrap_or_default())),
+        )?;
+        let mut env = HashMap::new();
+        env.insert(String::from("PATH"), path.into_string().unwrap());
+
+        let res = Exec::builder()
+            .exe(exe)
+            .ok_exit_codes(&[0])
+            .env(env)
+            .build()
+            .run()?;
+        assert_eq!(res.stdout.as_deref(), Some("found\n"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn run_reports_path_from_env_when_exe_is_not_found() -> Result<()> {
+        let mut env = HashMap::new();
+        env.insert(String::from("PATH"), String::from("/does/not/exist"));
+
+        let res = Exec::builder()
+            .exe("precious-exec-test-no-such-tool")
+            .ok_exit_codes(&[0])
+            .env(env)
+            .build()
+            .run();
+        match error_from_run(res)? {
+            Error::ExecutableNotInPath { exe, path } => {
+                assert_eq!(exe, "precious-exec-test-no-such-tool");
+                assert_eq!(path, "/does/not/exist");
+            }
+            e => return Err(e.into()),
+        }
+
         Ok(())
     }
 

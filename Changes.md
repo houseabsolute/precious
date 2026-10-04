@@ -126,6 +126,9 @@
   path, and `precious` treated that directory as if it were a file.
 - When exactly one command failed, the summary line that `precious` printed had a NUL character in
   it, right after the word "Error". This made tools like `grep` treat the output as binary.
+- When a command's `env` sets `PATH`, `precious` now uses that `PATH` to find the command's
+  executable. Before, it looked in its own `PATH`, so a command whose executable was only in the
+  `PATH` from `env` failed with an error that said the executable could not be found.
 
 ## 0.12.0 - 2026-08-22
 
