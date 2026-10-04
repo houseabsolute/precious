@@ -25,6 +25,8 @@ pub(crate) struct Init {
 pub(crate) struct ConfigInitFile {
     pub(crate) path: Utf8PathBuf,
     pub(crate) content: &'static str,
+    // We only set file permissions on unix, so nothing reads this on other platforms.
+    #[cfg_attr(not(unix), allow(dead_code))]
     pub(crate) is_executable: bool,
 }
 

@@ -91,7 +91,8 @@ fn escape_raw(path: &Path) -> String {
     }
 }
 
-#[cfg(test)]
+// Every test here needs to build a non-UTF-8 path from raw bytes, which only works on unix.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;

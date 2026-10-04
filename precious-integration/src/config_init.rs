@@ -312,7 +312,7 @@ fn init_fails_on_non_utf8_cwd() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 fn run_precious_expecting_failure(args: &[&str]) -> Result<String> {
     use std::process::Command;
     let precious = precious_path()?;
