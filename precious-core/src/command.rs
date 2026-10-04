@@ -179,6 +179,9 @@ enum CommandError {
     )]
     CommandWhichIsBothRequiresLintOrTidyFlags,
 
+    #[error("The cmd must start with the name of an executable, but it is empty")]
+    CmdIsEmpty,
+
     #[error("Cannot {method:} with the {command:} command, which is a {command_type:}")]
     CannotMethodWithCommand {
         method: &'static str,
@@ -287,6 +290,10 @@ struct PathInfo {
 
 impl Command {
     pub fn new(params: CommandParams) -> Result<Command> {
+        if params.cmd.first().is_none_or(String::is_empty) {
+            return Err(CommandError::CmdIsEmpty.into());
+        }
+
         if let CommandType::Both = params.typ {
             if params.lint_flags.is_empty() && params.tidy_flags.is_empty() {
                 return Err(CommandError::CommandWhichIsBothRequiresLintOrTidyFlags.into());
@@ -2269,6 +2276,40 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    // Without an executable there is nothing to run. This has to be an error when the command is
+    // created and not a panic when it is run.
+    #[test_case(vec![]; "empty list")]
+    #[test_case(vec![String::new()]; "empty string")]
+    #[test_case(vec![String::new(), "--flag".to_string()]; "empty string and a flag")]
+    #[parallel]
+    fn empty_cmd_is_an_error(cmd: Vec<String>) {
+        let params = CommandParams {
+            project_root: Utf8PathBuf::from("/"),
+            name: "empty".to_string(),
+            typ: CommandType::Lint,
+            include: vec!["**/*.rs".to_string()],
+            exclude: vec![],
+            invoke: Invoke::PerFile,
+            working_dir: WorkingDir::Root,
+            path_args: PathArgs::File,
+            cmd,
+            env: HashMap::new(),
+            lint_flags: vec![],
+            tidy_flags: vec![],
+            path_flag: String::new(),
+            ok_exit_codes: vec![0],
+            lint_failure_exit_codes: vec![],
+            expect_stderr: false,
+            ignore_stderr: vec![],
+        };
+        let err = Command::new(params).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<CommandError>(),
+            Some(&CommandError::CmdIsEmpty),
+            "unexpected error: {err:#}",
+        );
     }
 
     // A path can be something other than a regular file or a directory, like a socket or a FIFO.

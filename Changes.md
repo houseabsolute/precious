@@ -95,6 +95,9 @@
   file. A tidy command that matched one made `precious` panic, or fail with an error that said the
   path did not exist. If you pass one of these paths by name on the command line, a tidy command now
   fails with an error that says the path is not a regular file or a directory.
+- A command with an empty `cmd`, like `cmd = []` or `cmd = ""`, is now a config error. Before,
+  `cmd = []` made `precious` panic when it ran the command, and `cmd = ""` failed with an error
+  about an executable that could not be found.
 
 ## 0.12.0 - 2026-08-22
 
