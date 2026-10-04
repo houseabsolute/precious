@@ -984,7 +984,7 @@ impl Command {
         paths: &[Utf8PathBuf],
     ) -> (String, Vec<String>) {
         let mut args = self.execution.cmd.clone();
-        let cmd = args.remove(0);
+        let cmd = self.exe_from_project_root(args.remove(0));
 
         if let Some(flags) = flags {
             for f in flags {
@@ -1000,6 +1000,17 @@ impl Command {
         }
 
         (cmd, args)
+    }
+
+    // An executable like `./node_modules/.bin/eslint` is relative to the project root, no matter
+    // what directory the command runs in or what directory precious was run in. A bare name like
+    // `eslint` is left alone so that it is looked up in `PATH`.
+    fn exe_from_project_root(&self, exe: String) -> String {
+        let path = Utf8Path::new(&exe);
+        if path.is_relative() && path.components().count() > 1 {
+            return self.project_root.join(path).into_string();
+        }
+        exe
     }
 
     pub(crate) fn paths_summary(
@@ -2125,6 +2136,50 @@ mod tests {
 
         fs::remove_file(files.last())?;
         assert!(command.paths_were_changed(prev)?);
+
+        Ok(())
+    }
+
+    // A `cmd` like `./bin/tool` is relative to the project root. That holds no matter which directory
+    // the command runs in, and no matter which directory precious itself was run in. The tests run
+    // with the crate directory as the current directory, which is never the project root here.
+    #[cfg(unix)]
+    #[test_case(WorkingDir::Root; "working-dir = root")]
+    #[test_case(WorkingDir::Dir; "working-dir = dir")]
+    #[test_case(WorkingDir::ChdirTo(Utf8PathBuf::from("src")); "working-dir.chdir-to = src")]
+    #[parallel]
+    fn relative_cmd_is_resolved_from_project_root(working_dir: WorkingDir) -> Result<()> {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.precious_root();
+
+        helper.write_file("bin/tool", "#!/bin/sh\necho from-tool\n")?;
+        fs::set_permissions(root.join("bin/tool"), fs::Permissions::from_mode(0o755))?;
+
+        let mut command = default_command();
+        command.project_root = root.clone();
+        command.name = "tool".to_string();
+        command.typ = CommandType::Lint;
+        command.invocation.invoke = Invoke::PerFile;
+        command.invocation.working_dir = working_dir;
+        command.invocation.path_args = PathArgs::File;
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.execution.cmd = vec!["./bin/tool".to_string()];
+        command.execution.ok_exit_codes = vec![0];
+        command.execution.lint_ok_exit_codes = vec![0];
+
+        let files = Vec1::try_from(vec![Utf8Path::new("src/main.rs")])
+            .expect("the list of files is not empty");
+        let outcome = command
+            .lint(ActualInvoke::PerFile, &files)?
+            .expect("the command includes src/main.rs");
+        assert!(outcome.ok, "lint command exits 0");
+        assert_eq!(
+            outcome.stdout.as_deref().map(str::trim_end),
+            Some("from-tool"),
+            "ran the executable found relative to the project root",
+        );
 
         Ok(())
     }

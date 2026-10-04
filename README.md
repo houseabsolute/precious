@@ -364,6 +364,11 @@ cmd = ["some-tidier", "--config", "$PRECIOUS_ROOT/some-tidier.conf"]
 
 The `$PRECIOUS_ROOT` string will be replaced by the absolute path to the project root.
 
+If the executable in `cmd` is a relative path with a directory in it, like
+`./node_modules/.bin/eslint`, then `precious` looks for it relative to the project root. This is
+true no matter what `working-dir` is set to, and no matter what directory you run `precious` from.
+An executable with no directory in it, like `eslint`, is looked up in your `PATH`.
+
 ## Running Precious
 
 To get help run `precious --help`.
