@@ -149,7 +149,8 @@ pub struct CommonArgs {
     /// labels are ignored unless you also pass --label.
     #[clap(long)]
     command: Option<String>,
-    /// Run against all files in the current directory and below
+    /// Run against all files under the project root, which is the directory
+    /// that contains the precious config file
     #[clap(long, short)]
     all: bool,
     /// Run against files that have been modified according to git
