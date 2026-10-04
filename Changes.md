@@ -117,6 +117,10 @@
 - When the paths given on the command line overlap, each file is now only handled once. Before, a
   command like `precious tidy . src/a.txt` or `precious lint a.txt a.txt` passed the same file to a
   command more than once, and ran a per-file command on that file more than once.
+- Fixed a bug with a negated `exclude` pattern for a file inside an excluded directory, like
+  `exclude = ["vendor", "!vendor/keep.txt"]`. When the directory was given on the command line, as
+  in `precious lint vendor`, the file was not found and `precious` said that the path was excluded.
+  The file was found with `--all` or when a parent directory was given.
 
 ## 0.12.0 - 2026-08-22
 

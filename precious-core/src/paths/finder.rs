@@ -200,15 +200,16 @@ impl Finder {
                 .into());
             }
 
-            let rel_to_root = self.path_relative_to_project_root(&full)?;
-            if exclude_matcher.path_matches(&rel_to_root, full.is_dir()) {
-                continue;
-            }
-
+            // An excluded directory still has to be walked, because a negated pattern can bring
+            // back a file inside it. The walk checks each file against the excludes.
             if full.is_dir() {
                 let mut contents = self.walkdir_files(&full)?;
                 files.append(&mut contents);
-            } else {
+                continue;
+            }
+
+            let rel_to_root = self.path_relative_to_project_root(&full)?;
+            if !exclude_matcher.path_matches(&rel_to_root, false) {
                 files.push(rel_to_root);
             }
         }
@@ -1637,6 +1638,28 @@ mod tests {
             .map(Utf8PathBuf::from)
             .collect::<Vec<_>>();
         assert_eq!(finder.files(&cli_paths)?, Some(expect));
+        Ok(())
+    }
+
+    // A negated pattern can bring back a file inside an excluded directory. Naming that directory
+    // on the command line has to find the same files as walking down to it from the project root.
+    #[test_case("", "vendor"; "dir named from the project root")]
+    #[test_case("vendor", "."; "dot from inside the dir")]
+    #[parallel]
+    fn cli_mode_given_excluded_dir_with_negated_file(cwd: &str, cli_path: &str) -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(Utf8PathBuf::from("vendor/keep.txt"), "initial content")?;
+        helper.write_file(Utf8PathBuf::from("vendor/other.txt"), "initial content")?;
+        let mut finder = new_finder_with_excludes(
+            Mode::FromCli,
+            &helper.precious_root(),
+            helper.precious_root().join(cwd),
+            vec!["vendor".to_string(), "!vendor/keep.txt".to_string()],
+        )?;
+        assert_eq!(
+            finder.files(&[Utf8PathBuf::from(cli_path)])?,
+            Some(vec1![Utf8PathBuf::from("vendor/keep.txt")]),
+        );
         Ok(())
     }
 
