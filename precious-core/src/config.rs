@@ -86,9 +86,9 @@ pub struct Config {
 pub(crate) enum ConfigError {
     #[error("File at {file} cannot be read: {error:}")]
     FileCannotBeRead { file: Utf8PathBuf, error: String },
-    #[error(r#"Cannot set {invoke:} and path-args = "{path_args:}""#)]
+    #[error("Cannot set {invoke:} and path-args = {path_args:}")]
     CannotInvokePerFileWithPathArgs { invoke: Invoke, path_args: PathArgs },
-    #[error(r#"Cannot set {invoke:} and path-args = "{path_args:}""#)]
+    #[error("Cannot set {invoke:} and path-args = {path_args:}")]
     CannotInvokePerDirInRootWithPathArgs { invoke: Invoke, path_args: PathArgs },
     #[error(r#"Cannot set {invoke:} and working-dir = "dir""#)]
     CannotInvokeOnceWithWorkingDirEqDir { invoke: Invoke },
