@@ -90,6 +90,11 @@
 - A value of `0` for `invoke.per-file-or-dir`, `invoke.per-file-or-once`, or
   `invoke.per-dir-or-once` is now a config error. Before, the first two made `precious` panic when
   it ran the command, and the third was accepted and always ran the command once.
+- When `precious` walks the project to find files, it now skips anything that is not a regular file,
+  like a socket, a FIFO, or a broken symlink. Before, these were passed to commands like any other
+  file. A tidy command that matched one made `precious` panic, or fail with an error that said the
+  path did not exist. If you pass one of these paths by name on the command line, a tidy command now
+  fails with an error that says the path is not a regular file or a directory.
 
 ## 0.12.0 - 2026-08-22
 

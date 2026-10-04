@@ -363,7 +363,7 @@ impl Finder {
                             let is_excluded = raw
                                 .strip_prefix(&self.project_root)
                                 .is_ok_and(|rel| exclude_matcher.raw_path_matches(rel, false));
-                            if is_excluded || raw.is_dir() {
+                            if is_excluded || !raw.is_file() {
                                 continue;
                             }
                             return Err(NonUtf8PathError {
@@ -373,7 +373,10 @@ impl Finder {
                             .into());
                         }
                     };
-                    if path.is_dir() {
+                    // Besides directories, this skips things like sockets and FIFOs. A command
+                    // cannot do anything useful with one of those, and reading from a FIFO can
+                    // hang forever.
+                    if !path.is_file() {
                         continue;
                     }
 
@@ -637,6 +640,23 @@ mod tests {
             .downcast_ref::<NonUtf8PathError>()
             .expect("expected NonUtf8PathError");
         assert_eq!(downcast.source, NonUtf8Source::FilesystemWalk);
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[parallel]
+    fn all_mode_skips_paths_that_are_not_regular_files() -> Result<()> {
+        use std::os::unix::net::UnixListener;
+
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        let _socket = UnixListener::bind(helper.precious_root().join("src/socket.rs"))?;
+
+        let mut finder = new_finder(Mode::All, &helper.precious_root())?;
+        let files = finder.files(&[])?.expect("the test repo has files");
+        assert!(files.contains(&Utf8PathBuf::from("src/main.rs")));
+        assert!(!files.contains(&Utf8PathBuf::from("src/socket.rs")));
+
         Ok(())
     }
 

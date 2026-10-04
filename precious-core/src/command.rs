@@ -191,6 +191,9 @@ enum CommandError {
 
     #[error("Path {path:} should exist but it does not")]
     PathDoesNotExist { path: String },
+
+    #[error("Path {path:} is not a regular file or a directory")]
+    PathIsNotFileOrDir { path: String },
 }
 
 #[derive(Debug)]
@@ -917,15 +920,16 @@ impl Command {
                 let meta = Self::metadata_for_file(&file)?;
                 path_map.insert(file, meta);
             }
-        } else if !path.exists() {
+        } else if !full_path.exists() {
             return Err(CommandError::PathDoesNotExist {
                 path: path.as_str().to_string(),
             }
             .into());
         } else {
-            unreachable!(
-                "I sure hope is_file(), is_dir(), and !exists() are the only three states"
-            );
+            return Err(CommandError::PathIsNotFileOrDir {
+                path: path.as_str().to_string(),
+            }
+            .into());
         }
 
         Ok(PathMetadata { dir, path_map })
@@ -2262,6 +2266,42 @@ mod tests {
             command.tidy(ActualInvoke::PerDir, &files)?,
             Some(TidyOutcome::Unchanged),
             "the file with the non-UTF-8 name does not match the command, so it is ignored",
+        );
+
+        Ok(())
+    }
+
+    // A path can be something other than a regular file or a directory, like a socket or a FIFO.
+    // We cannot tell whether a tidy command changed one of those, so this has to be a clear error.
+    #[cfg(unix)]
+    #[test]
+    #[parallel]
+    fn tidy_errors_on_path_that_is_not_a_file_or_dir() -> Result<()> {
+        use std::os::unix::net::UnixListener;
+
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.precious_root();
+        let _socket = UnixListener::bind(root.join("src/socket.rs"))?;
+
+        let mut command = default_command();
+        command.project_root = root.clone();
+        command.name = "noop".to_string();
+        command.typ = CommandType::Tidy;
+        command.invocation.invoke = Invoke::PerFile;
+        command.invocation.path_args = PathArgs::File;
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.execution.cmd = vec!["true".to_string()];
+        command.execution.ok_exit_codes = vec![0];
+
+        let files = Vec1::try_from(vec![Utf8Path::new("src/socket.rs")])
+            .expect("the list of files is not empty");
+
+        let err = command
+            .tidy(ActualInvoke::PerFile, &files)
+            .expect_err("a socket cannot be tidied");
+        assert!(
+            format!("{err:#}").contains("src/socket.rs is not a regular file or a directory"),
+            "unexpected error: {err:#}",
         );
 
         Ok(())
