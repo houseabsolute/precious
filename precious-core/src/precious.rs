@@ -159,11 +159,13 @@ pub struct CommonArgs {
     /// Run against files that are staged for a git commit
     #[clap(long, short)]
     staged: bool,
-    /// Run against files that are different as compared with the given
-    /// `<REF>`. This can be a branch name, like `master`, or a ref name like
-    /// `HEAD~6` or `master@{2.days.ago}`. See `git help rev-parse` for more
-    /// options. Note that this will _not_ see files with uncommitted changes
-    /// in the local working directory.
+    /// Run against files that have changed in the current `HEAD` since it
+    /// split off from the given `<REF>`. This is what `git diff <REF>...`
+    /// shows, so changes that were made in `<REF>` after that point are not
+    /// included. The `<REF>` can be a branch name, like `master`, or a ref
+    /// name like `HEAD~6` or `master@{2.days.ago}`. See `git help rev-parse`
+    /// for more options. Note that this will _not_ see files with uncommitted
+    /// changes in the local working directory.
     #[clap(long, short = 'd', value_name = "REF")]
     git_diff_from: Option<String>,
     /// Run against file content that is staged for a git commit, stashing all
