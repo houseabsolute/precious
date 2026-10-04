@@ -607,8 +607,12 @@ whether or not any files are tidied.
 When running in `--lint` mode, precious will exit with `0` when all files pass linting. If any lint
 commands fail it will exit with `1`.
 
-In both modes, if any commands fail, either by returning exit codes that aren't listed as ok or by
-printing to stderr unexpectedly, then the exit code will not be `0` or `1`.
+In both modes, if any commands fail to run properly, then precious will exit with `43`. This happens
+when a command returns an exit code that isn't listed as ok, prints to stderr unexpectedly, or
+cannot be executed at all. If one command has lint failures and another fails to run properly, the
+exit code is `43`.
+
+Precious exits with `42` for errors of its own, like an invalid config file.
 
 ## Common Scenarios
 

@@ -65,9 +65,17 @@ impl From<Error> for Exit {
     }
 }
 
+// An exit status of 1 is only for lint failures. A command that does not run properly gets its own
+// status so that callers can tell it apart from both a lint failure and an error in precious
+// itself.
+const COMMAND_ERROR_STATUS: i8 = 43;
+
 #[derive(Debug)]
 struct ActionFailure {
     error: String,
+    // A lint failure means the command ran properly and found problems. Anything else means the
+    // command itself did not run properly, and that gets a different exit code.
+    is_execution_error: bool,
     config_key: String,
     paths: Vec<Utf8PathBuf>,
 }
@@ -687,7 +695,12 @@ impl LintOrTidyRunner {
                     out
                 }),
             );
-            (1, Some(error))
+            let status = if failures.iter().any(|af| af.is_execution_error) {
+                COMMAND_ERROR_STATUS
+            } else {
+                1
+            };
+            (status, Some(error))
         };
         Exit {
             status,
@@ -754,6 +767,7 @@ impl LintOrTidyRunner {
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
+                        is_execution_error: true,
                         config_key: t.config_key(),
                         paths: files.iter().map(|f| (*f).to_owned()).collect(),
                     }))
@@ -812,6 +826,7 @@ impl LintOrTidyRunner {
 
                         Some(Err(ActionFailure {
                             error: "linting failed".into(),
+                            is_execution_error: false,
                             config_key: l.config_key(),
                             paths: files.iter().map(|f| (*f).to_owned()).collect(),
                         }))
@@ -827,6 +842,7 @@ impl LintOrTidyRunner {
                     );
                     Some(Err(ActionFailure {
                         error: format!("{e:#}"),
+                        is_execution_error: true,
                         config_key: l.config_key(),
                         paths: files.iter().map(|f| (*f).to_owned()).collect(),
                     }))
@@ -1210,7 +1226,7 @@ lint-failure-exit-codes = [1]
         let mut lt = app.new_lint_or_tidy_runner()?;
         let status = lt.run();
 
-        assert_eq!(status, 1);
+        assert_eq!(status, 43);
 
         Ok(())
     }
@@ -1238,7 +1254,7 @@ lint-failure-exit-codes = [1]
         let mut lt = app.new_lint_or_tidy_runner()?;
         let status = lt.run();
 
-        assert_eq!(status, 1);
+        assert_eq!(status, 43);
 
         Ok(())
     }
@@ -1264,6 +1280,33 @@ lint-failure-exit-codes = [1]
         let status = lt.run();
 
         assert_eq!(status, 0);
+
+        Ok(())
+    }
+
+    // An exit code of 1 is reserved for lint failures. A command that does not run properly is a
+    // different kind of problem, and callers need to be able to tell the two apart.
+    #[test]
+    #[serial]
+    #[cfg(not(target_os = "windows"))]
+    fn lint_command_execution_error_does_not_exit_1() -> Result<()> {
+        let config = r#"
+    [commands.exit-two]
+    type    = "lint"
+    include = "**/*"
+    cmd     = ["sh", "-c", "exit 2", "exit-two"]
+    ok-exit-codes = [0]
+    lint-failure-exit-codes = [1]
+    "#;
+        let helper = TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, config)?;
+        let _pushd = helper.pushd_to_git_root()?;
+
+        let app = App::try_parse_from(["precious", "--quiet", "lint", "--all"])?;
+
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let status = lt.run();
+
+        assert_eq!(status, 43);
 
         Ok(())
     }

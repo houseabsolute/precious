@@ -78,6 +78,11 @@
 - Fixed a bug where a file with a name that is not valid UTF-8 made `precious` fail even when the
   file was excluded. Now `precious` only reports an error for a non-UTF-8 file name when the file is
   not excluded.
+- Fixed the exit code when a command fails to run properly. This covers a command that returns an
+  exit code that is not listed as ok, prints to stderr unexpectedly, or cannot be executed. In these
+  cases `precious` exited with `1`, the same as for a lint failure, even though the docs said it
+  would not. Now `precious` exits with `43`, in both lint and tidy mode. If you have scripts that
+  check for an exit code of `1` from `precious tidy`, you will need to update them.
 
 ## 0.12.0 - 2026-08-22
 

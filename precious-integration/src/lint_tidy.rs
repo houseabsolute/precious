@@ -421,7 +421,8 @@ fn exit_codes() -> Result<()> {
         .run()?;
     assert_eq!(out.exit_code, 0);
 
-    helper.write_file("src/good.rs", "this is not valid rust")?;
+    // This is valid Rust that is not formatted properly, so this is a real lint failure.
+    helper.write_file("src/good.rs", "fn  foo( ) { }\n")?;
 
     let out = Exec::builder()
         .exe(&precious)
@@ -432,6 +433,30 @@ fn exit_codes() -> Result<()> {
         .build()
         .run()?;
     assert_eq!(out.exit_code, 1);
+
+    // With invalid Rust, rustfmt prints a parse error to stderr. That means the command did not run
+    // properly, which is not the same as a lint failure.
+    helper.write_file("src/good.rs", "this is not valid rust")?;
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+    assert_eq!(out.exit_code, 43);
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["tidy", "--all"])
+        .ok_exit_codes(&all_codes)
+        .ignore_stderr(vec![match_all_re.clone()])
+        .in_dir(&helper.precious_root())
+        .build()
+        .run()?;
+    assert_eq!(out.exit_code, 43);
 
     let out = Exec::builder()
         .exe(&precious)
@@ -497,7 +522,7 @@ fn output_on_failure() -> Result<()> {
     let out = Exec::builder()
         .exe(&precious)
         .args(vec!["lint", "--all"])
-        .ok_exit_codes(&[1])
+        .ok_exit_codes(&[43])
         .in_dir(&helper.precious_root())
         .build()
         .run()?;
