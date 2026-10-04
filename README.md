@@ -490,7 +490,7 @@ Labels work as follows:
 - If you assign `labels` to a command and you want that command included in the `default` label, you
   must explicitly include it:
   ```toml
-  [command.some-command]
+  [commands.some-command]
   # ...
   labels = [ "default", "some-label" ]
   ```
