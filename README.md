@@ -486,7 +486,8 @@ Labels work as follows:
 
 #### Default Exclusions
 
-When selecting paths `precious` _always_ respects your ignore files. Right now it only knows how
+When `precious` walks a directory tree to find files, it respects your ignore files. This happens
+with the `--all` flag and when you pass a directory on the command line. Right now it only knows how
 this works for git, and it will respect all of the following ignore files:
 
 - Per-directory `.ignore` and `.gitignore` files.
@@ -495,6 +496,18 @@ this works for git, and it will respect all of the following ignore files:
 
 This is implemented using the [rust `ignore` crate](https://crates.io/crates/ignore), so adding
 support for other VCS systems should be proposed there.
+
+The ignore files are _not_ applied in two cases:
+
+- With the git-based flags (`--git`, `--staged`, `--staged-with-stash`, and `--git-diff-from`),
+  `precious` uses the files that git reports. Git only reports files that it tracks, so an ignored
+  file that was never added is not included. But a tracked file that matches an ignore rule, like
+  one added with `git add -f`, is included. Rules in `.ignore` files have no effect on what git
+  reports.
+- A file that you pass on the command line is always used, even if it matches an ignore rule.
+
+Use the global `exclude` key for paths that `precious` must never operate on. It applies in every
+case.
 
 In addition, you can specify excludes for all commands by setting a global `exclude` key.
 
@@ -512,7 +525,9 @@ When `precious` runs it does the following to determine which commands apply to 
   - `--git-diff-from <REF>` - All files in the current `HEAD` that differ from `<REF>`.
   - paths passed on the CLI - If a path is a file it is added to the list as-is. If the path is a
     directory then all the files under that directory (recursively) are found.
-- VCS ignore rules are applied to remove files from this list.
+- When `precious` walks a directory tree, for `--all` or for a directory passed on the CLI, VCS
+  ignore rules are applied to remove files from this list. They are not applied to the files that
+  git reports or to files passed on the CLI.
 - The global exclude rules are applied to remove files from this list.
 - Based on the command's `invoke` key, a list of files to be checked is generated and the command's
   include/exclude rules are applied. To be included, a file must match at least one include rule
