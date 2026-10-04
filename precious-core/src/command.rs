@@ -1903,14 +1903,17 @@ mod tests {
     #[test]
     #[parallel]
     fn maybe_path_metadata_for_per_dir() -> Result<()> {
+        // The matchers need the same root as the paths they check. On Windows, a matcher rooted
+        // at "/" panics when it is given an absolute path like `C:\...`.
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.git_root();
         let mut command = default_command();
         command.invocation.invoke = Invoke::PerFile;
-        command.filter.includer = MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?;
-        command.filter.excluder = MatcherBuilder::new("/")
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.filter.excluder = MatcherBuilder::new(&root)
             .with(&["**/can_ignore.rs"])?
             .build()?;
 
-        let helper = TestHelper::new()?.with_git_repo()?;
         let mut dir = helper.git_root();
         dir.push("src");
         let files = vec1![dir.as_path()];
@@ -2025,14 +2028,17 @@ mod tests {
     #[test]
     #[parallel]
     fn paths_were_changed_when_dir_has_new_file() -> Result<()> {
+        // The matchers need the same root as the paths they check. On Windows, a matcher rooted
+        // at "/" panics when it is given an absolute path like `C:\...`.
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.git_root();
         let mut command = default_command();
         command.invocation.invoke = Invoke::PerDir;
-        command.filter.includer = MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?;
-        command.filter.excluder = MatcherBuilder::new("/")
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.filter.excluder = MatcherBuilder::new(&root)
             .with(&["**/can_ignore.rs"])?
             .build()?;
 
-        let helper = TestHelper::new()?.with_git_repo()?;
         let git_root = helper.git_root();
         let all_files = helper.all_files();
         let mut files = vec![];
@@ -2075,14 +2081,17 @@ mod tests {
     #[test]
     #[parallel]
     fn paths_were_changed_when_dir_has_file_deleted() -> Result<()> {
+        // The matchers need the same root as the paths they check. On Windows, a matcher rooted
+        // at "/" panics when it is given an absolute path like `C:\...`.
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.git_root();
         let mut command = default_command();
         command.invocation.invoke = Invoke::PerDir;
-        command.filter.includer = MatcherBuilder::new("/").with(&["**/*.rs"])?.build()?;
-        command.filter.excluder = MatcherBuilder::new("/")
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.filter.excluder = MatcherBuilder::new(&root)
             .with(&["**/can_ignore.rs"])?
             .build()?;
 
-        let helper = TestHelper::new()?.with_git_repo()?;
         let git_root = helper.git_root();
         let all_files = helper.all_files();
         let mut files = vec![];

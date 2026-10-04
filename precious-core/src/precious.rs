@@ -1004,7 +1004,12 @@ lint-failure-exit-codes = [1]
         let (_, project_root, config_file, _) = app.load_config(current_dir_utf8()?)?;
         let mut expect_config_file = project_root;
         expect_config_file.push(DEFAULT_CONFIG_FILE_NAME);
-        assert_eq!(config_file, expect_config_file);
+        // On Windows these two paths can name the same file in different ways, like a short
+        // `RUNNER~1` name versus a canonical `\\?\C:\...` path.
+        assert_eq!(
+            config_file.canonicalize_utf8()?,
+            expect_config_file.canonicalize_utf8()?,
+        );
 
         Ok(())
     }
@@ -1047,7 +1052,12 @@ lint-failure-exit-codes = [1]
         let cwd = Utf8PathBuf::try_from(cwd_std).unwrap();
 
         let root = super::project_root(config_file.map(Utf8Path::new), &cwd)?;
-        assert_eq!(root, helper.precious_root());
+        // The root is canonical when it comes from a config file path with a parent. On Windows
+        // that differs from the temp dir path the helper has, even though they are the same dir.
+        assert_eq!(
+            root.canonicalize_utf8()?,
+            helper.precious_root().canonicalize_utf8()?,
+        );
 
         Ok(())
     }
