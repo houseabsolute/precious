@@ -26,6 +26,8 @@ pub(crate) fn precious_path() -> Result<String> {
     precious.push("..");
     precious.push("target");
     precious.push("debug");
-    precious.push("precious");
+    // On Windows the file is `precious.exe`, and canonicalizing a path fails if the file does not
+    // exist.
+    precious.push(format!("precious{}", env::consts::EXE_SUFFIX));
     Ok(precious.canonicalize_utf8()?.into_string())
 }
