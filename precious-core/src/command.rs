@@ -15,6 +15,7 @@ use std::{
     fmt, fs,
     io::ErrorKind,
     num::NonZeroUsize,
+    path::Path,
     str::FromStr,
     time::SystemTime,
 };
@@ -909,32 +910,12 @@ impl Command {
             // absolute, so they match the keys in `path_map`.
             dir = Some(full_path.clone());
             let entries = full_path
-                .read_dir_utf8()
+                .as_std_path()
+                .read_dir()
                 .with_context(|| format!("Failed to read directory {full_path}"))?;
-            for entry in entries {
-                let entry = entry
-                    .with_context(|| format!("Failed to read directory entry from {full_path}"))?;
-                let path = entry.path();
-                if path.is_file() && self.file_matches_rules(path) {
-                    let meta = entry
-                        .metadata()
-                        .with_context(|| format!("Failed to get metadata for file {path}"))?;
-                    let hash =
-                        md5::compute(fs::read(path).with_context(|| {
-                            format!("Failed to read file {path} for MD5 hashing")
-                        })?);
-                    let mtime = meta.modified().with_context(|| {
-                        format!("Failed to get modification time for file {path}")
-                    })?;
-                    path_map.insert(
-                        path.to_path_buf(),
-                        PathInfo {
-                            mtime,
-                            size: meta.len(),
-                            hash,
-                        },
-                    );
-                }
+            for file in self.matching_files_in(&full_path, entries)? {
+                let meta = Self::metadata_for_file(&file)?;
+                path_map.insert(file, meta);
             }
         } else if !path.exists() {
             return Err(CommandError::PathDoesNotExist {
@@ -950,11 +931,36 @@ impl Command {
         Ok(PathMetadata { dir, path_map })
     }
 
+    // This returns the files in a directory that match the command's include/exclude rules. The
+    // names are not required to be UTF-8 until we know that a file matches. A file that does not
+    // match is never passed to the command, so its name does not matter.
+    fn matching_files_in(&self, dir: &Utf8Path, entries: fs::ReadDir) -> Result<Vec<Utf8PathBuf>> {
+        let mut files = vec![];
+        for entry in entries {
+            let raw = entry
+                .with_context(|| format!("Failed to read directory entry from {dir}"))?
+                .path();
+            if !raw.is_file() || !self.raw_file_matches_rules(&raw) {
+                continue;
+            }
+            let file = Utf8PathBuf::from_path_buf(raw).map_err(|raw| NonUtf8PathError {
+                raw,
+                source: NonUtf8Source::FilesystemWalk,
+            })?;
+            files.push(file);
+        }
+        Ok(files)
+    }
+
     fn file_matches_rules(&self, file: &Utf8Path) -> bool {
-        if self.filter.excluder.path_matches(file, false) {
+        self.raw_file_matches_rules(file.as_std_path())
+    }
+
+    fn raw_file_matches_rules(&self, file: &Path) -> bool {
+        if self.filter.excluder.raw_path_matches(file, false) {
             return false;
         }
-        if self.filter.includer.path_matches(file, false) {
+        if self.filter.includer.raw_path_matches(file, false) {
             return true;
         }
         false
@@ -1083,21 +1089,17 @@ impl Command {
         }
 
         if let Some(dir) = prev.dir {
-            let entries = match dir.read_dir_utf8() {
+            let entries = match dir.as_std_path().read_dir() {
                 Ok(rd) => rd,
                 Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
                 Err(e) => return Err(e).with_context(|| format!("Failed to read directory {dir}")),
             };
-            for entry in entries {
-                let entry =
-                    entry.with_context(|| format!("Failed to read directory entry from {dir}"))?;
-                let path = entry.path();
-                if path.is_file()
-                    && self.file_matches_rules(path)
-                    && !prev.path_map.contains_key(path)
-                {
-                    return Ok(true);
-                }
+            if self
+                .matching_files_in(&dir, entries)?
+                .iter()
+                .any(|file| !prev.path_map.contains_key(file))
+            {
+                return Ok(true);
             }
         }
 
@@ -2219,6 +2221,91 @@ mod tests {
             command.tidy(ActualInvoke::PerDir, &files)?,
             Some(TidyOutcome::Unchanged),
             "a per-dir tidy command that changes nothing is reported as unchanged",
+        );
+
+        Ok(())
+    }
+
+    // A per-dir tidy command reads the directory to see whether the command changed anything. A
+    // file that the command does not match is not part of that check, so its name must not matter.
+    //
+    // The default macOS filesystems refuse to create a file with a non-UTF-8 name.
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    #[parallel]
+    fn tidy_per_dir_ignores_non_utf8_filename_that_does_not_match() -> Result<()> {
+        use std::{ffi::OsStr, fs, os::unix::ffi::OsStrExt};
+
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.precious_root();
+        fs::write(
+            root.as_std_path()
+                .join("src")
+                .join(OsStr::from_bytes(b"data\xff.bin")),
+            "not a rust file",
+        )?;
+
+        let mut command = default_command();
+        command.project_root = root.clone();
+        command.name = "noop".to_string();
+        command.typ = CommandType::Tidy;
+        command.invocation.invoke = Invoke::PerDir;
+        command.invocation.path_args = PathArgs::Dir;
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.execution.cmd = vec!["true".to_string()];
+        command.execution.ok_exit_codes = vec![0];
+
+        let files = Vec1::try_from(vec![Utf8Path::new("src/main.rs")])
+            .expect("the list of files is not empty");
+
+        assert_eq!(
+            command.tidy(ActualInvoke::PerDir, &files)?,
+            Some(TidyOutcome::Unchanged),
+            "the file with the non-UTF-8 name does not match the command, so it is ignored",
+        );
+
+        Ok(())
+    }
+
+    // A file that matches the command would be passed to it, and we cannot do that when its name
+    // is not UTF-8. The error has to include the raw bytes of the name.
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    #[parallel]
+    fn tidy_per_dir_errors_on_non_utf8_filename_that_matches() -> Result<()> {
+        use std::{ffi::OsStr, fs, os::unix::ffi::OsStrExt};
+
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.precious_root();
+        let bad_file = root
+            .as_std_path()
+            .join("src")
+            .join(OsStr::from_bytes(b"data\xff.rs"));
+        fs::write(&bad_file, "// a rust file")?;
+
+        let mut command = default_command();
+        command.project_root = root.clone();
+        command.name = "noop".to_string();
+        command.typ = CommandType::Tidy;
+        command.invocation.invoke = Invoke::PerDir;
+        command.invocation.path_args = PathArgs::Dir;
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.execution.cmd = vec!["true".to_string()];
+        command.execution.ok_exit_codes = vec![0];
+
+        let files = Vec1::try_from(vec![Utf8Path::new("src/main.rs")])
+            .expect("the list of files is not empty");
+
+        let err = command
+            .tidy(ActualInvoke::PerDir, &files)
+            .expect_err("a matching file with a non-UTF-8 name is an error");
+        assert_eq!(
+            err.downcast_ref::<NonUtf8PathError>(),
+            Some(&NonUtf8PathError {
+                raw: bad_file,
+                source: NonUtf8Source::FilesystemWalk,
+            }),
+            "unexpected error: {err:#}",
         );
 
         Ok(())

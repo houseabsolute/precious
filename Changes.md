@@ -83,6 +83,10 @@
   cases `precious` exited with `1`, the same as for a lint failure, even though the docs said it
   would not. Now `precious` exits with `43`, in both lint and tidy mode. If you have scripts that
   check for an exit code of `1` from `precious tidy`, you will need to update them.
+- Fixed a bug where a tidy command with `invoke = "per-dir"` failed when the directory had any file
+  with a name that is not valid UTF-8, even a file that the command does not include. Now `precious`
+  only reports an error for a non-UTF-8 file name when the file matches the command's `include` and
+  `exclude` rules, and that error shows the raw bytes of the name.
 
 ## 0.12.0 - 2026-08-22
 
