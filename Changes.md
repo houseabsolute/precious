@@ -98,6 +98,10 @@
 - A command with an empty `cmd`, like `cmd = []` or `cmd = ""`, is now a config error. Before,
   `cmd = []` made `precious` panic when it ran the command, and `cmd = ""` failed with an error
   about an executable that could not be found.
+- The `--command` flag now runs the named command whatever its labels are, unless `--label` is also
+  passed. Before, `--command` on its own still only looked at commands with the `default` label. So
+  a command with `labels` that did not include `default` could not be run by name alone, and
+  `precious` said that no commands matched the name.
 
 ## 0.12.0 - 2026-08-22
 

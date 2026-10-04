@@ -474,6 +474,9 @@ $> precious lint --command some-command --all
 The name passed to `--command` must match the name of the command in your config file. So in the
 above example, this would look for a command defined as `[commands.some-command]` in your config.
 
+This runs the command whatever its labels are, unless you also pass `--label`. If you pass both
+flags, the command only runs if it has that label.
+
 #### Selecting Commands With Labels
 
 Each command can be assigned one or more labels. This lets you create arbitrary groups of commands.

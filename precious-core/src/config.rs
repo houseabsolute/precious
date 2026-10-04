@@ -243,7 +243,14 @@ impl Config {
                 }
             }
 
-            if !c.matches_label(label.unwrap_or(DEFAULT_LABEL)) {
+            // Naming a command is a request to run that one command, so the default label does
+            // not apply. It only applies when nothing else says which commands to run.
+            let label = match (label, command) {
+                (Some(l), _) => Some(l),
+                (None, Some(_)) => None,
+                (None, None) => Some(DEFAULT_LABEL),
+            };
+            if label.is_some_and(|l| !c.matches_label(l)) {
                 continue;
             }
 
@@ -1195,6 +1202,55 @@ mod tests {
         assert_eq!(
             included,
             vec![Utf8Path::new("src/lib.rs"), Utf8Path::new("src/main.rs")]
+        );
+
+        Ok(())
+    }
+
+    // Naming a command is a request to run that one command. The default label only applies when
+    // nothing else says which commands to run.
+    #[test]
+    #[parallel]
+    fn command_name_without_label_selects_command_not_in_default_label() -> Result<()> {
+        let toml_text = r#"
+            [commands.rustfmt]
+            type = "lint"
+            include = "**/*.rs"
+            cmd = ["rustfmt", "--check"]
+            ok-exit-codes = 0
+            labels = ["ci"]
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let commands = config.into_lint_commands(Utf8Path::new("."), Some("rustfmt"), None)?;
+        assert_eq!(
+            commands.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            vec!["rustfmt"],
+        );
+
+        Ok(())
+    }
+
+    // When both a name and a label are given, the command has to match both.
+    #[test_case(Some("ci"), &["rustfmt"]; "label the command has")]
+    #[test_case(Some("default"), &[]; "label the command does not have")]
+    #[test_case(Some("other"), &[]; "label that no command has")]
+    #[parallel]
+    fn command_name_with_label_must_match_both(label: Option<&str>, expect: &[&str]) -> Result<()> {
+        let toml_text = r#"
+            [commands.rustfmt]
+            type = "lint"
+            include = "**/*.rs"
+            cmd = ["rustfmt", "--check"]
+            ok-exit-codes = 0
+            labels = ["ci"]
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let commands = config.into_lint_commands(Utf8Path::new("."), Some("rustfmt"), label)?;
+        assert_eq!(
+            commands.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(),
+            expect,
         );
 
         Ok(())

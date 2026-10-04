@@ -44,6 +44,15 @@ enum PreciousError {
     #[error("No {what:} commands match the given command name, {name:}")]
     NoCommandsMatchCommandName { what: String, name: String },
 
+    #[error(
+        "No {what:} commands match both the given command name, {name:}, and the given label, {label:}"
+    )]
+    NoCommandsMatchCommandNameAndLabel {
+        what: String,
+        name: String,
+        label: String,
+    },
+
     #[error("No {what:} commands match the given label, {label:}")]
     NoCommandsMatchLabel { what: String, label: String },
 }
@@ -136,7 +145,8 @@ pub enum Subcommand {
 #[allow(clippy::struct_excessive_bools)]
 pub struct CommonArgs {
     /// The command to run. If specified, only this command will be run. This
-    /// should match the command name in your config file.
+    /// should match the command name in your config file. The command's
+    /// labels are ignored unless you also pass --label.
     #[clap(long)]
     command: Option<String>,
     /// Run against all files in the current directory and below
@@ -597,6 +607,14 @@ impl LintOrTidyRunner {
         ) -> Result<Option<Vec<ActionFailure>>>,
     {
         if commands.is_empty() {
+            if let (Some(c), Some(l)) = (&self.command, &self.label) {
+                return Err(PreciousError::NoCommandsMatchCommandNameAndLabel {
+                    what: action.into(),
+                    name: c.into(),
+                    label: l.into(),
+                }
+                .into());
+            }
             if let Some(c) = &self.command {
                 return Err(PreciousError::NoCommandsMatchCommandName {
                     what: action.into(),
@@ -1355,6 +1373,36 @@ lint-failure-exit-codes = [1]
         let status = lt.run();
 
         assert_eq!(status, 42);
+
+        Ok(())
+    }
+
+    // The command exists here, so an error that only talks about the name would be misleading.
+    #[test]
+    #[serial]
+    fn one_command_given_with_label_it_does_not_have() -> Result<()> {
+        let helper =
+            TestHelper::new()?.with_config_file(DEFAULT_CONFIG_FILE_NAME, SIMPLE_CONFIG)?;
+        let _pushd = helper.pushd_to_git_root()?;
+
+        let app = App::try_parse_from([
+            "precious",
+            "--quiet",
+            "lint",
+            "--command",
+            "rustfmt",
+            "--label",
+            "no-such-label",
+            "--all",
+        ])?;
+
+        let mut lt = app.new_lint_or_tidy_runner()?;
+        let err = lt.run_subcommand().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "No linting commands match both the given command name, rustfmt, and the given \
+             label, no-such-label",
+        );
 
         Ok(())
     }
