@@ -711,6 +711,49 @@ lint-failure-exit-codes = 1
     Ok(())
 }
 
+// The GitHub runner treats `,` and `:` as separators in a workflow command's properties, and it
+// decodes `%XX` sequences. This uses `false` as the command, which does not exist on Windows.
+#[cfg(unix)]
+#[test]
+#[serial]
+fn github_annotation_escapes_special_chars() -> Result<()> {
+    compile_precious()?;
+    let helper = TestHelper::new()?.with_config_file(
+        "precious.toml",
+        r#"
+[commands."50%: false"]
+type    = "lint"
+include = "*.txt"
+cmd     = ["false"]
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+    )?;
+    helper.write_file("src/a,b%2Cc:d.txt", "content")?;
+
+    let precious = precious_path()?;
+    let env = HashMap::from([(String::from("GITHUB_ACTIONS"), String::from("true"))]);
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .env(env)
+        .ok_exit_codes(&[1])
+        .in_dir(&helper.precious_root())
+        .ignore_stderr(vec![Regex::new(".*")?])
+        .build()
+        .run()?;
+
+    let stdout = out.stdout.unwrap_or_default();
+    // In the message, only `%` and line endings need to be escaped.
+    assert!(
+        stdout.contains("src/a%2Cb%252Cc%3Ad.txt::Linting with 50%25: false failed"),
+        "expected an escaped annotation, got: {stdout}",
+    );
+
+    Ok(())
+}
+
 #[test]
 #[serial]
 fn output_on_failure() -> Result<()> {

@@ -380,6 +380,22 @@ fn github_annotation_path(project_root: &Utf8Path, file: &Utf8Path) -> Utf8PathB
     }
 }
 
+// The GitHub runner decodes `%XX` sequences in a workflow command and treats a line ending as the
+// end of the command. These are the same escapes that GitHub's own actions toolkit uses.
+fn escape_github_message(message: &str) -> String {
+    message
+        .replace('%', "%25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+}
+
+// In a property like `file=...`, the runner also treats `:` and `,` as separators.
+fn escape_github_property(value: &str) -> String {
+    escape_github_message(value)
+        .replace(':', "%3A")
+        .replace(',', "%2C")
+}
+
 fn project_root(config_file: Option<&Utf8Path>, cwd: &Utf8Path) -> Result<Utf8PathBuf> {
     if let Some(file) = config_file {
         if let Some(p) = file.parent() {
@@ -863,11 +879,17 @@ impl LintOrTidyRunner {
                                 if files.len() == NonZeroUsize::new(1).unwrap() {
                                     println!(
                                         "::error file={}::Linting with {} failed",
-                                        github_annotation_path(&s.project_root, files[0]),
-                                        l.name
+                                        escape_github_property(
+                                            github_annotation_path(&s.project_root, files[0])
+                                                .as_str()
+                                        ),
+                                        escape_github_message(&l.name),
                                     );
                                 } else {
-                                    println!("::error::Linting with {} failed", l.name);
+                                    println!(
+                                        "::error::Linting with {} failed",
+                                        escape_github_message(&l.name),
+                                    );
                                 }
                             }
                         }

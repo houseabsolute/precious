@@ -149,6 +149,9 @@
   Actions. The path was relative to the directory with the `precious` config file. When that was not
   the root of the repo, the annotation pointed at the wrong file. The path is now relative to
   `GITHUB_WORKSPACE`.
+- The `::error` annotation that `precious` prints when it runs in GitHub Actions now escapes special
+  characters in the file path and the command name. Before, a path that contained a character like
+  `,`, `:` or `%` gave an annotation that pointed at the wrong file.
 
 ## 0.12.0 - 2026-08-22
 
