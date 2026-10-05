@@ -126,13 +126,21 @@ fn cafe_txt_handled_through_git() -> Result<()> {
     helper.stage_all()?;
 
     let precious = precious_path()?;
-    Exec::builder()
+    let output = Exec::builder()
         .exe(&precious)
         .args(vec!["lint", "--staged"])
         .ok_exit_codes(&[0])
         .in_dir(&helper.precious_root())
         .build()
         .run()?;
+
+    // Exiting 0 is not enough. If git quotes the name, precious drops the file because the quoted
+    // path does not exist, and it still exits 0.
+    let stdout = output.stdout.unwrap_or_default();
+    assert!(
+        stdout.contains(&format!("Passed echo: {name}")),
+        "expected {name} to be linted, got:\n{stdout}",
+    );
 
     Ok(())
 }
