@@ -735,9 +735,23 @@ As of version 0.1.2, commands are run in the same order as they appear in the co
 ## Linting and Tidying this Code
 
 The code in this repo is linted and tidied with
-[`precious`](https://github.com/houseabsolute/precious). This repo contains a `mise.toml` file.
-[Mise](https://mise.jdx.dev/) is a tool for managing dev tools with per-repo configuration. You can
-install `mise` and use it to run `precious` as follows:
+[`precious`](https://github.com/houseabsolute/precious). The simplest way to run it is with the
+`just` recipes, which run `precious` inside the dev container. See
+[Developing Precious](#developing-precious) for how to set this up.
+
+```
+# Lints all code
+just lint -a
+# Tidies all code
+just tidy -a
+```
+
+You can also run `precious` on your own machine without the container. This repo contains a
+`mise.toml` file. [Mise](https://mise.jdx.dev/) is a tool for managing dev tools with per-repo
+configuration. It installs `precious` and most of the tools that `precious` runs, but it does not
+install Rust. The `precious` config for this repo runs `cargo clippy` and `rustfmt`, so you need to
+install a Rust toolchain with those components yourself, for example with
+[`rustup`](https://rustup.rs/).
 
 ```
 # Installs mise
