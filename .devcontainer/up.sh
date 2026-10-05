@@ -8,8 +8,10 @@
 # container starts before the listener is really up, the event is missed and
 # the CLI waits forever. It gets stuck in one very specific place - right after
 # printing "Container started", with the container running but before any
-# lifecycle command has run. Re-running always works, because the container
-# then already exists and the CLI never waits for an event.
+# lifecycle command has run. Re-running works, because the container then
+# already exists and the CLI never waits for an event. That is only true if the
+# retry does not remove the container, so retries drop the
+# --remove-existing-container flag. See the retry loop below.
 #
 # This is https://github.com/devcontainers/cli/issues/1236, still open as of
 # CLI 0.88.0. Drop this wrapper once it's fixed upstream.
@@ -71,10 +73,12 @@ is_stuck() {
         tail -n 1 "$log" | grep -q 'Container started$'
 }
 
+args=("$@")
+
 for attempt in $(seq 1 "$max_attempts"); do
     : >"$log"
 
-    mise exec -- devcontainer up "$@" >"$log" 2>&1 &
+    mise exec -- devcontainer up "${args[@]}" >"$log" 2>&1 &
     pid=$!
 
     tail -n +1 -f --pid="$pid" "$log" &
@@ -98,6 +102,18 @@ for attempt in $(seq 1 "$max_attempts"); do
     if [ "$stuck" -eq 0 ]; then
         exit "$status"
     fi
+
+    # A stuck attempt has already removed the old container and created a new
+    # one. If the retry removed the container again, the CLI would have to wait
+    # for a start event again and could get stuck the same way. Without the
+    # flag, the retry reuses the container that the stuck attempt created.
+    kept=()
+    for arg in "${args[@]}"; do
+        if [ "$arg" != "--remove-existing-container" ]; then
+            kept+=("$arg")
+        fi
+    done
+    args=("${kept[@]}")
 
     if [ "$attempt" -lt "$max_attempts" ]; then
         echo "devcontainer up is stuck waiting for the container start event," \
