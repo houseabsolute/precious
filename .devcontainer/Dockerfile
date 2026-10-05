@@ -27,10 +27,4 @@ RUN useradd -m -s /bin/bash dev \
 
 USER dev
 
-# The test helpers create git repos and commit to them, but they only set
-# `user.email`. Without a global identity here, git can't derive a name (the
-# `dev` user has no GECOS field) and every commit in the tests fails.
-RUN git config --global user.name "dev" \
-    && git config --global user.email "dev@example.com"
-
 RUN echo 'eval "$(mise activate bash)"' >> /home/dev/.bashrc
