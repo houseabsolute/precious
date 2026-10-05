@@ -60,9 +60,9 @@ version = "0.12.0"
 
 [workspace.dependencies]
 anyhow = { version = "1.0.104", default-features = false }
-bon = { version = "3.9.3", default-features = false }
+bon = { version = "3.10.1", default-features = false }
 camino = { version = "1.2", features = ["serde1"] }
-clap = { version = "4.6.4", default-features = false, features = [
+clap = { version = "4.6.7", default-features = false, features = [
     "cargo",
     "derive",
     "error-context",
@@ -70,15 +70,15 @@ clap = { version = "4.6.4", default-features = false, features = [
     "usage",
     "wrap_help",
 ] }
-comfy-table = { version = "7.2.2", default-features = false }
+comfy-table = { version = "8.0.1", default-features = false }
 env_logger = { version = "0.11.11", default-features = false }
-fern = { version = ">= 0.5.0, < 0.7.0", default-features = false, features = ["colored"] }
+fern = { version = "0.7.1", default-features = false, features = ["colored"] }
 filetime = { version = "0.2.29", default-features = false }
-ignore = { version = "0.4.31", default-features = false }
-indexmap = { version = "2.14.0", default-features = false, features = ["serde", "std"] }
+ignore = { version = "0.4.33", default-features = false }
+indexmap = { version = "2.14.2", default-features = false, features = ["serde", "std"] }
 itertools = { version = "0.15.0", default-features = true }
 libc = { version = "0.2.189", default-features = false }
-log = { version = "0.4.33", default-features = false }
+log = { version = "0.4.34", default-features = false }
 md5 = { version = "0.8.1", default-features = false }
 mitsein = { version = "0.9.0", default-features = false, features = ["itertools", "std"] }
 pathdiff = { version = "0.2.3", default-features = false }
@@ -91,16 +91,16 @@ rayon = { version = "1.12.0", default-features = false }
 regex = { version = "1.13.1", default-features = true }
 serde = { version = "1.0.229", default-features = true, features = ["derive"] }
 serde_json = { version = "1.0.151", default-features = false, features = ["std"] }
-serial_test = { version = "3.5.0", default-features = false }
+serial_test = { version = "4.0.1", default-features = false }
 tempfile = { version = "3.27.0", default-features = false }
-test-case = { version = "3.3.1", default-features = false }
-thiserror = { version = "2.0.19", default-features = true }
-toml = { version = "1.1.3", default-features = false, features = [
+test-case = { version = "3.4.0", default-features = false }
+thiserror = { version = "2.0.21", default-features = true }
+toml = { version = "1.1.6", default-features = false, features = [
     "parse",
     "preserve_order",
     "serde",
 ] }
-which = { version = ">= 3.0.0, < 5.0.0", default-features = false }
+which = { version = "8.0.6", default-features = false, features = ["real-sys"] }
 
 [workspace.lints.clippy]
 fallible_impl_from = "deny"
