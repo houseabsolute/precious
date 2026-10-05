@@ -135,6 +135,9 @@
   prints now includes the command's stdout as well as its stderr.
 - Fixed the error message for an executable that cannot be found. It was missing the closing
   parenthesis after the `PATH` value.
+- Fixed the shortened command that `precious` shows in its `--verbose` output for a command that
+  sets `path-flag`. It could end with a flag that had no path after it, and it reported the wrong
+  number of paths left out.
 
 ## 0.12.0 - 2026-08-22
 

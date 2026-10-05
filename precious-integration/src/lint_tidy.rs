@@ -511,6 +511,50 @@ lint-failure-exit-codes = 1
     Ok(())
 }
 
+// This uses `true` as the command, which does not exist on Windows.
+#[cfg(unix)]
+#[test]
+#[serial]
+fn verbose_log_shortens_command_with_path_flag() -> Result<()> {
+    let helper = TestHelper::new()?.with_config_file(
+        "precious.toml",
+        r#"
+[commands.true]
+type    = "lint"
+include = "*.txt"
+invoke  = "once"
+path-flag = "--file"
+cmd     = ["true"]
+ok-exit-codes = 0
+"#,
+    )?;
+    for name in ["a", "b", "c", "d", "e"] {
+        helper.write_file(format!("{name}.txt"), "content")?;
+    }
+
+    let precious = precious_path()?;
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all", "--verbose"])
+        .ok_exit_codes(&[0])
+        .in_dir(&helper.precious_root())
+        .ignore_stderr(vec![Regex::new(".*")?])
+        .build()
+        .run()?;
+
+    let stdout = out.stdout.unwrap_or_default();
+    let stderr = out.stderr.unwrap_or_default();
+    let output = format!("{stdout}{stderr}");
+
+    assert!(
+        output.contains("using command [true --file a.txt --file b.txt ... and 3 more paths]"),
+        "expected the shortened command to keep each flag with its path, got: {output}",
+    );
+
+    Ok(())
+}
+
 #[test]
 #[serial]
 fn output_on_failure() -> Result<()> {

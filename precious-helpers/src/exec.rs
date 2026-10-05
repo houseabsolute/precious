@@ -32,6 +32,7 @@ pub struct Exec<'a> {
     exe: &'a str,
     args: Vec<&'a str>,
     num_paths: usize,
+    paths_have_flags: bool,
     env: HashMap<String, String>,
     ok_exit_codes: &'a [i32],
     ignore_stderr: Vec<Regex>,
@@ -54,6 +55,8 @@ impl<'a> Exec<'a> {
         exe: &'a str,
         #[builder(default)] args: Vec<&'a str>,
         #[builder(default)] num_paths: usize,
+        // This is true when each path in `args` has a flag right before it, like `--file a.txt`.
+        #[builder(default)] paths_have_flags: bool,
         #[builder(default)] env: HashMap<String, String>,
         ok_exit_codes: &'a [i32],
         #[builder(default)] ignore_stderr: Vec<Regex>,
@@ -63,6 +66,7 @@ impl<'a> Exec<'a> {
             exe,
             args,
             num_paths,
+            paths_have_flags,
             env,
             ok_exit_codes,
             ignore_stderr,
@@ -89,14 +93,21 @@ impl<'a> Exec<'a> {
             return cmd.join(" ");
         }
 
-        let num_non_paths = self.args.len() - self.num_paths;
+        // When each path has its own flag, the flag and the path are two arguments that we must
+        // keep together. Otherwise we would count the flags as paths and could end the command
+        // with a flag that has no path after it.
+        let args_per_path = if self.paths_have_flags { 2 } else { 1 };
+        let num_non_paths = self
+            .args
+            .len()
+            .saturating_sub(self.num_paths * args_per_path);
 
         // At this point, we know we have more than 3 arguments. We will always include all the
         // arguments that are _not_ paths.
         cmd.extend(args.by_ref().take(num_non_paths));
 
         // If we have 3 paths or less, we'll include all of them.
-        if args.len() <= 3 {
+        if self.num_paths <= 3 {
             cmd.extend(args);
             return cmd.join(" ");
         }
@@ -104,9 +115,9 @@ impl<'a> Exec<'a> {
         // Otherwise we'll include 2 paths and then "and N more paths". We know that N will always
         // be >= 2. We never want to include "... and 1 more path", since in that case we might as
         // well have included that 1 path instead.
-        cmd.extend(args.by_ref().take(2));
+        cmd.extend(args.by_ref().take(2 * args_per_path));
 
-        let and_more = format!("... and {} more paths", args.len());
+        let and_more = format!("... and {} more paths", self.num_paths - 2);
         cmd.push(&and_more);
 
         cmd.join(" ")
@@ -1052,6 +1063,58 @@ STDERR
             .exe(exe)
             .args(args.to_vec())
             .num_paths(num_paths)
+            .ok_exit_codes(&[0])
+            .build();
+        assert_eq!(exec.loggable_command, expect);
+    }
+
+    #[test_case(
+        "foo",
+        &["--file", "bar"],
+        1,
+        "foo --file bar";
+        "one path"
+    )]
+    #[test_case(
+        "foo",
+        &["--file", "bar", "--file", "baz", "--file", "buz"],
+        3,
+        "foo --file bar --file baz --file buz";
+        "three paths"
+    )]
+    #[test_case(
+        "foo",
+        &["--file", "bar", "--file", "baz", "--file", "buz", "--file", "quux"],
+        4,
+        "foo --file bar --file baz ... and 2 more paths";
+        "four paths"
+    )]
+    #[test_case(
+        "foo",
+        &["--file", "bar", "--file", "baz", "--file", "buz", "--file", "quux", "--file", "corge"],
+        5,
+        "foo --file bar --file baz ... and 3 more paths";
+        "five paths"
+    )]
+    #[test_case(
+        "foo",
+        &["--bar", "--baz", "--file", "bar", "--file", "baz", "--file", "buz", "--file", "quux"],
+        4,
+        "foo --bar --baz --file bar --file baz ... and 2 more paths";
+        "two flags and four paths"
+    )]
+    #[parallel]
+    fn loggable_command_when_paths_have_flags(
+        exe: &str,
+        args: &[&str],
+        num_paths: usize,
+        expect: &str,
+    ) {
+        let exec = Exec::builder()
+            .exe(exe)
+            .args(args.to_vec())
+            .num_paths(num_paths)
+            .paths_have_flags(true)
             .ok_exit_codes(&[0])
             .build();
         assert_eq!(exec.loggable_command, expect);
