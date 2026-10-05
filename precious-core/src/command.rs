@@ -2113,6 +2113,41 @@ mod tests {
         Ok(())
     }
 
+    // We must read a symlink's metadata the same way before and after the command runs. If one
+    // read follows the link and the other does not, the link always looks like it changed.
+    #[cfg(unix)]
+    #[test]
+    #[parallel]
+    fn paths_were_changed_is_false_for_unchanged_symlink_in_dir() -> Result<()> {
+        let helper = TestHelper::new()?.with_git_repo()?;
+        let root = helper.git_root();
+        let mut command = default_command();
+        command.invocation.invoke = Invoke::PerDir;
+        command.filter.includer = MatcherBuilder::new(&root).with(&["**/*.rs"])?.build()?;
+        command.filter.excluder = MatcherBuilder::new(&root).build()?;
+
+        helper.write_file("other/real.rs", "some content that is longer than a link")?;
+        // The link and its target must have different mtimes, or we would not notice which one
+        // we read. Files created right after each other can get the same mtime.
+        fs::File::options()
+            .write(true)
+            .open(root.join("other/real.rs"))?
+            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_hours(1))?;
+        let dir = root.join("src");
+        let link = dir.join("link.rs");
+        std::os::unix::fs::symlink("../other/real.rs", &link)?;
+
+        // With per-dir invocation, we look at the directory that contains the files we are given.
+        let files = vec1![link.as_path()];
+        let prev = command
+            .maybe_path_metadata_for(ActualInvoke::PerDir, &files)?
+            .unwrap();
+        assert!(prev.path_map.contains_key(&link), "contains {link}");
+        assert!(!command.paths_were_changed(prev)?);
+
+        Ok(())
+    }
+
     #[test]
     #[parallel]
     fn paths_were_changed_when_dir_has_file_deleted() -> Result<()> {
