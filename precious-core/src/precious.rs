@@ -354,6 +354,32 @@ fn current_dir_utf8() -> Result<Utf8PathBuf> {
     })
 }
 
+// GitHub resolves a relative path in an annotation against the root of the repo. Our paths are
+// relative to the precious project root, which can be a subdirectory of the repo. On GitHub the
+// repo root is `GITHUB_WORKSPACE`, so we make the path relative to that when we can. If we cannot,
+// we use the absolute path, which GitHub also understands.
+fn github_annotation_path(project_root: &Utf8Path, file: &Utf8Path) -> Utf8PathBuf {
+    let full = project_root.join(file);
+    let Ok(workspace) = env::var("GITHUB_WORKSPACE") else {
+        return full;
+    };
+    if workspace.is_empty() {
+        return full;
+    }
+
+    // We canonicalize both sides so that a symlink in one of them does not stop the prefix from
+    // matching.
+    let workspace = Utf8PathBuf::from(workspace);
+    let workspace = workspace.canonicalize_utf8().unwrap_or(workspace);
+    let root = project_root
+        .canonicalize_utf8()
+        .unwrap_or_else(|_| project_root.to_owned());
+    match root.strip_prefix(&workspace) {
+        Ok(relative) => relative.join(file),
+        Err(_) => full,
+    }
+}
+
 fn project_root(config_file: Option<&Utf8Path>, cwd: &Utf8Path) -> Result<Utf8PathBuf> {
     if let Some(file) = config_file {
         if let Some(p) = file.parent() {
@@ -837,7 +863,8 @@ impl LintOrTidyRunner {
                                 if files.len() == NonZeroUsize::new(1).unwrap() {
                                     println!(
                                         "::error file={}::Linting with {} failed",
-                                        files[0], l.name
+                                        github_annotation_path(&s.project_root, files[0]),
+                                        l.name
                                     );
                                 } else {
                                     println!("::error::Linting with {} failed", l.name);

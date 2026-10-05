@@ -664,6 +664,53 @@ fn argument_errors_name_the_argument() -> Result<()> {
     Ok(())
 }
 
+// GitHub resolves a relative path in an annotation against the root of the repo, not against the
+// precious project root. This uses `false` as the command, which does not exist on Windows.
+#[cfg(unix)]
+#[test]
+#[serial]
+fn github_annotation_path_is_relative_to_the_workspace() -> Result<()> {
+    compile_precious()?;
+    let helper = TestHelper::new()?;
+    helper.write_file(
+        "sub/precious.toml",
+        r#"
+[commands.false]
+type    = "lint"
+include = "*.txt"
+cmd     = ["false"]
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+    )?;
+    helper.write_file("sub/src/a.txt", "content")?;
+
+    let precious = precious_path()?;
+    let workspace = helper.git_root().canonicalize_utf8()?;
+    let env = HashMap::from([
+        (String::from("GITHUB_ACTIONS"), String::from("true")),
+        (String::from("GITHUB_WORKSPACE"), workspace.to_string()),
+    ]);
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .env(env)
+        .ok_exit_codes(&[1])
+        .in_dir(&workspace.join("sub"))
+        .ignore_stderr(vec![Regex::new(".*")?])
+        .build()
+        .run()?;
+
+    let stdout = out.stdout.unwrap_or_default();
+    assert!(
+        stdout.contains("::error file=sub/src/a.txt::Linting with false failed"),
+        "expected an annotation for sub/src/a.txt, got: {stdout}",
+    );
+
+    Ok(())
+}
+
 #[test]
 #[serial]
 fn output_on_failure() -> Result<()> {

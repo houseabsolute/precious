@@ -145,6 +145,10 @@
   that output could garble what the script printed.
 - Fixed the help output and the errors for bad command line arguments. The help had an empty
   `Usage:` line, and errors like "unexpected argument found" did not say which argument was wrong.
+- Fixed the path in the `::error file=...` annotation that `precious` prints when it runs in GitHub
+  Actions. The path was relative to the directory with the `precious` config file. When that was not
+  the root of the repo, the annotation pointed at the wrong file. The path is now relative to
+  `GITHUB_WORKSPACE`.
 
 ## 0.12.0 - 2026-08-22
 
