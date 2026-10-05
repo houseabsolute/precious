@@ -162,6 +162,12 @@
 - When the working directory for a command does not exist, for example because of a bad
   `working-dir.chdir-to` value, the error now names that directory. Before, the error only named the
   command, so it looked like the executable was missing.
+- Errors in a command's config are now reported no matter which commands are selected to run.
+  Before, some checks only ran for commands that matched the mode (`lint` or `tidy`), the
+  `--command` flag, and the `--label` flag. This meant that `precious lint` would not report a tidy
+  command with a bad `invoke`, `working-dir`, and `path-args` combination. The same was true for a
+  bad `ignore-stderr` regex, a bad `include` or `exclude` glob, and the checks on `lint-flags` and
+  `tidy-flags`.
 
 ## 0.12.0 - 2026-08-22
 

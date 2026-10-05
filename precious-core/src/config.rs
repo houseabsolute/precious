@@ -237,28 +237,22 @@ impl Config {
                 return Err(ConfigError::NoInclude { command: name }.into());
             }
 
-            if let Some(c) = command {
-                if name != c {
-                    continue;
-                }
-            }
-
-            // Naming a command is a request to run that one command, so the default label does
-            // not apply. It only applies when nothing else says which commands to run.
-            let label = match (label, command) {
-                (Some(l), _) => Some(l),
-                (None, Some(_)) => None,
-                (None, None) => Some(DEFAULT_LABEL),
+            // This runs before the filters below so that a broken command is always an error. If
+            // it ran after them, a lint-only run would never report a broken tidy command.
+            let typ_matches = c.typ == typ || c.typ == CommandType::Both;
+            let label_matches = match (label, command) {
+                // Naming a command is a request to run that one command, so the default label
+                // does not apply. It only applies when nothing else says which commands to run.
+                (Some(l), _) => c.matches_label(l),
+                (None, Some(_)) => true,
+                (None, None) => c.matches_label(DEFAULT_LABEL),
             };
-            if label.is_some_and(|l| !c.matches_label(l)) {
-                continue;
-            }
-
-            if c.typ != typ && c.typ != CommandType::Both {
-                continue;
-            }
-
             let cmd = c.try_into_command(project_root, &name)?;
+
+            if command.is_some_and(|c| name != c) || !label_matches || !typ_matches {
+                continue;
+            }
+
             commands.push(cmd);
         }
 
@@ -1345,6 +1339,49 @@ mod tests {
             ConfigError::NoInclude {
                 command: "rustfmt".to_string(),
             }
+        );
+
+        Ok(())
+    }
+
+    #[test_case(None, None; "filtered out by type")]
+    #[test_case(Some("goodlint"), None; "filtered out by command name")]
+    #[test_case(None, Some("ci"); "filtered out by label")]
+    #[parallel]
+    fn invalid_command_that_is_filtered_out_is_still_an_error(
+        command: Option<&str>,
+        label: Option<&str>,
+    ) -> Result<()> {
+        // The README says that a bad invoke/working-dir/path-args combination is an error. That
+        // has to hold for every command in the config, or a lint-only hook never reports a broken
+        // tidy command.
+        let toml_text = r#"
+            [commands.goodlint]
+            type = "lint"
+            include = "*.txt"
+            cmd = ["true"]
+            ok-exit-codes = 0
+            labels = ["default", "ci"]
+
+            [commands.badtidy]
+            type = "tidy"
+            include = "*.txt"
+            invoke = "once"
+            working-dir = "dir"
+            cmd = ["true"]
+            ok-exit-codes = 0
+        "#;
+
+        let config: Config = toml::from_str(toml_text)?;
+        let res = config.into_lint_commands(Utf8Path::new("."), command, label);
+        let Err(err) = res else {
+            panic!("expected an error for the badtidy command but got none");
+        };
+        let msg = format!("{err:#}");
+        assert!(msg.contains("badtidy"), "error names the command: {msg}");
+        assert!(
+            msg.contains(r#"invoke = "once""#),
+            "error names the bad combination: {msg}",
         );
 
         Ok(())
