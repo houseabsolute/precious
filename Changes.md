@@ -152,6 +152,10 @@
 - The `::error` annotation that `precious` prints when it runs in GitHub Actions now escapes special
   characters in the file path and the command name. Before, a path that contained a character like
   `,`, `:` or `%` gave an annotation that pointed at the wrong file.
+- The `::error` annotation that `precious` prints when it runs in GitHub Actions no longer names a
+  file when the command was not given file paths, for example with `path-args = "none"`. Before, if
+  only one file matched the command, the annotation was put on that file, even though the failure
+  could have been in any file.
 
 ## 0.12.0 - 2026-08-22
 

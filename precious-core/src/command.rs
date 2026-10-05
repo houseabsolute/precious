@@ -1032,6 +1032,15 @@ impl Command {
         exe
     }
 
+    // This is true when the command gets file paths as its arguments. With any other `path-args`
+    // value, a failure cannot be tied to one file, even if only one file matched.
+    pub(crate) fn is_given_file_paths(&self) -> bool {
+        matches!(
+            self.invocation.path_args,
+            PathArgs::File | PathArgs::AbsoluteFile
+        )
+    }
+
     pub(crate) fn paths_summary(
         &self,
         actual_invoke: ActualInvoke,

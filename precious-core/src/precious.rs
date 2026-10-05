@@ -876,7 +876,9 @@ impl LintOrTidyRunner {
                         }
                         if let Ok(ga) = env::var("GITHUB_ACTIONS") {
                             if !ga.is_empty() {
-                                if files.len() == NonZeroUsize::new(1).unwrap() {
+                                if files.len() == NonZeroUsize::new(1).unwrap()
+                                    && l.is_given_file_paths()
+                                {
                                     println!(
                                         "::error file={}::Linting with {} failed",
                                         escape_github_property(

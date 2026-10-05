@@ -754,6 +754,54 @@ lint-failure-exit-codes = 1
     Ok(())
 }
 
+// When a command is not given file paths, we cannot know which file it failed on. This uses
+// `false` as the command, which does not exist on Windows.
+#[cfg(unix)]
+#[test]
+#[serial]
+fn github_annotation_has_no_file_when_command_gets_no_file_paths() -> Result<()> {
+    compile_precious()?;
+    let helper = TestHelper::new()?.with_config_file(
+        "precious.toml",
+        r#"
+[commands.false]
+type    = "lint"
+include = "*.txt"
+invoke  = "once"
+path-args = "none"
+cmd     = ["false"]
+ok-exit-codes = 0
+lint-failure-exit-codes = 1
+"#,
+    )?;
+    helper.write_file("src/a.txt", "content")?;
+
+    let precious = precious_path()?;
+    let env = HashMap::from([(String::from("GITHUB_ACTIONS"), String::from("true"))]);
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all"])
+        .env(env)
+        .ok_exit_codes(&[1])
+        .in_dir(&helper.precious_root())
+        .ignore_stderr(vec![Regex::new(".*")?])
+        .build()
+        .run()?;
+
+    let stdout = out.stdout.unwrap_or_default();
+    assert!(
+        stdout.contains("::error::Linting with false failed"),
+        "expected an annotation with no file, got: {stdout}",
+    );
+    assert!(
+        !stdout.contains("::error file="),
+        "expected no annotation with a file, got: {stdout}",
+    );
+
+    Ok(())
+}
+
 #[test]
 #[serial]
 fn output_on_failure() -> Result<()> {
