@@ -2,11 +2,14 @@ name: Security audit - on push
 
 on:
   push:
+    # With only a tags filter here, GitHub would not run this for any branch push. A branches
+    # filter with no tags filter gives us branch pushes only, which is what we want. Path filters
+    # are not checked for tag pushes, so a tag push would always run this.
+    branches:
+      - "**"
     paths:
       - "**/Cargo.toml"
       - "**/Cargo.lock"
-    tags-ignore:
-      - "precious-*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
