@@ -4,8 +4,8 @@
 
 ## 1.0.0 - 2026-10-05
 
-This 1.0.0 does not contain any breaking changes, but it does contain many bug fixes. Going forward,
-this project will follow [semver versioning](https://semver.org/).
+This 1.0.0 release does not contain any breaking changes, but it does contain many bug fixes. Going
+forward, this project will follow [semver versioning](https://semver.org/).
 
 - When the `precious` config is in a subdirectory of a larger git project, it was inconsistent about
   what files it would consider. If given specific files or the `--all` flag, it only looked at files
