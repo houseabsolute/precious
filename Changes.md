@@ -138,6 +138,8 @@
 - Fixed the shortened command that `precious` shows in its `--verbose` output for a command that
   sets `path-flag`. It could end with a flag that had no path after it, and it reported the wrong
   number of paths left out.
+- Fixed a false warning in the `--verbose` output. When a command could not be started, `precious`
+  logged "Got a disconnected error receiving message from main thread" next to the real error.
 
 ## 0.12.0 - 2026-08-22
 

@@ -555,6 +555,58 @@ ok-exit-codes = 0
     Ok(())
 }
 
+// This relies on a `#!` line to make the spawn fail, which only works on Unix.
+#[cfg(unix)]
+#[test]
+#[serial]
+fn verbose_log_has_no_disconnected_warning_when_spawn_fails() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let helper = TestHelper::new()?.with_config_file(
+        "precious.toml",
+        r#"
+[commands.bad-script]
+type    = "lint"
+include = "*.txt"
+invoke  = "once"
+cmd     = ["./bad-script.sh"]
+ok-exit-codes = 0
+"#,
+    )?;
+    helper.write_file("a.txt", "content")?;
+    // The file exists and is executable, so we find it, but the interpreter does not exist, so
+    // spawning it fails.
+    helper.write_file("bad-script.sh", "#!/does/not/exist\n")?;
+    let script = helper.precious_root().join("bad-script.sh");
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755))?;
+
+    let precious = precious_path()?;
+
+    let out = Exec::builder()
+        .exe(&precious)
+        .args(vec!["lint", "--all", "--verbose"])
+        .ok_exit_codes(&[43])
+        .in_dir(&helper.precious_root())
+        .ignore_stderr(vec![Regex::new(".*")?])
+        .build()
+        .run()?;
+
+    let stdout = out.stdout.unwrap_or_default();
+    let stderr = out.stderr.unwrap_or_default();
+    let output = format!("{stdout}{stderr}");
+
+    assert!(
+        output.contains("Failed to get output from command"),
+        "expected the spawn error in the output, got: {output}",
+    );
+    assert!(
+        !output.contains("disconnected error"),
+        "expected no warning about a disconnected thread, got: {output}",
+    );
+
+    Ok(())
+}
+
 #[test]
 #[serial]
 fn output_on_failure() -> Result<()> {

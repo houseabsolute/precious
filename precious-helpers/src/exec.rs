@@ -220,12 +220,10 @@ impl<'a> Exec<'a> {
     fn output_from_command(&self, mut c: process::Command) -> Result<process::Output> {
         let status = self.maybe_spawn_status_thread();
 
-        let output = c.output().with_context(|| {
-            format!(
-                "Failed to get output from command `{}`",
-                self.full_command()
-            )
-        })?;
+        let output = c.output();
+        // We stop the status thread before we look at the result. If we returned early on an
+        // error, we would drop the sender without telling the thread to stop, and the thread
+        // would log a warning about the main thread going away.
         if let Some((sender, thread)) = status {
             if let Err(err) = sender.send(ThreadMessage::Terminate) {
                 warn!("Error terminating background status thread: {err}");
@@ -234,6 +232,12 @@ impl<'a> Exec<'a> {
                 warn!("Error joining background status thread: {err:?}");
             }
         }
+        let output = output.with_context(|| {
+            format!(
+                "Failed to get output from command `{}`",
+                self.full_command()
+            )
+        })?;
 
         self.handle_output(output)
     }
