@@ -168,6 +168,9 @@
   command with a bad `invoke`, `working-dir`, and `path-args` combination. The same was true for a
   bad `ignore-stderr` regex, a bad `include` or `exclude` glob, and the checks on `lint-flags` and
   `tidy-flags`.
+- The config that `precious config init --component perl` generates now uses `ignore-stderr = ".*"`
+  for `perlimports`. Before, it used the deprecated `expect-stderr = true`. The two do the same
+  thing.
 
 ## 0.12.0 - 2026-08-22
 
