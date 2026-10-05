@@ -2,6 +2,8 @@
 
 ## NEXT - TBD
 
+## 1.0.0 - 2026-10-05
+
 This 1.0.0 does not contain any breaking changes, but it does contain many bug fixes. Going forward,
 this project will follow [semver versioning](https://semver.org/).
 
