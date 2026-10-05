@@ -140,6 +140,9 @@
   number of paths left out.
 - Fixed a false warning in the `--verbose` output. When a command could not be started, `precious`
   logged "Got a disconnected error receiving message from main thread" next to the real error.
+- Fixed the `dev/bin/check-go-mod.sh` script that `precious config init` generates for Go projects.
+  It used the output of `go mod tidy -v` as a `printf` format string, so a `%` or a backslash in
+  that output could garble what the script printed.
 
 ## 0.12.0 - 2026-08-22
 

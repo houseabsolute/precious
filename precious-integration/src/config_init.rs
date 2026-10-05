@@ -7,10 +7,12 @@ use serial_test::serial;
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
 use std::{
+    env,
     fs::{self, File},
-    path::Path,
+    path::{Path, PathBuf},
 };
 use tempfile::TempDir;
+use test_case::test_case;
 
 #[test]
 #[serial]
@@ -399,6 +401,57 @@ fn chdir_to_tempdir() -> Result<(TempDir, Pushd)> {
         .tempdir()?;
     let pd = Pushd::new(td.path())?;
     Ok((td, pd))
+}
+
+// The README tells people that the examples match what `precious config init` generates. We compare
+// the parsed TOML, not the text, so that the examples can have extra comments.
+#[test_case("golang", &["go", "gitignore"]; "golang")]
+#[test_case("perl", &["perl", "gitignore"]; "perl")]
+#[test_case("python", &["python"]; "python")]
+#[test_case("ruby", &["ruby"]; "ruby")]
+#[test_case("rust", &["rust", "gitignore"]; "rust")]
+#[test_case("typescript", &["typescript"]; "typescript")]
+#[serial]
+fn example_config_matches_init_output(example: &str, components: &[&str]) -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(components, None)?;
+    assert_eq!(output.exit_code, 0);
+
+    let generated: toml::Table = fs::read_to_string("precious.toml")?.parse()?;
+    let example_file = examples_dir()?.join(example).join("precious.toml");
+    let from_example: toml::Table = fs::read_to_string(example_file)?.parse()?;
+
+    pretty_assertions::assert_eq!(from_example, generated);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn example_check_go_mod_script_matches_init_output() -> Result<()> {
+    compile_precious()?;
+    let (_td, _pd) = chdir_to_tempdir()?;
+    let output = init_with_components(&["go"], None)?;
+    assert_eq!(output.exit_code, 0);
+
+    // On Windows git may check out the example with CRLF line endings, depending on
+    // `core.autocrlf`. The generated file is left alone so that this still fails if `config init`
+    // ever writes CRLF into a shell script.
+    let generated = fs::read_to_string("dev/bin/check-go-mod.sh")?;
+    let example_file = examples_dir()?.join("golang/helpers/check-go-mod.sh");
+    let from_example = fs::read_to_string(example_file)?.replace("\r\n", "\n");
+
+    pretty_assertions::assert_eq!(from_example, generated);
+
+    Ok(())
+}
+
+fn examples_dir() -> Result<PathBuf> {
+    let mut dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    dir.push("..");
+    dir.push("examples");
+    Ok(dir)
 }
 
 fn init_with_components(components: &[&str], init_path: Option<&str>) -> Result<Output> {

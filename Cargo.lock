@@ -560,6 +560,8 @@ dependencies = [
  "regex",
  "serial_test",
  "tempfile",
+ "test-case",
+ "toml",
 ]
 
 [[package]]

@@ -23,6 +23,8 @@ pretty_assertions.workspace = true
 pushd.workspace = true
 serial_test.workspace = true
 tempfile.workspace = true
+test-case.workspace = true
+toml.workspace = true
 
 [[test]]
 name = "integration_tests"
