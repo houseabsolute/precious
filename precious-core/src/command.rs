@@ -792,11 +792,14 @@ impl Command {
         files: &Slice1<&Utf8Path>,
         in_dir: &Utf8Path,
     ) -> Result<Vec<Utf8PathBuf>> {
+        let (root, in_dir) = self.root_and_dir_for_relative_paths(in_dir);
+        let (root, in_dir) = (root.as_path(), in_dir.as_path());
+
         match self.invocation.path_args {
             PathArgs::File => files
                 .iter()
                 .sorted()
-                .map(|r| self.path_relative_to(r, in_dir))
+                .map(|r| Self::path_relative_to(r, root, in_dir))
                 .collect::<Result<Vec<_>>>(),
             PathArgs::Dir => Self::files_by_dir_hashmap(files)
                 .context(r#"Failed to group files by directory for path-args = "dir""#)
@@ -804,7 +807,7 @@ impl Command {
                     fm.into_keys()
                         .sorted()
                         .map(|r| {
-                            self.path_relative_to(r, in_dir)
+                            Self::path_relative_to(r, root, in_dir)
                                 .map(|p| Self::with_leading_dot_slash(&p))
                         })
                         .collect::<Result<Vec<_>>>()
@@ -847,8 +850,32 @@ impl Command {
         }
     }
 
-    fn path_relative_to(&self, path: &Utf8Path, in_dir: &Utf8Path) -> Result<Utf8PathBuf> {
-        let mut abs = self.project_root.clone();
+    // A `chdir-to` value can be a symlink or can contain `..`. The command runs in the real
+    // directory that the value resolves to, so that is the directory the relative paths we pass to
+    // it have to start from. We resolve the project root as well, so that the two paths have the
+    // same form and can be compared. We do not resolve the file paths, because a file that is a
+    // symlink should still be passed to the command by its own name.
+    //
+    // For the other `working-dir` values, the working directory is always made from the project
+    // root and a file's path, so the text of the paths already lines up.
+    fn root_and_dir_for_relative_paths(&self, in_dir: &Utf8Path) -> (Utf8PathBuf, Utf8PathBuf) {
+        if matches!(self.invocation.working_dir, WorkingDir::ChdirTo(_)) {
+            if let (Ok(root), Ok(dir)) = (
+                self.project_root.canonicalize_utf8(),
+                in_dir.canonicalize_utf8(),
+            ) {
+                return (root, dir);
+            }
+        }
+        (self.project_root.clone(), in_dir.to_path_buf())
+    }
+
+    fn path_relative_to(
+        path: &Utf8Path,
+        root: &Utf8Path,
+        in_dir: &Utf8Path,
+    ) -> Result<Utf8PathBuf> {
+        let mut abs = root.to_path_buf();
         abs.push(path);
 
         if let Some(diff) = pathdiff::diff_paths(&abs, in_dir) {
@@ -2109,6 +2136,69 @@ mod tests {
         file.push("src/new.rs");
         fs::write(&file, "a new file")?;
         assert!(command.paths_were_changed(prev)?);
+
+        Ok(())
+    }
+
+    // The command runs in the real directory that `chdir-to` resolves to. The path args have to be
+    // relative to that directory, not to the text of the `chdir-to` value.
+    #[cfg(unix)]
+    #[test]
+    #[parallel]
+    fn operating_on_with_chdir_to_symlink() -> Result<()> {
+        let helper = TestHelper::new()?;
+        helper.write_file("deep/nested/pkg/a.txt", "a")?;
+        helper.write_file("other/b.txt", "b")?;
+        let root = helper.git_root();
+        std::os::unix::fs::symlink("deep/nested/pkg", root.join("pkg"))?;
+
+        let mut command = default_command();
+        command.project_root = root;
+        command.invocation.path_args = PathArgs::File;
+        command.invocation.working_dir = WorkingDir::ChdirTo(Utf8PathBuf::from("pkg"));
+
+        let files = vec1![
+            Utf8Path::new("deep/nested/pkg/a.txt"),
+            Utf8Path::new("other/b.txt"),
+        ];
+        let in_dir = command.in_dir(files[0])?;
+        assert_eq!(
+            command.operating_on(&files, &in_dir)?,
+            vec![
+                Utf8PathBuf::from("a.txt"),
+                Utf8PathBuf::from("../../../other/b.txt"),
+            ],
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn operating_on_with_chdir_to_with_dot_dot() -> Result<()> {
+        let helper = TestHelper::new()?;
+        helper.write_file("deep/nested/pkg/a.txt", "a")?;
+        helper.write_file("other/b.txt", "b")?;
+        helper.write_file("sub/c.txt", "c")?;
+
+        let mut command = default_command();
+        command.project_root = helper.git_root();
+        command.invocation.path_args = PathArgs::File;
+        command.invocation.working_dir =
+            WorkingDir::ChdirTo(Utf8PathBuf::from("sub/../deep/nested/pkg"));
+
+        let files = vec1![
+            Utf8Path::new("deep/nested/pkg/a.txt"),
+            Utf8Path::new("other/b.txt"),
+        ];
+        let in_dir = command.in_dir(files[0])?;
+        assert_eq!(
+            command.operating_on(&files, &in_dir)?,
+            vec![
+                Utf8PathBuf::from("a.txt"),
+                Utf8PathBuf::from("../../../other/b.txt"),
+            ],
+        );
 
         Ok(())
     }

@@ -156,6 +156,9 @@
   file when the command was not given file paths, for example with `path-args = "none"`. Before, if
   only one file matched the command, the annotation was put on that file, even though the failure
   could have been in any file.
+- Fixed the paths that `precious` passes to a command when `working-dir.chdir-to` is a symlink or
+  contains `..`. The paths were not relative to the directory that the command really ran in, so the
+  command could not find the files.
 
 ## 0.12.0 - 2026-08-22
 
