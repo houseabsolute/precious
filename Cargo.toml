@@ -90,6 +90,7 @@ pushd = { version = "0.0.2", default-features = false }
 rayon = { version = "1.12.0", default-features = false }
 regex = { version = "1.13.1", default-features = true }
 serde = { version = "1.0.229", default-features = true, features = ["derive"] }
+serde_json = { version = "1.0.151", default-features = false, features = ["std"] }
 serial_test = { version = "3.5.0", default-features = false }
 tempfile = { version = "3.27.0", default-features = false }
 test-case = { version = "3.3.1", default-features = false }
