@@ -190,9 +190,9 @@ invoke.per-file-or-dir = 42
 
 The number must be at least `1`.
 
-These experimental options are useful for optimizing the speed of running a command. In some cases,
-a command can be run in multiple ways, and how quickly it completes depends on how many files or
-directories need to be linted or tidied.
+These options are useful for optimizing the speed of running a command. In some cases, a command can
+be run in multiple ways, and how quickly it completes depends on how many files or directories need
+to be linted or tidied.
 
 The `golangci-lint` tool is a good example. Invoking it multiple times for a few directories can be
 much faster than running it against the entire repo. However, once there are enough directories to
@@ -599,8 +599,8 @@ precious on most or all of the directories at once, then `once` will be faster.
 However, if you have a larger set of directories and you usually only need to lint or tidy a small
 subset of these at once, then `per-dir` mode will be faster.
 
-You can also use the experimental `invoke.per-dir-or-once = n` option to have `precious` switch
-between `once` and `per-dir`, depending on the number of directories that precious will operate on.
+You can also use the `invoke.per-dir-or-once = n` option to have `precious` switch between `once`
+and `per-dir`, depending on the number of directories that precious will operate on.
 
 ### Quiet Flags for Commands
 
