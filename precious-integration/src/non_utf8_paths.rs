@@ -32,16 +32,18 @@ fn non_utf8_filename_fails_with_clear_error() -> Result<()> {
     std::fs::write(&path, b"contents")?;
 
     let precious = precious_path()?;
-    let res = Exec::builder()
+    let out = Exec::builder()
         .exe(&precious)
         .args(vec!["lint", "--all"])
-        .ok_exit_codes(&[1])
+        // Any other exit code makes `run` return an error. That is how this test checks that
+        // precious treats this as an error of its own and not as a lint failure.
+        .ok_exit_codes(&[42])
+        .ignore_stderr(vec![regex::Regex::new(".*")?])
         .in_dir(&helper.precious_root())
         .build()
-        .run();
+        .run()?;
 
-    let err = res.expect_err("expected non-zero exit");
-    let msg = format!("{err:#}");
+    let msg = out.stderr.unwrap_or_default();
     assert!(
         msg.contains("non-UTF-8 path from filesystem walk"),
         "expected fail-fast diagnostic, got:\n{msg}",
@@ -92,16 +94,18 @@ fn non_utf8_git_index_entry_fails_with_clear_error() -> Result<()> {
     assert!(status.success(), "git update-index failed");
 
     let precious = precious_path()?;
-    let res = Exec::builder()
+    let out = Exec::builder()
         .exe(&precious)
         .args(vec!["lint", "--staged"])
-        .ok_exit_codes(&[1])
+        // Any other exit code makes `run` return an error. That is how this test checks that
+        // precious treats this as an error of its own and not as a lint failure.
+        .ok_exit_codes(&[42])
+        .ignore_stderr(vec![regex::Regex::new(".*")?])
         .in_dir(&helper.precious_root())
         .build()
-        .run();
+        .run()?;
 
-    let err = res.expect_err("expected non-zero exit");
-    let msg = format!("{err:#}");
+    let msg = out.stderr.unwrap_or_default();
     assert!(
         msg.contains("non-UTF-8 path from git diff"),
         "expected GitDiff diagnostic, got:\n{msg}",
