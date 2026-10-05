@@ -143,6 +143,8 @@
 - Fixed the `dev/bin/check-go-mod.sh` script that `precious config init` generates for Go projects.
   It used the output of `go mod tidy -v` as a `printf` format string, so a `%` or a backslash in
   that output could garble what the script printed.
+- Fixed the help output and the errors for bad command line arguments. The help had an empty
+  `Usage:` line, and errors like "unexpected argument found" did not say which argument was wrong.
 
 ## 0.12.0 - 2026-08-22
 

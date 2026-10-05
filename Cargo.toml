@@ -65,7 +65,9 @@ camino = { version = "1.2", features = ["serde1"] }
 clap = { version = "4.6.4", default-features = false, features = [
     "cargo",
     "derive",
+    "error-context",
     "std",
+    "usage",
     "wrap_help",
 ] }
 comfy-table = { version = "7.2.2", default-features = false }

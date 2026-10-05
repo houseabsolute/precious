@@ -609,6 +609,63 @@ ok-exit-codes = 0
 
 #[test]
 #[serial]
+fn help_shows_usage() -> Result<()> {
+    compile_precious()?;
+    let precious = precious_path()?;
+
+    // On Windows the usage line names the executable as `precious.exe`.
+    let exe = format!("precious{}", std::env::consts::EXE_SUFFIX);
+    for (args, expect) in [
+        (vec!["--help"], format!("Usage: {exe}")),
+        (vec!["lint", "--help"], format!("Usage: {exe} lint")),
+    ] {
+        let out = Exec::builder()
+            .exe(&precious)
+            .args(args)
+            .ok_exit_codes(&[0])
+            .build()
+            .run()?;
+        let stdout = out.stdout.unwrap_or_default();
+        assert!(
+            stdout.contains(&expect),
+            "expected help to contain {expect:?}, got: {stdout}",
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn argument_errors_name_the_argument() -> Result<()> {
+    compile_precious()?;
+    let precious = precious_path()?;
+
+    let any_stderr = Regex::new(".*")?;
+    for (args, expect) in [
+        (vec!["lint"], "--all"),
+        (vec!["lint", "--bogus"], "--bogus"),
+        (vec!["--jobs", "x", "lint", "--all"], "--jobs"),
+    ] {
+        let out = Exec::builder()
+            .exe(&precious)
+            .args(args)
+            .ok_exit_codes(&[2])
+            .ignore_stderr(vec![any_stderr.clone()])
+            .build()
+            .run()?;
+        let stderr = out.stderr.unwrap_or_default();
+        assert!(
+            stderr.contains(expect),
+            "expected error to contain {expect:?}, got: {stderr}",
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn output_on_failure() -> Result<()> {
     let helper = set_up_for_tests()?;
     helper.write_file("src/bad.rs", "this is not valid rust")?;
