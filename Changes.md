@@ -159,6 +159,9 @@
 - Fixed the paths that `precious` passes to a command when `working-dir.chdir-to` is a symlink or
   contains `..`. The paths were not relative to the directory that the command really ran in, so the
   command could not find the files.
+- When the working directory for a command does not exist, for example because of a bad
+  `working-dir.chdir-to` value, the error now names that directory. Before, the error only named the
+  command, so it looked like the executable was missing.
 
 ## 0.12.0 - 2026-08-22
 

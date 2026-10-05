@@ -326,7 +326,8 @@ impl<'a> Exec<'a> {
         cmd.args(&self.args);
 
         let in_dir = if let Some(d) = &self.in_dir {
-            d.canonicalize_utf8()?
+            d.canonicalize_utf8()
+                .with_context(|| format!("Could not use {d} as the working directory"))?
         } else {
             Utf8PathBuf::try_from(env::current_dir()?)?
         };
@@ -590,6 +591,32 @@ mod tests {
             .build()
             .run()?;
         assert_eq!(res.stdout.as_deref(), Some("found\n"));
+
+        Ok(())
+    }
+
+    // Without the directory in the message, this error reads as if the executable is missing.
+    #[test]
+    #[parallel]
+    fn run_names_the_working_dir_when_it_does_not_exist() -> Result<()> {
+        let td = tempdir()?;
+        let dir = Utf8PathBuf::try_from(td.path().join("does-not-exist"))?;
+
+        let res = Exec::builder()
+            .exe("cargo")
+            .args(vec!["--version"])
+            .ok_exit_codes(&[0])
+            .in_dir(&dir)
+            .build()
+            .run();
+        let Err(err) = res else {
+            panic!("expected an error when the working directory does not exist");
+        };
+        let message = format!("{err:#}");
+        assert!(
+            message.contains(dir.as_str()),
+            "expected the error to name {dir}, got: {message}",
+        );
 
         Ok(())
     }
