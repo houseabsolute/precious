@@ -65,7 +65,7 @@ path_args = "none"
 ---
 
 ```toml
-run_mode = "once"
+run_mode = "root"
 chdir = false
 ```
 
@@ -78,7 +78,7 @@ path_args = "dot"
 ---
 
 ```toml
-run_mode = "once"
+run_mode = "root"
 chdir = true
 ```
 
