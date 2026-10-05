@@ -44,6 +44,12 @@ pub enum FinderError {
     )]
     AllPathsWereExcluded,
 
+    #[error(
+        "Attempted to find all matching paths but found no files. The directory may be empty, or \
+         an ignore file such as .gitignore may exclude everything."
+    )]
+    NoPathsWereFound,
+
     #[error("Path passed on the command line does not exist: {path}")]
     NonExistentPathOnCli { path: Utf8PathBuf },
 
@@ -104,8 +110,13 @@ impl Finder {
             }
         }
 
+        let mut excluded_by_config = false;
         let mut files = match self.mode.clone() {
-            Mode::All => self.all_files().context("Failed to get all files")?,
+            Mode::All => {
+                let (files, excluded) = self.all_files().context("Failed to get all files")?;
+                excluded_by_config = excluded;
+                files
+            }
             Mode::FromCli => self
                 .files_from_cli(cli_paths)
                 .context("Failed to get files from command line")?,
@@ -142,7 +153,10 @@ impl Finder {
                     };
                     Err(err.into())
                 }
-                Mode::All => Err(FinderError::AllPathsWereExcluded {}.into()),
+                // The walk also drops files because of ignore files like `.gitignore`. Blaming
+                // the precious config for that sends people to the wrong file.
+                Mode::All if excluded_by_config => Err(FinderError::AllPathsWereExcluded {}.into()),
+                Mode::All => Err(FinderError::NoPathsWereFound {}.into()),
             };
         }
 
@@ -181,7 +195,7 @@ impl Finder {
             .expect("we know this is Some - look up a couple lines"))
     }
 
-    fn all_files(&self) -> Result<Vec<Utf8PathBuf>> {
+    fn all_files(&self) -> Result<(Vec<Utf8PathBuf>, bool)> {
         debug!("Getting all files under {}", self.project_root);
         self.walkdir_files(&self.project_root)
     }
@@ -203,7 +217,7 @@ impl Finder {
             // An excluded directory still has to be walked, because a negated pattern can bring
             // back a file inside it. The walk checks each file against the excludes.
             if full.is_dir() {
-                let mut contents = self.walkdir_files(&full)?;
+                let (mut contents, _) = self.walkdir_files(&full)?;
                 files.append(&mut contents);
                 continue;
             }
@@ -331,7 +345,9 @@ impl Finder {
         ])
     }
 
-    fn walkdir_files(&self, root: &Utf8Path) -> Result<Vec<Utf8PathBuf>> {
+    // Besides the files, this returns whether an exclude from the precious config dropped any
+    // file. The caller needs that to explain why no files were found.
+    fn walkdir_files(&self, root: &Utf8Path) -> Result<(Vec<Utf8PathBuf>, bool)> {
         let canonical_root = root
             .canonicalize_utf8()
             .with_context(|| format!("Failed to canonicalize walk root {root}"))?;
@@ -352,6 +368,7 @@ impl Finder {
             .context("Failed to build exclude matcher")?;
 
         let mut files: Vec<Utf8PathBuf> = vec![];
+        let mut excluded_by_config = false;
         for result in ignore::WalkBuilder::new(&canonical_root)
             .hidden(false)
             .overrides(overrides)
@@ -367,7 +384,11 @@ impl Finder {
                             let is_excluded = raw
                                 .strip_prefix(&self.project_root)
                                 .is_ok_and(|rel| exclude_matcher.raw_path_matches(rel, false));
-                            if is_excluded || !raw.is_file() {
+                            if !raw.is_file() {
+                                continue;
+                            }
+                            if is_excluded {
+                                excluded_by_config = true;
                                 continue;
                             }
                             return Err(NonUtf8PathError {
@@ -386,6 +407,7 @@ impl Finder {
 
                     let rel = self.path_relative_to_canonical_root(&canonical_root, &path)?;
                     if exclude_matcher.path_matches(&rel, false) {
+                        excluded_by_config = true;
                         continue;
                     }
 
@@ -397,7 +419,7 @@ impl Finder {
             }
         }
 
-        Ok(files)
+        Ok((files, excluded_by_config))
     }
 
     fn files_from_git(&mut self, args: Vec<&str>) -> Result<Vec<Utf8PathBuf>> {
@@ -647,6 +669,52 @@ mod tests {
             .downcast_ref::<NonUtf8PathError>()
             .expect("expected NonUtf8PathError");
         assert_eq!(downcast.source, NonUtf8Source::FilesystemWalk);
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn all_mode_error_does_not_blame_the_config_when_gitignore_hides_everything() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+        helper.write_file(".gitignore", "*\n")?;
+
+        // There are no excludes in the precious config, so the error must not point there.
+        let mut finder = new_finder(Mode::All, &helper.precious_root())?;
+        let err = finder.files(&[]).expect_err("expected an error");
+        let msg = format!("{err:#}");
+        assert!(
+            !msg.contains("excluded in the precious config"),
+            "error does not blame the precious config: {msg}",
+        );
+        assert!(
+            msg.contains("ignore file"),
+            "error says that an ignore file may be the cause: {msg}",
+        );
+        assert_eq!(
+            err.downcast_ref::<FinderError>(),
+            Some(&FinderError::NoPathsWereFound),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn all_mode_error_blames_the_config_when_its_excludes_hide_everything() -> Result<()> {
+        let helper = testhelper::TestHelper::new()?.with_git_repo()?;
+
+        let mut finder = new_finder_with_excludes(
+            Mode::All,
+            &helper.precious_root(),
+            helper.precious_root(),
+            vec!["**/*".to_string()],
+        )?;
+        let err = finder.files(&[]).expect_err("expected an error");
+        assert_eq!(
+            err.downcast_ref::<FinderError>(),
+            Some(&FinderError::AllPathsWereExcluded),
+        );
+
         Ok(())
     }
 

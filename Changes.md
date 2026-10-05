@@ -171,6 +171,10 @@
 - The config that `precious config init --component perl` generates now uses `ignore-stderr = ".*"`
   for `perlimports`. Before, it used the deprecated `expect-stderr = true`. The two do the same
   thing.
+- When `precious` is run with `--all` and finds no files, the error no longer always says that
+  everything was excluded in the precious config. It only says that when an `exclude` in the config
+  dropped a file. Otherwise it says that no files were found, and that the directory may be empty or
+  an ignore file such as `.gitignore` may exclude everything.
 
 ## 0.12.0 - 2026-08-22
 
